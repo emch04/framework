@@ -24,12 +24,21 @@ test('createProject writes a fullstack Astratra starter', () => {
   assert.equal(result.targetDir, path.join(cwd, 'demo-app'));
   assert.equal(fs.existsSync(path.join(result.targetDir, 'api/server.js')), true);
   assert.equal(fs.existsSync(path.join(result.targetDir, 'web/src/main.jsx')), true);
+  assert.equal(fs.existsSync(path.join(result.targetDir, '.gitignore')), true);
 
   const pkg = JSON.parse(fs.readFileSync(path.join(result.targetDir, 'package.json'), 'utf8'));
   assert.equal(pkg.name, 'demo-app');
   assert.equal(pkg.dependencies['@astratra/saas-kit'], '^0.1.0');
   assert.equal(pkg.dependencies['@astratra/saas-kit-ui'], '^0.1.0');
   assert.equal(pkg.scripts['dev:web'], 'vite --host 127.0.0.1');
+
+  const apiServer = fs.readFileSync(path.join(result.targetDir, 'api/server.js'), 'utf8');
+  assert.match(apiServer, /Port \$\{port\} is already in use/);
+  assert.equal(apiServer.includes("path.resolve('.astratra')"), true);
+
+  const viteConfig = fs.readFileSync(path.join(result.targetDir, 'vite.config.js'), 'utf8');
+  assert.match(viteConfig, /readApiUrl/);
+  assert.match(viteConfig, /VITE_API_URL/);
 });
 
 test('createProject refuses a non-empty directory unless forced', () => {

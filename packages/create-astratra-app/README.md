@@ -49,5 +49,9 @@ npm run dev:web
 
 Pour le template `api`, seul `npm run dev:api` est cree.
 
+Si le port `4000` est deja occupe, l'API essaie automatiquement le port
+suivant et ecrit l'URL choisie dans `.astratra/api.json`. Lance `dev:api`
+avant `dev:web` pour que Vite lise la bonne URL.
+
 Avant la production, il faut remplacer `JWT_SECRET`, brancher de vrais stores
 et utiliser une vraie verification de mot de passe.

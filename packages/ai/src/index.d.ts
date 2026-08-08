@@ -50,6 +50,7 @@ export interface ProviderStats {
 
 export interface ProviderRouter {
   ask(prompt: string, request?: ProviderRequest, ctx?: Record<string, unknown>): Promise<unknown>;
+  /** Les entrées sont indexées par "providerId:modelId". */
   getStats(): Record<string, ProviderStats>;
   stop(): void;
 }

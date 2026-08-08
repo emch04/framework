@@ -1,10 +1,39 @@
 const { AppError } = require('@astratra/core');
+const { randomUUID } = require('crypto');
 
 const DEFAULT_COOLDOWN_MS = 60 * 1000;
 const DEFAULT_COOLDOWN_JITTER_MS = 8 * 1000;
 const DEFAULT_MAX_FAILURES = 3;
 const DEFAULT_DEGRADED_MS = 5 * 60 * 1000;
 const RPM_WINDOW_MS = 60 * 1000;
+const RESERVE_USAGE_SCRIPT = `
+local now = tonumber(ARGV[1])
+local rpmLimit = tonumber(ARGV[2])
+local rpdLimit = tonumber(ARGV[3])
+local tpdLimit = tonumber(ARGV[4])
+local tokenCost = tonumber(ARGV[5])
+local reservationId = ARGV[6]
+local rpmWindowMs = tonumber(ARGV[7])
+local rpmTtl = tonumber(ARGV[8])
+local dayTtl = tonumber(ARGV[9])
+
+redis.call('ZREMRANGEBYSCORE', KEYS[1], '-inf', now - rpmWindowMs)
+if rpmLimit > 0 and redis.call('ZCARD', KEYS[1]) >= rpmLimit then return 0 end
+
+local rpdUsed = tonumber(redis.call('GET', KEYS[2]) or '0')
+if rpdLimit > 0 and rpdUsed + 1 > rpdLimit then return 0 end
+
+local tpdUsed = tonumber(redis.call('GET', KEYS[3]) or '0')
+if tpdLimit > 0 and tpdUsed + tokenCost > tpdLimit then return 0 end
+
+redis.call('ZADD', KEYS[1], now, reservationId)
+redis.call('EXPIRE', KEYS[1], rpmTtl)
+redis.call('INCRBY', KEYS[2], 1)
+redis.call('EXPIRE', KEYS[2], dayTtl)
+redis.call('INCRBY', KEYS[3], tokenCost)
+redis.call('EXPIRE', KEYS[3], dayTtl)
+return 1
+`;
 
 function createProviderRouter(config = {}) {
   const providers = Array.isArray(config.providers) ? config.providers : [];
@@ -34,20 +63,21 @@ function createProviderRouter(config = {}) {
 
     for (const candidate of candidates) {
       const { provider, model } = candidate;
-      if (!isModelAvailable(state, model, request)) continue;
+      const key = modelKey(provider, model);
+      if (!isModelAvailable(state, key, model, request)) continue;
+      if (!await redis.reserveUsage(key, model, request)) continue;
 
-      reserveUsage(state, model, request);
-      redis.mirrorUsage(model.id, state.models[model.id]);
+      reserveUsage(state, key, request);
 
       try {
         const result = await provider.call(prompt, ctx, model);
-        clearFailures(state, model.id);
-        redis.mirrorFailures(model.id, state.models[model.id]);
+        clearFailures(state, key);
+        redis.mirrorFailures(key, state.models[key]);
         return result;
       } catch (error) {
         errors.push(error);
-        markFailure(state, model.id, error, options);
-        redis.mirrorFailure(model.id, state.models[model.id]);
+        markFailure(state, key, error, options);
+        redis.mirrorFailure(key, state.models[key]);
       }
     }
 
@@ -60,8 +90,9 @@ function createProviderRouter(config = {}) {
     const stats = {};
     providers.forEach(provider => {
       (provider.models || []).forEach(model => {
-        const modelState = state.models[model.id] || createModelState();
-        stats[model.id] = {
+        const key = modelKey(provider, model);
+        const modelState = state.models[key] || createModelState();
+        stats[key] = {
           provider: provider.id,
           rpm_now: currentRpm(modelState, now),
           rpm_limit: model.rpm ?? null,
@@ -93,7 +124,7 @@ function createInitialState(providers) {
   const state = { models: {} };
   providers.forEach(provider => {
     (provider.models || []).forEach(model => {
-      state.models[model.id] = createModelState();
+      state.models[modelKey(provider, model)] = createModelState();
     });
   });
   return state;
@@ -110,14 +141,13 @@ function createModelState() {
   };
 }
 
-// Redis is a best-effort, optional shared-state layer: if it's absent,
-// misconfigured, or fails at any point, the router must keep working with
-// its in-memory state only — never let Redis trouble block or crash a call.
+// Redis makes quota reservations atomically across instances. If it is absent
+// or unavailable, the router falls back to the process-local counters.
 function createRedisLink(config, options) {
   const noop = {
     connect: async () => {},
     restoreState: async () => {},
-    mirrorUsage: () => {},
+    reserveUsage: async () => true,
     mirrorFailure: () => {},
     mirrorFailures: () => {},
     disconnect: () => {}
@@ -127,8 +157,8 @@ function createRedisLink(config, options) {
 
   let client = null;
   const prefix = options.redisKeyPrefix;
-  const dayKey = (type, modelId) => `${prefix}:${type}:${modelId}:${new Date().toDateString()}`;
-  const stateKey = (type, modelId) => `${prefix}:${type}:${modelId}`;
+  const dayKey = (type, key) => `${prefix}:${type}:${key}:${new Date().toISOString().slice(0, 10)}`;
+  const stateKey = (type, key) => `${prefix}:${type}:${key}`;
   const secondsUntilMidnight = () => Math.ceil(msUntilNextMidnight() / 1000);
 
   async function connect() {
@@ -153,13 +183,13 @@ function createRedisLink(config, options) {
   async function restoreState(state) {
     if (!client || !client.isOpen) return;
     try {
-      for (const [modelId, modelState] of Object.entries(state.models)) {
+      for (const [key, modelState] of Object.entries(state.models)) {
         const [rpd, tpd, failures, cooldownTtl, degradedTtl] = await Promise.all([
-          client.get(dayKey('rpd', modelId)),
-          client.get(dayKey('tpd', modelId)),
-          client.get(stateKey('failures', modelId)),
-          client.ttl(stateKey('cooldown', modelId)),
-          client.ttl(stateKey('degraded', modelId))
+          client.get(dayKey('rpd', key)),
+          client.get(dayKey('tpd', key)),
+          client.get(stateKey('failures', key)),
+          client.ttl(stateKey('cooldown', key)),
+          client.ttl(stateKey('degraded', key))
         ]);
 
         if (rpd) modelState.rpdUsed = parseInt(rpd, 10);
@@ -173,32 +203,49 @@ function createRedisLink(config, options) {
     }
   }
 
-  function mirrorUsage(modelId, modelState) {
-    if (!client || !client.isOpen) return;
-    const ttl = secondsUntilMidnight();
-    client.incrBy(dayKey('rpd', modelId), 1).catch(() => {});
-    client.expire(dayKey('rpd', modelId), ttl).catch(() => {});
-    if (modelState.tpdUsed) {
-      client.set(dayKey('tpd', modelId), String(modelState.tpdUsed), { EX: ttl }).catch(() => {});
+  async function reserveUsage(key, model, request) {
+    if (!client || !client.isOpen) return true;
+    try {
+      const reserved = await client.eval(RESERVE_USAGE_SCRIPT, {
+        keys: [
+          stateKey('rpm', key),
+          dayKey('rpd', key),
+          dayKey('tpd', key)
+        ],
+        arguments: [
+          String(Date.now()),
+          String(model.rpm || 0),
+          String(model.rpd || 0),
+          String(model.tpd || 0),
+          String(estimatedTokens(request)),
+          randomUUID(),
+          String(RPM_WINDOW_MS),
+          String(Math.ceil(RPM_WINDOW_MS / 1000)),
+          String(secondsUntilMidnight())
+        ]
+      });
+      return Number(reserved) === 1;
+    } catch (_error) {
+      return true;
     }
   }
 
-  function mirrorFailures(modelId, modelState) {
+  function mirrorFailures(key, modelState) {
     if (!client || !client.isOpen) return;
-    client.del(stateKey('failures', modelId)).catch(() => {});
-    if (!modelState.degradedUntil) client.del(stateKey('degraded', modelId)).catch(() => {});
+    client.del(stateKey('failures', key)).catch(() => {});
+    if (!modelState.degradedUntil) client.del(stateKey('degraded', key)).catch(() => {});
   }
 
-  function mirrorFailure(modelId, modelState) {
+  function mirrorFailure(key, modelState) {
     if (!client || !client.isOpen) return;
-    client.set(stateKey('failures', modelId), String(modelState.failures), { EX: 86400 }).catch(() => {});
+    client.set(stateKey('failures', key), String(modelState.failures), { EX: 86400 }).catch(() => {});
     if (modelState.cooldownUntil) {
       const ttl = Math.max(1, Math.ceil((modelState.cooldownUntil - Date.now()) / 1000));
-      client.set(stateKey('cooldown', modelId), '1', { EX: ttl }).catch(() => {});
+      client.set(stateKey('cooldown', key), '1', { EX: ttl }).catch(() => {});
     }
     if (modelState.degradedUntil) {
       const ttl = Math.max(1, Math.ceil((modelState.degradedUntil - Date.now()) / 1000));
-      client.set(stateKey('degraded', modelId), '1', { EX: ttl }).catch(() => {});
+      client.set(stateKey('degraded', key), '1', { EX: ttl }).catch(() => {});
     }
   }
 
@@ -209,7 +256,7 @@ function createRedisLink(config, options) {
     client = null;
   }
 
-  return { connect, restoreState, mirrorUsage, mirrorFailure, mirrorFailures, disconnect };
+  return { connect, restoreState, reserveUsage, mirrorFailure, mirrorFailures, disconnect };
 }
 
 function selectCandidates(providers, intentRouting, request) {
@@ -240,10 +287,10 @@ function supportsComplexity(model, complexity) {
   return Array.isArray(model.complexity) && model.complexity.includes(complexity);
 }
 
-function isModelAvailable(state, model, request) {
+function isModelAvailable(state, key, model, request) {
   const now = Date.now();
-  const modelState = state.models[model.id] || createModelState();
-  state.models[model.id] = modelState;
+  const modelState = state.models[key] || createModelState();
+  state.models[key] = modelState;
 
   if (isUntilActive(modelState.cooldownUntil, now)) return false;
   if (isUntilActive(modelState.degradedUntil, now)) return false;
@@ -253,14 +300,14 @@ function isModelAvailable(state, model, request) {
   return true;
 }
 
-function reserveUsage(state, model, request) {
-  const modelState = state.models[model.id] || createModelState();
+function reserveUsage(state, key, request) {
+  const modelState = state.models[key] || createModelState();
   const now = Date.now();
   modelState.rpmWindow = modelState.rpmWindow.filter(ts => now - ts < RPM_WINDOW_MS);
   modelState.rpmWindow.push(now);
   modelState.rpdUsed += 1;
   modelState.tpdUsed += estimatedTokens(request);
-  state.models[model.id] = modelState;
+  state.models[key] = modelState;
 }
 
 function estimatedTokens(request) {
@@ -295,6 +342,10 @@ function clearFailures(state, modelId) {
   const modelState = state.models[modelId] || createModelState();
   modelState.failures = 0;
   state.models[modelId] = modelState;
+}
+
+function modelKey(provider, model) {
+  return `${provider.id}:${model.id}`;
 }
 
 function isRateLimitError(error) {

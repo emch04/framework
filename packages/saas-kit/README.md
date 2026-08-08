@@ -8,8 +8,8 @@ génériques auth, users, settings, notifications et dashboard. Il assemble :
 
 - `@astratra/core` pour les request IDs, le format de réponse API, le 404 et
   la gestion d'erreurs.
-- `@astratra/security` pour le WAF, le rate limiting, l'auth JWT,
-  l'autorisation par rôle, et le service WebAuthn optionnel.
+- `@astratra/security` pour les primitives JWT/RBAC, le rate limiting, le WAF
+  heuristique et le service WebAuthn optionnel.
 - `@astratra/ai` en dépendance du package pour qu'un projet puisse composer
   des fonctionnalités IA à côté du starter, sans que le kit n'impose de
   routes IA métier.
@@ -21,6 +21,9 @@ const { createSaasApp } = require('@astratra/saas-kit');
 
 const app = createSaasApp({
   jwtSecret: process.env.JWT_SECRET,
+  jwtAlgorithms: ['HS256'],
+  jwtIssuer: 'mon-app',
+  jwtAudience: 'mon-api',
   usersStore,
   settingsStore,
   verifyPassword: async (user, password) => passwordService.verify(user, password),
@@ -47,9 +50,12 @@ app.listen(3000);
 - `GET /dashboard/summary`
 
 Toutes les routes protégées suivent le même ordre de middlewares de
-sécurité que la mini-app de démo : request id, parseur JSON, WAF, limiteur
-API, limiteur de login pour `/auth`, auth JWT pour les modules protégés,
+sécurité que la mini-app de démo : request id, parseur JSON, WAF heuristique,
+limiteur API, limiteur de login pour `/auth`, auth JWT pour les modules protégés,
 puis 404 et gestion d'erreurs.
+
+`jwtAlgorithms` vaut `['HS256']` par defaut. `jwtIssuer` et `jwtAudience` sont
+optionnels, mais recommandes des qu'une app sort du simple developpement local.
 
 ## Adapters requis
 

@@ -67,6 +67,9 @@ export interface CreateSaasAppOptions {
   jwtSecret?: string;
   legacyJwtSecret?: string;
   jwtExpiresIn?: string | number;
+  jwtAlgorithms?: string[];
+  jwtIssuer?: string;
+  jwtAudience?: string | string[];
   usersStore?: UsersStore;
   settingsStore?: SettingsStore;
   notify: (userId: string, notification: NotificationPayload) => Awaitable<unknown>;

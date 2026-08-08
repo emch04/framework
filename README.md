@@ -30,16 +30,16 @@ consomme `@astratra/saas-kit-ui`.
 |---|---|---|
 | [`@astratra/core`](packages/core/README.md) | 20 | réponses API, gestion d'erreurs, logs, request id, config env |
 | [`@astratra/tooling`](packages/tooling/README.md) | 20 | CLI : audit secrets/routes/i18n, lanceur de tests, orchestrateur de déploiement |
-| [`@astratra/security`](packages/security/README.md) | 24 | auth JWT, RBAC, rate limiting (mémoire ou Redis optionnel), WAF, WebAuthn/passkeys |
+| [`@astratra/security`](packages/security/README.md) | 26 | primitives JWT/RBAC, rate limiting (mémoire ou Redis optionnel), WAF heuristique, WebAuthn/passkeys |
 | [`@astratra/ai`](packages/ai/README.md) | 12 | routing IA multi-provider avec quotas/fallback/Redis optionnel, registre d'outils, boucle d'agent |
-| [`@astratra/saas-kit`](packages/saas-kit/README.md) | 8 | starter : `createSaasApp()` assemblant users/auth/settings/notifications/dashboard |
+| [`@astratra/saas-kit`](packages/saas-kit/README.md) | 9 | starter : `createSaasApp()` assemblant users/auth/settings/notifications/dashboard |
 | [`@astratra/store-mongo`](packages/store-mongo/README.md) | 6 | adapter de persistance réel (MongoDB/Mongoose) pour `usersStore`/`settingsStore` |
 | [`@astratra/saas-kit-ui`](packages/saas-kit-ui/README.md) | 2 | dashboard React réutilisable pour `@astratra/saas-kit` |
 | [`create-astratra-app`](packages/create-astratra-app/README.md) | 3 | générateur CLI pour créer une app Astratra rapidement |
 | [`examples/clinic-demo`](examples/clinic-demo/README.md) | 5 | preuve de concept API hors du domaine scolaire |
 | [`examples/dashboard-ui`](examples/dashboard-ui/README.md) | 2 | exemple React + Vite consommant `@astratra/saas-kit-ui` et l'API `saas-kit` |
 
-**102 tests au total**, plus `npm run lint`, `npm run typecheck` et le build
+**105 tests au total**, plus `npm run lint`, `npm run typecheck` et le build
 du dashboard React. Chaque package a été vérifié indépendamment —
 dépendances réellement installées et tests réellement exécutés (pas juste
 rapportés), plus relecture manuelle du code et passe de grep confirmant
@@ -54,7 +54,8 @@ produit, le code Astratra équivalent le prend en adapter/callback injecté :
 
 - `createAuthMiddleware` de `@astratra/security` prend un callback optionnel
   `verifySession(decoded)` au lieu d'interroger une collection Mongoose
-  codée en dur pour la révocation de session.
+  codée en dur pour la révocation de session. Il accepte aussi une allowlist
+  d'algorithmes JWT, un issuer et une audience.
 - `createProviderRouter` de `@astratra/ai` prend un tableau `providers` que
   vous définissez — aucun catalogue Groq/Gemini/Mistral intégré.
 - `createSaasApp` de `@astratra/saas-kit` prend `usersStore`,
@@ -218,6 +219,13 @@ ne sont pas des packages npm.
   d'images, ni confirmation humaine** avant d'exécuter un outil — ces options
   restent hors périmètre pour une première version (voir
   `packages/ai/README.md`).
+- **Le WAF d'`@astratra/security` est une couche heuristique.** Il aide à
+  bloquer des patterns évidents, mais ne remplace pas la validation des
+  entrées, les requêtes paramétrées, une CSP, la sanitation adaptée au
+  contexte ou un WAF réseau.
+- **WebAuthn/passkeys reste une primitive d'intégration.** Une app qui veut
+  promettre une sécurité production-ready doit auditer son intégration complète
+  avant d'en faire un argument commercial fort.
 
 ## Contribuer / étendre
 

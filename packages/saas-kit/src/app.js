@@ -27,6 +27,7 @@ const DEFAULT_ROLES = {
 
 function normalizeOptions(options = {}) {
   const jwtSecret = options.jwtSecret || process.env.JWT_SECRET || DEFAULT_JWT_SECRET;
+  const jwtAlgorithms = options.jwtAlgorithms || ['HS256'];
   const usersStore = options.usersStore || createMemoryUsersStore();
   const settingsStore = options.settingsStore || createMemorySettingsStore();
   const notify = options.notify;
@@ -46,6 +47,9 @@ function normalizeOptions(options = {}) {
   return {
     ...options,
     jwtSecret,
+    jwtAlgorithms,
+    jwtIssuer: options.jwtIssuer,
+    jwtAudience: options.jwtAudience,
     usersStore,
     settingsStore,
     notify,
@@ -67,6 +71,9 @@ function createSaasApp(options = {}) {
   const authMiddleware = createAuthMiddleware({
     secret: normalized.jwtSecret,
     legacySecret: normalized.legacyJwtSecret,
+    algorithms: normalized.jwtAlgorithms,
+    issuer: normalized.jwtIssuer,
+    audience: normalized.jwtAudience,
     verifySession: normalized.verifySession,
     extractToken: normalized.extractToken
   });

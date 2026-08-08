@@ -54,6 +54,41 @@ describe('jwtAuth', () => {
     expect(next).not.toHaveBeenCalled();
   });
 
+  test('rejects tokens signed with algorithms outside the configured allowlist', async () => {
+    const token = jwt.sign({ id: 'u1' }, 'secret', { algorithm: 'HS512' });
+    const res = createRes();
+    const next = jest.fn();
+
+    await createAuthMiddleware({ secret: 'secret', algorithms: ['HS256'] })(
+      { headers: { authorization: `Bearer ${token}` } },
+      res,
+      next
+    );
+
+    expect(res.status).toHaveBeenCalledWith(401);
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  test('verifies issuer and audience when configured', async () => {
+    const token = jwt.sign({ id: 'u1' }, 'secret', {
+      algorithm: 'HS256',
+      issuer: 'other-app',
+      audience: 'my-api'
+    });
+    const res = createRes();
+    const next = jest.fn();
+
+    await createAuthMiddleware({
+      secret: 'secret',
+      algorithms: ['HS256'],
+      issuer: 'my-app',
+      audience: 'my-api'
+    })({ headers: { authorization: `Bearer ${token}` } }, res, next);
+
+    expect(res.status).toHaveBeenCalledWith(401);
+    expect(next).not.toHaveBeenCalled();
+  });
+
   test('accepts legacy secret when primary signature fails', async () => {
     const token = jwt.sign({ id: 'u1', role: 'member' }, 'old-secret');
     const req = { cookies: { token }, headers: {} };

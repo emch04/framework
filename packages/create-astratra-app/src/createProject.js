@@ -164,8 +164,7 @@ export default defineConfig({
   root: 'web',
   plugins: [react()],
   server: {
-    host: '127.0.0.1',
-    port: 5173
+    host: '127.0.0.1'
   }
 });
 `;
@@ -173,6 +172,7 @@ export default defineConfig({
 
 function devScript() {
   return `import fs from 'node:fs';
+import net from 'node:net';
 import { spawn } from 'node:child_process';
 
 const isWindows = process.platform === 'win32';
@@ -199,6 +199,19 @@ function run(label, args) {
   return child;
 }
 
+function findFreePort(host = '127.0.0.1') {
+  return new Promise((resolve, reject) => {
+    const server = net.createServer();
+    server.unref();
+    server.on('error', reject);
+    server.listen(0, host, () => {
+      const address = server.address();
+      const port = typeof address === 'object' && address ? address.port : 0;
+      server.close(() => resolve(port));
+    });
+  });
+}
+
 function shutdown(code = 0) {
   shuttingDown = true;
   for (const child of children) {
@@ -207,9 +220,10 @@ function shutdown(code = 0) {
   process.exit(code);
 }
 
-function waitForApiConfig() {
+async function waitForApiConfig() {
   if (fs.existsSync(apiConfigPath)) {
-    run('web', ['run', 'dev:web']);
+    const webPort = await findFreePort();
+    run('web', ['run', 'dev:web', '--', '--port', String(webPort)]);
     return;
   }
 
@@ -219,7 +233,12 @@ function waitForApiConfig() {
     return;
   }
 
-  setTimeout(waitForApiConfig, pollMs);
+  setTimeout(() => {
+    waitForApiConfig().catch((error) => {
+      console.error(error.message);
+      shutdown(1);
+    });
+  }, pollMs);
 }
 
 process.on('SIGINT', () => shutdown(0));
@@ -227,7 +246,10 @@ process.on('SIGTERM', () => shutdown(0));
 
 fs.rmSync(apiConfigPath, { force: true });
 run('api', ['run', 'dev:api']);
-waitForApiConfig();
+waitForApiConfig().catch((error) => {
+  console.error(error.message);
+  shutdown(1);
+});
 `;
 }
 

@@ -1,0 +1,20 @@
+{
+  "name": "astratra",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Astratra npm workspace monorepo.",
+  "workspaces": [
+    "packages/*",
+    "examples/clinic-demo",
+    "examples/dashboard-ui"
+  ],
+  "scripts": {
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.18.0",
+    "eslint": "^9.18.0",
+    "typescript": "^5.9.2"
+  }
+}

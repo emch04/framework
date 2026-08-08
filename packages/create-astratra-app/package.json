@@ -1,0 +1,26 @@
+{
+  "name": "create-astratra-app",
+  "version": "0.1.0",
+  "description": "CLI generator for new Astratra SaaS applications.",
+  "type": "module",
+  "bin": {
+    "create-astratra-app": "bin/create-astratra-app.js"
+  },
+  "files": [
+    "bin",
+    "src"
+  ],
+  "scripts": {
+    "test": "node --test __tests__/*.test.js"
+  },
+  "keywords": [
+    "astratra",
+    "create",
+    "starter",
+    "saas"
+  ],
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  }
+}

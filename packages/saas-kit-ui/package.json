@@ -1,0 +1,36 @@
+{
+  "name": "@astratra/saas-kit-ui",
+  "version": "0.1.0",
+  "description": "Reusable React dashboard shell for Astratra SaaS applications.",
+  "type": "module",
+  "main": "src/index.jsx",
+  "module": "src/index.jsx",
+  "exports": {
+    ".": "./src/index.jsx",
+    "./api": "./src/lib/api.js",
+    "./styles.css": "./src/styles/global.css"
+  },
+  "files": [
+    "src"
+  ],
+  "scripts": {
+    "test": "node --test __tests__/*.test.js"
+  },
+  "keywords": [
+    "astratra",
+    "react",
+    "dashboard",
+    "saas"
+  ],
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
+  "peerDependencies": {
+    "react": ">=18",
+    "react-dom": ">=18"
+  },
+  "sideEffects": [
+    "**/*.css"
+  ]
+}

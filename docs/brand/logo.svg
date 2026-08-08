@@ -1,0 +1,9 @@
+<svg width="256" height="256" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Astratra">
+  <rect width="48" height="48" rx="10" fill="#17201b" />
+  <path
+    fill-rule="evenodd"
+    clip-rule="evenodd"
+    d="M24 8 L6 40 L42 40 Z M24 19 L16 31 L32 31 Z"
+    fill="#d9ff66"
+  />
+</svg>

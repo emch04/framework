@@ -1,0 +1,38 @@
+{
+  "name": "@astratra/tooling",
+  "version": "0.1.0",
+  "description": "Generic audit, test, and deploy tooling for Astratra workspaces.",
+  "main": "src/index.js",
+  "types": "src/index.d.ts",
+  "type": "commonjs",
+  "bin": {
+    "astratra": "bin/astratra.js"
+  },
+  "files": [
+    "src",
+    "bin"
+  ],
+  "scripts": {
+    "test": "jest"
+  },
+  "jest": {
+    "testMatch": [
+      "**/__tests__/**/*.test.js"
+    ]
+  },
+  "keywords": [
+    "astratra",
+    "tooling",
+    "cli"
+  ],
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
+  "dependencies": {
+    "@astratra/core": "^0.1.0"
+  },
+  "devDependencies": {
+    "jest": "30.4.2"
+  }
+}

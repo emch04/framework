@@ -1,0 +1,43 @@
+{
+  "name": "@astratra/store-mongo",
+  "version": "0.1.0",
+  "description": "MongoDB/Mongoose persistence adapters for Astratra SaaS stores.",
+  "main": "src/index.js",
+  "types": "src/index.d.ts",
+  "type": "commonjs",
+  "files": [
+    "src"
+  ],
+  "scripts": {
+    "test": "jest"
+  },
+  "jest": {
+    "testMatch": [
+      "**/__tests__/**/*.test.js"
+    ],
+    "testTimeout": 60000
+  },
+  "keywords": [
+    "astratra",
+    "mongodb",
+    "mongoose",
+    "saas"
+  ],
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
+  "peerDependencies": {
+    "mongoose": ">=8"
+  },
+  "peerDependenciesMeta": {
+    "mongoose": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "jest": "30.4.2",
+    "mongodb-memory-server": "^10.2.0",
+    "mongoose": "^8.17.0"
+  }
+}

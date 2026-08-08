@@ -1,0 +1,104 @@
+const jwt = require('jsonwebtoken');
+const { createAuthMiddleware, authorizeRoles } = require('../src');
+
+const createRes = () => {
+  const res = {};
+  res.status = jest.fn(() => res);
+  res.json = jest.fn(() => res);
+  return res;
+};
+
+describe('jwtAuth', () => {
+  test('injects decoded user for a valid bearer token', async () => {
+    const token = jwt.sign({ id: 'u1', role: 'admin' }, 'secret');
+    const req = { headers: { authorization: `Bearer ${token}` } };
+    const res = createRes();
+    const next = jest.fn();
+
+    await createAuthMiddleware({ secret: 'secret' })(req, res, next);
+
+    expect(req.user).toMatchObject({ id: 'u1', role: 'admin' });
+    expect(next).toHaveBeenCalledTimes(1);
+    expect(res.status).not.toHaveBeenCalled();
+  });
+
+  test('returns 401 when token is absent', async () => {
+    const res = createRes();
+    const next = jest.fn();
+
+    await createAuthMiddleware({ secret: 'secret' })({ headers: {} }, res, next);
+
+    expect(res.status).toHaveBeenCalledWith(401);
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  test('returns 401 for expired tokens', async () => {
+    const token = jwt.sign({ id: 'u1' }, 'secret', { expiresIn: -1 });
+    const res = createRes();
+    const next = jest.fn();
+
+    await createAuthMiddleware({ secret: 'secret' })({ headers: { authorization: `Bearer ${token}` } }, res, next);
+
+    expect(res.status).toHaveBeenCalledWith(401);
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  test('returns 401 for invalid signatures', async () => {
+    const token = jwt.sign({ id: 'u1' }, 'other-secret');
+    const res = createRes();
+    const next = jest.fn();
+
+    await createAuthMiddleware({ secret: 'secret' })({ cookies: { token } }, res, next);
+
+    expect(res.status).toHaveBeenCalledWith(401);
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  test('accepts legacy secret when primary signature fails', async () => {
+    const token = jwt.sign({ id: 'u1', role: 'member' }, 'old-secret');
+    const req = { cookies: { token }, headers: {} };
+    const next = jest.fn();
+
+    await createAuthMiddleware({ secret: 'new-secret', legacySecret: 'old-secret' })(req, createRes(), next);
+
+    expect(req.user).toMatchObject({ id: 'u1', role: 'member' });
+    expect(next).toHaveBeenCalledTimes(1);
+  });
+
+  test('calls verifySession when provided and rejects revoked sessions', async () => {
+    const token = jwt.sign({ id: 'u1', tokenVersion: 2 }, 'secret');
+    const verifySession = jest.fn().mockResolvedValue(false);
+    const res = createRes();
+    const next = jest.fn();
+
+    await createAuthMiddleware({ secret: 'secret', verifySession })(
+      { headers: { authorization: `Bearer ${token}` } },
+      res,
+      next
+    );
+
+    expect(verifySession).toHaveBeenCalledWith(expect.objectContaining({ id: 'u1', tokenVersion: 2 }));
+    expect(res.status).toHaveBeenCalledWith(401);
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  test('does not verify sessions when callback is absent', async () => {
+    const token = jwt.sign({ id: 'u1', tokenVersion: 2 }, 'secret');
+    const req = { headers: { authorization: `Bearer ${token}` } };
+    const next = jest.fn();
+
+    await createAuthMiddleware({ secret: 'secret' })(req, createRes(), next);
+
+    expect(next).toHaveBeenCalledTimes(1);
+  });
+
+  test('authorizeRoles allows configured roles and rejects others', () => {
+    const allowedNext = jest.fn();
+    authorizeRoles('owner', 'editor')({ user: { role: 'owner' } }, createRes(), allowedNext);
+    expect(allowedNext).toHaveBeenCalledTimes(1);
+
+    const deniedRes = createRes();
+    authorizeRoles('owner')({ user: { role: 'viewer' } }, deniedRes, jest.fn());
+    expect(deniedRes.status).toHaveBeenCalledWith(403);
+  });
+});

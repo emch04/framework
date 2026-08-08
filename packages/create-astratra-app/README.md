@@ -28,9 +28,12 @@ Il genere :
 
 - une API Express avec `@astratra/saas-kit` ;
 - une interface React avec `@astratra/saas-kit-ui` ;
+- des fichiers prets a modifier pour `api/security`, `api/stores`,
+  `api/db`, `api/ai` et `api/modules` ;
+- une base MongoDB optionnelle via `@astratra/store-mongo` et `mongoose` ;
+- une base IA optionnelle via `@astratra/ai` avec router, tools et agent ;
 - les scripts `dev:api` et `dev:web` ;
-- un `.env.example` avec le port API, le host et les origins CORS de
-  developpement.
+- un `.env.example` pour l'API, la securite, CORS, MongoDB et Redis.
 
 Template API seule :
 
@@ -57,12 +60,24 @@ Pour le template `api`, seul `npm run dev:api` est cree.
 
 Par defaut, l'API demande un port libre au systeme et ecrit l'URL choisie dans
 `.astratra/api.json`. Lance `dev:api` avant `dev:web` pour que Vite lise la
-bonne URL. Pour forcer un port precis, utilise par exemple
-`PORT=4000 npm run dev:api`.
+bonne URL. Laisse `PORT` vide pour garder le choix automatique.
 
 En developpement, l'API accepte automatiquement les origins
 `localhost`/`127.0.0.1`, quel que soit le port choisi par Vite. En production,
 definis explicitement `CORS_ORIGIN`.
+
+## Fichiers generes importants
+
+- `api/config/env.js` centralise la configuration.
+- `api/config/cors.js` gere CORS sans port de developpement fixe.
+- `api/security/auth.js`, `api/security/rateLimit.js` et `api/security/waf.js`
+  branchent la securite Astratra.
+- `api/stores/memory.js` lance vite avec des stores en memoire.
+- `api/db/mongo.js` et `api/stores/mongo.js` preparent MongoDB.
+- `api/ai/providers.js`, `api/ai/tools.js` et `api/ai/agent.js` preparent
+  la logique IA.
+- `api/modules/users.js`, `api/modules/settings.js` et
+  `api/modules/notifications.js` isolent la logique metier de depart.
 
 Avant la production, il faut remplacer `JWT_SECRET`, brancher de vrais stores
 et utiliser une vraie verification de mot de passe.

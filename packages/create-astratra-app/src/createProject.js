@@ -27,8 +27,13 @@ function assertCanCreate(targetDir, force) {
 
 function packageJson(projectName, template) {
   const dependencies = {
+    '@astratra/ai': '^0.1.0',
+    '@astratra/core': '^0.1.0',
     '@astratra/saas-kit': '^0.1.0',
-    express: '^4.18.3'
+    '@astratra/security': '^0.1.0',
+    '@astratra/store-mongo': '^0.1.0',
+    express: '^4.18.3',
+    mongoose: '^8.17.0'
   };
   const devDependencies = {};
 
@@ -61,50 +66,33 @@ function apiServer() {
 import fs from 'node:fs';
 import path from 'node:path';
 import saasKit from '@astratra/saas-kit';
+import { env } from './config/env.js';
+import { createCorsMiddleware } from './config/cors.js';
+import { createAuthSecurity } from './security/auth.js';
+import { createRateLimitSecurity } from './security/rateLimit.js';
+import { createWafSecurity } from './security/waf.js';
+import { createMemoryStores } from './stores/memory.js';
+import { userPublicFields } from './modules/users.js';
+import { createNotificationModule } from './modules/notifications.js';
 
-const { createSaasApp, createMemorySettingsStore } = saasKit;
-const preferredPort = process.env.PORT ? Number(process.env.PORT) : 0;
-const host = process.env.HOST || '127.0.0.1';
-const allowedOrigins = new Set((process.env.CORS_ORIGIN || '')
-  .split(',')
-  .map((origin) => origin.trim())
-  .filter(Boolean));
-
-function isAllowedDevOrigin(origin) {
-  if (process.env.NODE_ENV === 'production') return false;
-  try {
-    const url = new URL(origin);
-    return ['127.0.0.1', 'localhost'].includes(url.hostname);
-  } catch {
-    return false;
-  }
-}
+const { createSaasApp } = saasKit;
+const preferredPort = env.port;
+const host = env.host;
+const stores = createMemoryStores();
+const notifications = createNotificationModule();
 
 const app = express();
-app.use((req, res, next) => {
-  const origin = req.headers.origin;
-  if (origin && (allowedOrigins.has(origin) || isAllowedDevOrigin(origin))) {
-    res.setHeader('Access-Control-Allow-Origin', origin);
-    res.setHeader('Vary', 'Origin');
-  }
-  res.setHeader('Access-Control-Allow-Headers', 'content-type, authorization');
-  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PATCH,OPTIONS');
-  if (req.method === 'OPTIONS') {
-    res.status(204).end();
-    return;
-  }
-  next();
-});
+app.use(createCorsMiddleware({ allowedOrigins: env.corsOrigins }));
 
 app.use(createSaasApp({
-  jwtSecret: process.env.JWT_SECRET || 'change-me-in-production',
-  settingsStore: createMemorySettingsStore({
-    productName: 'Astratra App',
-    supportEmail: 'support@example.test',
-    onboardingEnabled: true
-  }),
+  ...createAuthSecurity(env),
+  ...createRateLimitSecurity(env),
+  ...createWafSecurity(env),
+  usersStore: stores.usersStore,
+  settingsStore: stores.settingsStore,
+  publicUserFields: userPublicFields(),
   verifyPassword: async (user, password) => user.password === password,
-  notify: async (message) => ({ delivered: true, message })
+  notify: notifications.notify
 }));
 
 function writeApiRuntimeConfig(port) {
@@ -139,6 +127,234 @@ function listen(port, attemptsLeft = 20) {
 }
 
 listen(preferredPort);
+`;
+}
+
+function envConfig() {
+  return `export const env = {
+  nodeEnv: process.env.NODE_ENV || 'development',
+  port: process.env.PORT ? Number(process.env.PORT) : 0,
+  host: process.env.HOST || '127.0.0.1',
+  jwtSecret: process.env.JWT_SECRET || 'change-me-in-production',
+  legacyJwtSecret: process.env.LEGACY_JWT_SECRET || '',
+  mongoUri: process.env.MONGO_URI || '',
+  redisUrl: process.env.REDIS_URL || '',
+  corsOrigins: (process.env.CORS_ORIGIN || '')
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean)
+};
+`;
+}
+
+function corsConfig() {
+  return `function isAllowedDevOrigin(origin) {
+  if (process.env.NODE_ENV === 'production') return false;
+  try {
+    const url = new URL(origin);
+    return ['127.0.0.1', 'localhost'].includes(url.hostname);
+  } catch {
+    return false;
+  }
+}
+
+export function createCorsMiddleware({ allowedOrigins = [] } = {}) {
+  const allowed = new Set(allowedOrigins);
+  return (req, res, next) => {
+    const origin = req.headers.origin;
+    if (origin && (allowed.has(origin) || isAllowedDevOrigin(origin))) {
+      res.setHeader('Access-Control-Allow-Origin', origin);
+      res.setHeader('Vary', 'Origin');
+    }
+    res.setHeader('Access-Control-Allow-Headers', 'content-type, authorization');
+    res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PATCH,OPTIONS');
+    if (req.method === 'OPTIONS') {
+      res.status(204).end();
+      return;
+    }
+    next();
+  };
+}
+`;
+}
+
+function securityAuth() {
+  return `export function createAuthSecurity(env) {
+  return {
+    jwtSecret: env.jwtSecret,
+    legacyJwtSecret: env.legacyJwtSecret || undefined,
+    roles: {
+      adminRoles: ['owner', 'admin']
+    }
+  };
+}
+`;
+}
+
+function securityRateLimit() {
+  return `export function createRateLimitSecurity(env) {
+  return {
+    apiRateLimit: {
+      windowMs: 15 * 60 * 1000,
+      max: 300,
+      redisUrl: env.redisUrl || undefined
+    },
+    loginRateLimit: {
+      windowMs: 15 * 60 * 1000,
+      max: 10,
+      redisUrl: env.redisUrl || undefined
+    }
+  };
+}
+`;
+}
+
+function securityWaf() {
+  return `export function createWafSecurity() {
+  return {
+    waf: {
+      message: {
+        success: false,
+        message: 'Request blocked by Astratra security policy.'
+      }
+    }
+  };
+}
+`;
+}
+
+function memoryStores() {
+  return `import saasKit from '@astratra/saas-kit';
+import { defaultSettings } from '../modules/settings.js';
+
+const { createMemorySettingsStore, createMemoryUsersStore } = saasKit;
+
+export function createMemoryStores() {
+  return {
+    usersStore: createMemoryUsersStore(),
+    settingsStore: createMemorySettingsStore(defaultSettings)
+  };
+}
+`;
+}
+
+function mongoDb() {
+  return `import mongoose from 'mongoose';
+
+export async function connectMongo(uri, options = {}) {
+  if (!uri) {
+    throw new Error('MONGO_URI is required to connect MongoDB.');
+  }
+  await mongoose.connect(uri, options);
+  return mongoose.connection;
+}
+`;
+}
+
+function mongoStores() {
+  return `import storeMongo from '@astratra/store-mongo';
+
+const { createMongoSettingsStore, createMongoUsersStore } = storeMongo;
+
+export function createMongoStores({ uri, connection } = {}) {
+  const options = connection ? { connection } : { uri };
+  return {
+    usersStore: createMongoUsersStore(options),
+    settingsStore: createMongoSettingsStore(options)
+  };
+}
+`;
+}
+
+function aiProviders() {
+  return `import ai from '@astratra/ai';
+
+const { createProviderRouter } = ai;
+
+export function createAiRouter() {
+  return createProviderRouter({
+    providers: [
+      // Ajoute ici OpenAI, Workers AI, Groq, Mistral, Gemini, etc.
+      // Chaque provider doit exposer { id, models, call(prompt, ctx, model) }.
+    ],
+    intentRouting: {}
+  });
+}
+`;
+}
+
+function aiTools() {
+  return `import ai from '@astratra/ai';
+
+const { createToolRegistry } = ai;
+
+export function createAiTools() {
+  const registry = createToolRegistry();
+
+  registry.register({
+    name: 'health_check',
+    type: 'internal',
+    description: 'Retourne un statut simple de l application.',
+    roles: ['owner', 'admin'],
+    params: {},
+    handler: async () => ({ ok: true })
+  });
+
+  return registry;
+}
+`;
+}
+
+function aiAgent() {
+  return `import ai from '@astratra/ai';
+import { createAiRouter } from './providers.js';
+import { createAiTools } from './tools.js';
+
+const { runAgentLoop } = ai;
+
+export function createAgent() {
+  const router = createAiRouter();
+  const registry = createAiTools();
+
+  return {
+    ask: ({ prompt, userRole = 'owner', ctx = {} }) => runAgentLoop({
+      prompt,
+      userRole,
+      ctx,
+      registry,
+      router
+    }),
+    stop: () => router.stop()
+  };
+}
+`;
+}
+
+function usersModule() {
+  return `export function userPublicFields() {
+  return ['id', 'email', 'role'];
+}
+`;
+}
+
+function settingsModule() {
+  return `export const defaultSettings = {
+  productName: 'Astratra App',
+  supportEmail: 'support@example.test',
+  onboardingEnabled: true
+};
+`;
+}
+
+function notificationsModule() {
+  return `export function createNotificationModule() {
+  return {
+    notify: async (message) => ({
+      delivered: true,
+      message
+    })
+  };
+}
 `;
 }
 
@@ -321,8 +537,20 @@ npm run dev:api
 ${webSteps}
 Par defaut, l'API demande un port libre au systeme et ecrit l'URL choisie
 dans \`.astratra/api.json\`. Lance \`dev:api\` avant \`dev:web\` pour que Vite
-lise la bonne URL. Pour forcer un port precis, utilise par exemple
-\`PORT=4000 npm run dev:api\`.
+lise la bonne URL. Laisse \`PORT\` vide pour garder le choix automatique.
+
+## Fichiers importants
+
+- \`api/config/env.js\` centralise la configuration.
+- \`api/config/cors.js\` gere CORS sans port de developpement fixe.
+- \`api/security/auth.js\`, \`api/security/rateLimit.js\` et
+  \`api/security/waf.js\` branchent la securite Astratra.
+- \`api/stores/memory.js\` lance vite avec des stores en memoire.
+- \`api/db/mongo.js\` et \`api/stores/mongo.js\` preparent MongoDB.
+- \`api/ai/providers.js\`, \`api/ai/tools.js\` et \`api/ai/agent.js\`
+  preparent la logique IA.
+- \`api/modules/users.js\`, \`api/modules/settings.js\` et
+  \`api/modules/notifications.js\` isolent la logique metier de depart.
 
 Comptes de test :
 
@@ -376,8 +604,22 @@ export function createProject({ targetDir, template = 'fullstack', force = false
 
   writeFile(absoluteTarget, 'package.json', `${packageJson(projectName, template)}\n`);
   writeFile(absoluteTarget, 'api/server.js', apiServer());
+  writeFile(absoluteTarget, 'api/config/env.js', envConfig());
+  writeFile(absoluteTarget, 'api/config/cors.js', corsConfig());
+  writeFile(absoluteTarget, 'api/security/auth.js', securityAuth());
+  writeFile(absoluteTarget, 'api/security/rateLimit.js', securityRateLimit());
+  writeFile(absoluteTarget, 'api/security/waf.js', securityWaf());
+  writeFile(absoluteTarget, 'api/stores/memory.js', memoryStores());
+  writeFile(absoluteTarget, 'api/stores/mongo.js', mongoStores());
+  writeFile(absoluteTarget, 'api/db/mongo.js', mongoDb());
+  writeFile(absoluteTarget, 'api/ai/providers.js', aiProviders());
+  writeFile(absoluteTarget, 'api/ai/tools.js', aiTools());
+  writeFile(absoluteTarget, 'api/ai/agent.js', aiAgent());
+  writeFile(absoluteTarget, 'api/modules/users.js', usersModule());
+  writeFile(absoluteTarget, 'api/modules/settings.js', settingsModule());
+  writeFile(absoluteTarget, 'api/modules/notifications.js', notificationsModule());
   writeFile(absoluteTarget, '.gitignore', 'node_modules\n.env\n.astratra\n');
-  writeFile(absoluteTarget, '.env.example', 'PORT=\nHOST=127.0.0.1\nJWT_SECRET=change-me\nCORS_ORIGIN=\n');
+  writeFile(absoluteTarget, '.env.example', 'PORT=\nHOST=127.0.0.1\nJWT_SECRET=change-me\nLEGACY_JWT_SECRET=\nCORS_ORIGIN=\nMONGO_URI=\nREDIS_URL=\n');
   writeFile(absoluteTarget, 'README.md', readme(projectName, template));
 
   if (template === 'fullstack') {

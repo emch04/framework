@@ -12,7 +12,7 @@ const userIdValidation = [
   param('id').notEmpty().withMessage('id is required')
 ];
 
-function createUsersRoutes({ usersStore, authorizeAdmin }) {
+function createUsersRoutes({ usersStore, authorizeAdmin, publicUserFields }) {
   const router = express.Router();
 
   router.use(authorizeAdmin);
@@ -21,7 +21,7 @@ function createUsersRoutes({ usersStore, authorizeAdmin }) {
     const pagination = toPagination(req.query);
     const users = await usersStore.list(pagination);
     return apiResponse(res, 200, 'Users list', {
-      items: users.map(sanitizeUser),
+      items: users.map((user) => sanitizeUser(user, publicUserFields)),
       limit: pagination.limit,
       offset: pagination.offset
     });
@@ -33,12 +33,12 @@ function createUsersRoutes({ usersStore, authorizeAdmin }) {
       throw new AppError('User not found.', 404);
     }
 
-    return apiResponse(res, 200, 'User found', sanitizeUser(user));
+    return apiResponse(res, 200, 'User found', sanitizeUser(user, publicUserFields));
   }));
 
   router.post('/', validateMiddleware(createUserValidation), asyncHandler(async (req, res) => {
     const user = await usersStore.create(req.body);
-    return apiResponse(res, 201, 'User created', sanitizeUser(user));
+    return apiResponse(res, 201, 'User created', sanitizeUser(user, publicUserFields));
   }));
 
   router.patch('/:id', validateMiddleware(userIdValidation), asyncHandler(async (req, res) => {
@@ -47,7 +47,7 @@ function createUsersRoutes({ usersStore, authorizeAdmin }) {
       throw new AppError('User not found.', 404);
     }
 
-    return apiResponse(res, 200, 'User updated', sanitizeUser(user));
+    return apiResponse(res, 200, 'User updated', sanitizeUser(user, publicUserFields));
   }));
 
   return router;

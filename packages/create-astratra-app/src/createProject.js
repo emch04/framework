@@ -29,9 +29,9 @@ function packageJson(projectName, template) {
   const dependencies = {
     '@astratra/ai': '^1.0.0',
     '@astratra/core': '^1.0.0',
-    '@astratra/saas-kit': '^1.0.0',
-    '@astratra/security': '^1.0.0',
-    '@astratra/store-mongo': '^1.0.0',
+    '@astratra/saas-kit': '^1.0.1',
+    '@astratra/security': '^1.0.1',
+    '@astratra/store-mongo': '^1.0.1',
     express: '^4.18.3',
     mongoose: '^8.17.0'
   };
@@ -131,11 +131,22 @@ listen(preferredPort);
 }
 
 function envConfig() {
-  return `export const env = {
-  nodeEnv: process.env.NODE_ENV || 'development',
+  return `const nodeEnv = process.env.NODE_ENV || 'development';
+const jwtSecret = process.env.JWT_SECRET || 'change-me-in-production';
+
+function assertProductionEnv() {
+  if (nodeEnv === 'production' && jwtSecret === 'change-me-in-production') {
+    throw new Error('JWT_SECRET is required in production.');
+  }
+}
+
+assertProductionEnv();
+
+export const env = {
+  nodeEnv,
   port: process.env.PORT ? Number(process.env.PORT) : 0,
   host: process.env.HOST || '127.0.0.1',
-  jwtSecret: process.env.JWT_SECRET || 'change-me-in-production',
+  jwtSecret,
   legacyJwtSecret: process.env.LEGACY_JWT_SECRET || '',
   jwtIssuer: process.env.JWT_ISSUER || '',
   jwtAudience: process.env.JWT_AUDIENCE || '',
@@ -354,9 +365,10 @@ function settingsModule() {
 function notificationsModule() {
   return `export function createNotificationModule() {
   return {
-    notify: async (message) => ({
+    notify: async (userId, notification) => ({
       delivered: true,
-      message
+      userId,
+      notification
     })
   };
 }
@@ -373,9 +385,9 @@ function readApiUrl() {
   try {
     const configPath = path.resolve('.astratra/api.json');
     const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-    return config.apiUrl || 'http://127.0.0.1:4000';
+    return config.apiUrl || '';
   } catch {
-    return 'http://127.0.0.1:4000';
+    return '';
   }
 }
 

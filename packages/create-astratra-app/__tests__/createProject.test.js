@@ -44,10 +44,10 @@ test('createProject writes a fullstack Astratra starter', () => {
   const pkg = JSON.parse(fs.readFileSync(path.join(result.targetDir, 'package.json'), 'utf8'));
   assert.equal(pkg.name, 'demo-app');
   assert.equal(pkg.dependencies['@astratra/core'], '^1.0.0');
-  assert.equal(pkg.dependencies['@astratra/security'], '^1.0.0');
+  assert.equal(pkg.dependencies['@astratra/security'], '^1.0.1');
   assert.equal(pkg.dependencies['@astratra/ai'], '^1.0.0');
-  assert.equal(pkg.dependencies['@astratra/saas-kit'], '^1.0.0');
-  assert.equal(pkg.dependencies['@astratra/store-mongo'], '^1.0.0');
+  assert.equal(pkg.dependencies['@astratra/saas-kit'], '^1.0.1');
+  assert.equal(pkg.dependencies['@astratra/store-mongo'], '^1.0.1');
   assert.equal(pkg.dependencies['@astratra/saas-kit-ui'], '^1.0.0');
   assert.equal(pkg.dependencies.mongoose, '^8.17.0');
   assert.equal(pkg.scripts.dev, 'node scripts/dev.js');
@@ -57,6 +57,7 @@ test('createProject writes a fullstack Astratra starter', () => {
   const envConfig = fs.readFileSync(path.join(result.targetDir, 'api/config/env.js'), 'utf8');
   const corsConfig = fs.readFileSync(path.join(result.targetDir, 'api/config/cors.js'), 'utf8');
   const authSecurity = fs.readFileSync(path.join(result.targetDir, 'api/security/auth.js'), 'utf8');
+  const notificationsModule = fs.readFileSync(path.join(result.targetDir, 'api/modules/notifications.js'), 'utf8');
   const memoryStores = fs.readFileSync(path.join(result.targetDir, 'api/stores/memory.js'), 'utf8');
   const envExample = fs.readFileSync(path.join(result.targetDir, '.env.example'), 'utf8');
   assert.equal(apiServer.includes('./config/env.js'), true);
@@ -71,6 +72,11 @@ test('createProject writes a fullstack Astratra starter', () => {
   assert.equal(authSecurity.includes("jwtAlgorithms: ['HS256']"), true);
   assert.equal(authSecurity.includes('jwtIssuer'), true);
   assert.equal(authSecurity.includes('jwtAudience'), true);
+  assert.equal(envConfig.includes('assertProductionEnv'), true);
+  assert.equal(envConfig.includes('change-me-in-production'), true);
+  assert.equal(notificationsModule.includes('notify: async (userId, notification)'), true);
+  assert.equal(notificationsModule.includes('userId'), true);
+  assert.equal(notificationsModule.includes('notification'), true);
   assert.equal(envExample.includes('JWT_ISSUER='), true);
   assert.equal(envExample.includes('JWT_AUDIENCE='), true);
   assert.equal(memoryStores.includes('../modules/settings.js'), true);
@@ -85,6 +91,7 @@ test('createProject writes a fullstack Astratra starter', () => {
   assert.match(viteConfig, /readApiUrl/);
   assert.match(viteConfig, /VITE_API_URL/);
   assert.doesNotMatch(viteConfig, /port: 5173/);
+  assert.doesNotMatch(viteConfig, /4000/);
 
   const devScript = fs.readFileSync(path.join(result.targetDir, 'scripts/dev.js'), 'utf8');
   assert.match(devScript, /dev:api/);

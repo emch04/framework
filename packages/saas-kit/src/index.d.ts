@@ -30,6 +30,8 @@ export interface UsersStore {
   findById(id: string): Awaitable<SaasUser | null>;
   create(userData: SaasUser): Awaitable<SaasUser>;
   list(options?: UserListOptions): Awaitable<SaasUser[]>;
+  count?(options?: Pick<UserListOptions, 'role'>): Awaitable<number>;
+  countByRole?(): Awaitable<Record<string, number>>;
   update(id: string, patch: Partial<SaasUser>): Awaitable<SaasUser | null>;
 }
 

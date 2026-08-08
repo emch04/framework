@@ -43,6 +43,8 @@ export interface PostgresUsersStore<TUser extends PostgresUserBase = PostgresUse
   findById(id: string): Promise<TUser | null>;
   create(userData: Partial<TUser> & Record<string, unknown>): Promise<TUser>;
   list(options?: UsersListOptions): Promise<TUser[]>;
+  count(options?: Pick<UsersListOptions, 'role'>): Promise<number>;
+  countByRole(): Promise<Record<string, number>>;
   update(id: string, patch: Partial<TUser> & Record<string, unknown>): Promise<TUser | null>;
   disconnect(): Promise<void>;
 }
@@ -50,8 +52,8 @@ export interface PostgresUsersStore<TUser extends PostgresUserBase = PostgresUse
 export interface PostgresSettingsStore<TSettings extends object = Record<string, unknown>> {
   get<TKey extends keyof TSettings & string>(key: TKey): Promise<TSettings[TKey] | null>;
   get(key: string): Promise<unknown | null>;
-  set<TKey extends keyof TSettings & string>(key: TKey, value: TSettings[TKey]): Promise<void>;
-  set(key: string, value: unknown): Promise<void>;
+  set<TKey extends keyof TSettings & string>(key: TKey, value: TSettings[TKey]): Promise<TSettings[TKey]>;
+  set(key: string, value: unknown): Promise<unknown>;
   getAll(): Promise<Partial<TSettings>>;
   disconnect(): Promise<void>;
 }

@@ -160,19 +160,48 @@ test('login tokens work with configured JWT issuer and audience', async () => {
   assert.equal(response.body.success, true);
 });
 
+test('production mode requires an explicit JWT secret', () => {
+  const previousNodeEnv = process.env.NODE_ENV;
+  const previousJwtSecret = process.env.JWT_SECRET;
+  process.env.NODE_ENV = 'production';
+  delete process.env.JWT_SECRET;
+
+  try {
+    assert.throws(
+      () => createSaasApp({
+        notify: async () => ({ queued: true }),
+        verifyPassword: async () => true
+      }),
+      /JWT_SECRET/
+    );
+  } finally {
+    if (previousNodeEnv === undefined) delete process.env.NODE_ENV;
+    else process.env.NODE_ENV = previousNodeEnv;
+    if (previousJwtSecret === undefined) delete process.env.JWT_SECRET;
+    else process.env.JWT_SECRET = previousJwtSecret;
+  }
+});
+
 test('users routes support basic admin CRUD through the users store', async () => {
   const { app } = createTestApp();
   const token = await login(app, 'owner@example.test');
 
   const created = await request(app, 'POST', '/users', {
     headers: { authorization: `Bearer ${token}` },
-    body: { email: 'new@example.test', role: 'member', name: 'New User', password: 'secret' }
+    body: {
+      email: 'new@example.test',
+      role: 'member',
+      name: 'New User',
+      password: 'secret',
+      refreshToken: 'private-refresh-token'
+    }
   });
 
   assert.equal(created.status, 201);
   assert.equal(created.body.data.email, 'new@example.test');
   assert.equal(created.body.data.role, 'member');
   assert.equal(created.body.data.password, undefined);
+  assert.equal(created.body.data.refreshToken, undefined);
 
   const listed = await request(app, 'GET', '/users?role=member&limit=10&offset=0', {
     headers: { authorization: `Bearer ${token}` }
@@ -186,7 +215,7 @@ test('users routes support basic admin CRUD through the users store', async () =
   });
 
   assert.equal(fetched.status, 200);
-  assert.equal(fetched.body.data.name, 'New User');
+  assert.equal(fetched.body.data.name, undefined);
 
   const updated = await request(app, 'PATCH', `/users/${created.body.data.id}`, {
     headers: { authorization: `Bearer ${token}` },
@@ -194,7 +223,7 @@ test('users routes support basic admin CRUD through the users store', async () =
   });
 
   assert.equal(updated.status, 200);
-  assert.equal(updated.body.data.name, 'Renamed User');
+  assert.equal(updated.body.data.name, undefined);
 });
 
 test('settings routes read and write generic key/value settings', async () => {
@@ -257,6 +286,26 @@ test('dashboard summary reports generic user count and role breakdown', async ()
     member: 1,
     owner: 1
   });
+});
+
+test('dashboard summary uses aggregate store methods when available', async () => {
+  const usersStore = createMemoryUsersStore();
+  usersStore.count = async () => 2;
+  usersStore.countByRole = async () => ({ owner: 1, member: 1 });
+  usersStore.list = async () => {
+    throw new Error('dashboard should not list all users when aggregate methods exist');
+  };
+  const settingsStore = createMemorySettingsStore();
+  const { app } = createTestApp({ usersStore, settingsStore });
+  const token = jwt.sign({ id: 'user-owner', email: 'owner@example.test', role: 'owner' }, TEST_SECRET);
+
+  const response = await request(app, 'GET', '/dashboard/summary', {
+    headers: { authorization: `Bearer ${token}` }
+  });
+
+  assert.equal(response.status, 200);
+  assert.equal(response.body.data.userCount, 2);
+  assert.deepEqual(response.body.data.roleBreakdown, { owner: 1, member: 1 });
 });
 
 test('custom admin roles are honored without imposing fixed roles', async () => {

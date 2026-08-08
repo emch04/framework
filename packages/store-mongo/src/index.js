@@ -72,6 +72,10 @@ function safeNumber(value, fallback) {
   return Number.isFinite(number) ? Math.max(number, 0) : fallback;
 }
 
+function normalizeEmail(email) {
+  return String(email || '').trim().toLowerCase();
+}
+
 function initModel(Model) {
   if (!Model.astratraInitPromise) {
     Model.astratraInitPromise = Model.init();
@@ -101,7 +105,8 @@ function createMongoUsersStore(options = {}) {
   return {
     async findByEmail(email) {
       await ready();
-      const user = await User.findOne({ email }).lean();
+      const normalized = normalizeEmail(email);
+      const user = await User.findOne({ email: normalized }).lean();
       return stripMongoFields(user);
     },
 
@@ -118,6 +123,9 @@ function createMongoUsersStore(options = {}) {
     async create(userData) {
       await ready();
       const data = { ...(userData || {}) };
+      if (data.email !== undefined) {
+        data.email = normalizeEmail(data.email);
+      }
       if (data.id !== undefined && data._id === undefined && context.mongoose.isValidObjectId(data.id)) {
         data._id = data.id;
         delete data.id;
@@ -145,11 +153,29 @@ function createMongoUsersStore(options = {}) {
       return users.map(stripMongoFields);
     },
 
+    async count({ role } = {}) {
+      await ready();
+      const query = role ? { role } : {};
+      return User.countDocuments(query);
+    },
+
+    async countByRole() {
+      await ready();
+      const rows = await User.aggregate([
+        { $group: { _id: { $ifNull: ['$role', 'unknown'] }, count: { $sum: 1 } } },
+        { $sort: { _id: 1 } }
+      ]);
+      return Object.fromEntries(rows.map((row) => [row._id, row.count]));
+    },
+
     async update(id, patch) {
       await ready();
       const data = { ...(patch || {}) };
       delete data.id;
       delete data._id;
+      if (data.email !== undefined) {
+        data.email = normalizeEmail(data.email);
+      }
 
       try {
         const user = await User.findByIdAndUpdate(id, { $set: data }, {
@@ -195,11 +221,12 @@ function createMongoSettingsStore(options = {}) {
 
     async set(key, value) {
       await ready();
-      await Setting.findOneAndUpdate(
+      const setting = await Setting.findOneAndUpdate(
         { key },
         { $set: { key, value } },
         { upsert: true, new: true, setDefaultsOnInsert: true }
       ).lean();
+      return setting.value;
     },
 
     async getAll() {

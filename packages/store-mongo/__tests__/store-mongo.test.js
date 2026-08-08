@@ -50,6 +50,10 @@ test('users store supports CRUD round-trip with plain returned objects', async (
     id: created.id,
     email: 'doctor@example.test'
   });
+  await expect(usersStore.findByEmail('DOCTOR@example.test')).resolves.toMatchObject({
+    id: created.id,
+    email: 'doctor@example.test'
+  });
   await expect(usersStore.findById(created.id)).resolves.toMatchObject({
     id: created.id,
     role: 'doctor'
@@ -77,6 +81,13 @@ test('users list supports role filtering and pagination', async () => {
     email: 'doctor-2@example.test',
     role: 'doctor'
   });
+  await expect(usersStore.count()).resolves.toBe(4);
+  await expect(usersStore.count({ role: 'doctor' })).resolves.toBe(2);
+  await expect(usersStore.countByRole()).resolves.toEqual({
+    admin: 1,
+    doctor: 2,
+    patient: 1
+  });
 });
 
 test('users store rejects duplicate email when uniqueEmail is enabled', async () => {
@@ -93,9 +104,9 @@ test('settings store supports get, set and getAll', async () => {
   const settingsStore = createMongoSettingsStore({ connection });
 
   await expect(settingsStore.get('timezone')).resolves.toBeNull();
-  await settingsStore.set('timezone', 'Europe/Paris');
-  await settingsStore.set('flags', { reminders: true });
-  await settingsStore.set('timezone', 'Africa/Kinshasa');
+  await expect(settingsStore.set('timezone', 'Europe/Paris')).resolves.toBe('Europe/Paris');
+  await expect(settingsStore.set('flags', { reminders: true })).resolves.toEqual({ reminders: true });
+  await expect(settingsStore.set('timezone', 'Africa/Kinshasa')).resolves.toBe('Africa/Kinshasa');
 
   await expect(settingsStore.get('timezone')).resolves.toBe('Africa/Kinshasa');
   await expect(settingsStore.getAll()).resolves.toEqual({

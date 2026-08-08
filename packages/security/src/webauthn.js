@@ -93,8 +93,15 @@ const normalizeChallenge = (pending) => {
   return {
     challenge: pending.challenge,
     origin: pending.origin || pending.metadata?.origin,
-    rpID: pending.rpID || pending.metadata?.rpID
+    rpID: pending.rpID || pending.metadata?.rpID,
+    expiresAt: pending.expiresAt || pending.metadata?.expiresAt
   };
+};
+
+const isExpiredChallenge = (pending) => {
+  if (!pending?.expiresAt) return false;
+  const expiresAt = new Date(pending.expiresAt).getTime();
+  return Number.isFinite(expiresAt) && expiresAt <= Date.now();
 };
 
 const publicKeyToBase64Url = (publicKey) => {
@@ -164,6 +171,9 @@ const createWebauthnService = (store, options = {}) => {
       if (!pending) {
         throw createError('No pending WebAuthn registration challenge.', 400);
       }
+      if (isExpiredChallenge(pending)) {
+        throw createError('Expired WebAuthn registration challenge.', 400);
+      }
 
       const verification = await verifyRegistrationResponse({
         response,
@@ -222,10 +232,16 @@ const createWebauthnService = (store, options = {}) => {
       if (!pending) {
         throw createError('No pending WebAuthn authentication challenge.', 400);
       }
+      if (isExpiredChallenge(pending)) {
+        throw createError('Expired WebAuthn authentication challenge.', 400);
+      }
 
       const stored = await store.getCredentialById(response.id);
       if (!stored) {
         throw createError('Unknown WebAuthn credential.', 401);
+      }
+      if (String(stored.userId) !== String(userId)) {
+        throw createError('WebAuthn credential does not belong to this user.', 401);
       }
 
       const credentialID = stored.credentialID || stored.id;

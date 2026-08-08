@@ -49,6 +49,10 @@ function mergeUserRow(row) {
   return { ...row.data, id: row.id };
 }
 
+function normalizeEmail(email) {
+  return String(email || '').trim().toLowerCase();
+}
+
 function createPostgresUsersStore(options = {}) {
   const table = options.usersTable || DEFAULT_USERS_TABLE;
   assertValidIdentifier(table, 'usersTable');
@@ -73,7 +77,7 @@ function createPostgresUsersStore(options = {}) {
   return {
     async findByEmail(email) {
       await ready;
-      const result = await pool.query(`SELECT id, data FROM ${table} WHERE email = $1 LIMIT 1`, [email]);
+      const result = await pool.query(`SELECT id, data FROM ${table} WHERE email = $1 LIMIT 1`, [normalizeEmail(email)]);
       return mergeUserRow(result.rows[0]);
     },
 
@@ -93,6 +97,9 @@ function createPostgresUsersStore(options = {}) {
       await ready;
       const data = { ...(userData || {}) };
       delete data.id;
+      if (data.email !== undefined) {
+        data.email = normalizeEmail(data.email);
+      }
       const id = randomUUID();
       const email = data.email ?? null;
       const role = data.role ?? null;
@@ -122,11 +129,33 @@ function createPostgresUsersStore(options = {}) {
       return result.rows.map(mergeUserRow);
     },
 
+    async count({ role } = {}) {
+      await ready;
+      const result = role
+        ? await pool.query(`SELECT COUNT(*)::int AS count FROM ${table} WHERE role = $1`, [role])
+        : await pool.query(`SELECT COUNT(*)::int AS count FROM ${table}`);
+      return result.rows[0].count;
+    },
+
+    async countByRole() {
+      await ready;
+      const result = await pool.query(`
+        SELECT COALESCE(role, 'unknown') AS role, COUNT(*)::int AS count
+        FROM ${table}
+        GROUP BY COALESCE(role, 'unknown')
+        ORDER BY role
+      `);
+      return Object.fromEntries(result.rows.map((row) => [row.role, row.count]));
+    },
+
     async update(id, patch) {
       await ready;
       if (!isValidUuid(id)) return null;
       const safePatch = { ...(patch || {}) };
       delete safePatch.id;
+      if (safePatch.email !== undefined) {
+        safePatch.email = normalizeEmail(safePatch.email);
+      }
 
       try {
         const existing = await pool.query(`SELECT id, data FROM ${table} WHERE id = $1 LIMIT 1`, [id]);
@@ -179,11 +208,13 @@ function createPostgresSettingsStore(options = {}) {
 
     async set(key, value) {
       await ready;
-      await pool.query(
+      const result = await pool.query(
         `INSERT INTO ${table} (key, value) VALUES ($1, $2)
-         ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
+         ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value
+         RETURNING value`,
         [key, JSON.stringify(value)]
       );
+      return result.rows[0].value;
     },
 
     async getAll() {

@@ -15,7 +15,7 @@ d'agent.
 const { createProviderRouter } = require('@astratra/ai');
 
 const router = createProviderRouter({
-  redisUrl: process.env.REDIS_URL,  // optionnel — état partagé entre instances, repli RAM si absent/injoignable
+  redisUrl: process.env.REDIS_URL,  // optionnel — quotas atomiques partagés entre instances
   intentRouting: {
     summarize: { preferred: ['fast-model'] }
   },
@@ -29,15 +29,19 @@ const router = createProviderRouter({
 });
 
 const reponse = await router.ask('Résume ceci.', { complexity: 'simple', estimatedTokens: 200 });
-router.getStats();  // usage RPM/RPD/TPD par modèle, état cooldown/dégradé
+router.getStats();  // usage RPM/RPD/TPD par "providerId:modelId", état cooldown/dégradé
 router.stop();      // arrête le timer de reset minuit et ferme le lien Redis, s'il existe
 ```
 
 Les providers sont essayés dans l'ordre du tableau que vous fournissez —
 l'ordre de fallback est votre décision, pas figé dans le package. Les
 quotas RPM/RPD/TPD, le cooldown après 429 avec jitter et la dégradation
-après échecs répétés sont suivis par modèle. Les compteurs journaliers se
-réinitialisent automatiquement à minuit local.
+après échecs répétés sont suivis par couple `providerId:modelId`. Avec
+`redisUrl`, la réservation des quotas est atomique entre instances avant
+l'appel du provider. Sans Redis, ou si Redis devient indisponible, le routeur
+continue avec des compteurs RAM locaux : ce repli ne peut pas garantir un
+quota distribué. Les compteurs journaliers se réinitialisent automatiquement
+à minuit.
 
 ## Registre d'outils
 

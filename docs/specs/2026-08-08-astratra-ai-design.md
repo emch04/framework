@@ -62,9 +62,9 @@ Le routeur porte le mécanisme générique de `provider.manager.js` :
 - cooldown avec jitter après erreur 429
 - dégradation après N échecs consécutifs (configurable, défaut 3, durée
   configurable, défaut 5 min)
-- état partagé Redis **optionnel** (si `config.redisUrl` fourni), repli RAM
-  silencieux sinon — reprendre le pattern "ne doit jamais faire échouer
-  l'appli" de l'original
+- réservations de quotas Redis **atomiques** (si `config.redisUrl` fourni),
+  avec clés par `providerId:modelId`; repli RAM local si Redis est absent ou
+  indisponible, sans prétention de quota distribué dans ce cas
 - sélection ordonnée : `routing` optionnel par intent (`config.intentRouting`,
   même forme que `INTENT_ROUTING` mais fourni par le consommateur, vide par
   défaut) puis par `complexity`
@@ -79,7 +79,8 @@ de repli type "je suis indisponible" en dur — ça, c'est au consommateur de le
 gérer avec le message qu'il veut).
 
 `router.getStats()` — même forme que l'original (rpm_now, rpd_used, cooldown,
-degraded, failures par modèle), utile pour un futur dashboard.
+degraded, failures), indexée par `providerId:modelId`, utile pour un futur
+dashboard.
 
 Pas de complexité "assessComplexity" automatique par défaut (l'algorithme d'origine
 regarde le texte du prompt et des heuristiques propres à son usage) — le

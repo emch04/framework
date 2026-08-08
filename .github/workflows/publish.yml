@@ -1,0 +1,48 @@
+name: Publish npm package
+
+on:
+  workflow_dispatch:
+    inputs:
+      workspace:
+        description: Workspace npm to publish
+        required: true
+        type: choice
+        options:
+          - '@astratra/ai'
+          - '@astratra/core'
+          - '@astratra/security'
+          - '@astratra/saas-kit'
+          - '@astratra/saas-kit-ui'
+          - '@astratra/store-mongo'
+          - '@astratra/store-postgres'
+          - '@astratra/tooling'
+          - create-astratra-app
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment: npm
+    env:
+      WORKSPACE: ${{ inputs.workspace }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+          registry-url: https://registry.npmjs.org
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify package
+        run: npm pack --workspace "$WORKSPACE" --dry-run
+
+      - name: Publish with npm provenance
+        run: npm publish --workspace "$WORKSPACE" --access public --provenance

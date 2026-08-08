@@ -60,7 +60,7 @@ describe('providerRouter', () => {
     await expect(router.ask('second', { complexity: 'simple', estimatedTokens: 10 })).resolves.toBe('fallback answer');
 
     const stats = router.getStats();
-    expect(stats['primary-model'].cooldown).toBe(true);
+    expect(stats['primary:primary-model'].cooldown).toBe(true);
     expect(primaryCall).toHaveBeenCalledTimes(1);
     expect(fallbackCall).toHaveBeenCalledTimes(2);
     router.stop();
@@ -86,7 +86,7 @@ describe('providerRouter', () => {
     await router.ask('two', { complexity: 'simple', estimatedTokens: 10 });
     await router.ask('three', { complexity: 'simple', estimatedTokens: 10 });
 
-    expect(router.getStats()['unstable-model']).toMatchObject({
+    expect(router.getStats()['primary:unstable-model']).toMatchObject({
       degraded: true,
       failures: 2
     });
@@ -107,7 +107,7 @@ describe('providerRouter', () => {
     });
 
     await router.ask('first', { complexity: 'simple', estimatedTokens: 20 });
-    expect(router.getStats()['daily-model']).toMatchObject({
+    expect(router.getStats()['primary:daily-model']).toMatchObject({
       rpd_used: 1,
       tpd_used: 20
     });
@@ -115,7 +115,7 @@ describe('providerRouter', () => {
     jest.advanceTimersByTime(11_000);
     await Promise.resolve();
 
-    expect(router.getStats()['daily-model']).toMatchObject({
+    expect(router.getStats()['primary:daily-model']).toMatchObject({
       rpd_used: 0,
       tpd_used: 0
     });
@@ -132,8 +132,86 @@ describe('providerRouter', () => {
     });
 
     await expect(router.ask('hello', { complexity: 'simple', estimatedTokens: 1 })).resolves.toBe('ok');
-    expect(router.getStats()['memory-model'].rpd_used).toBe(1);
+    expect(router.getStats()['memory-only:memory-model'].rpd_used).toBe(1);
     router.stop();
+  });
+
+  test('keeps models with the same id isolated by provider', async () => {
+    const primaryCall = jest.fn().mockResolvedValue('primary answer');
+    const fallbackCall = jest.fn().mockResolvedValue('fallback answer');
+    const router = createProviderRouter({
+      providers: [
+        provider('primary', [
+          { id: 'shared-model', rpm: 1, rpd: 10, tpd: 1000, complexity: ['simple'] }
+        ], primaryCall),
+        provider('fallback', [
+          { id: 'shared-model', rpm: 1, rpd: 10, tpd: 1000, complexity: ['simple'] }
+        ], fallbackCall)
+      ]
+    });
+
+    await expect(router.ask('first', { complexity: 'simple' })).resolves.toBe('primary answer');
+    await expect(router.ask('second', { complexity: 'simple' })).resolves.toBe('fallback answer');
+
+    expect(router.getStats()).toMatchObject({
+      'primary:shared-model': { provider: 'primary', rpm_now: 1 },
+      'fallback:shared-model': { provider: 'fallback', rpm_now: 1 }
+    });
+    router.stop();
+  });
+
+  test('uses Redis atomic reservations before calling a provider', async () => {
+    const fakeClient = {
+      isOpen: true,
+      connect: jest.fn().mockResolvedValue(),
+      disconnect: jest.fn().mockResolvedValue(),
+      on: jest.fn(),
+      get: jest.fn().mockResolvedValue(null),
+      ttl: jest.fn().mockResolvedValue(-2),
+      eval: jest.fn()
+        .mockResolvedValueOnce(0)
+        .mockResolvedValueOnce(1),
+      incrBy: jest.fn().mockResolvedValue(1),
+      expire: jest.fn().mockResolvedValue(1),
+      set: jest.fn().mockResolvedValue('OK'),
+      del: jest.fn().mockResolvedValue(1)
+    };
+
+    jest.doMock('redis', () => ({ createClient: jest.fn(() => fakeClient) }), { virtual: true });
+    jest.resetModules();
+    const { createProviderRouter: createRouterWithMockedRedis } = require('../src');
+    const primaryCall = jest.fn().mockResolvedValue('primary answer');
+    const fallbackCall = jest.fn().mockResolvedValue('fallback answer');
+    const router = createRouterWithMockedRedis({
+      redisUrl: 'redis://localhost:6379',
+      providers: [
+        provider('primary', [
+          { id: 'shared-model', rpm: 1, rpd: 1, tpd: 10, complexity: ['simple'] }
+        ], primaryCall),
+        provider('fallback', [
+          { id: 'shared-model', rpm: 1, rpd: 1, tpd: 10, complexity: ['simple'] }
+        ], fallbackCall)
+      ]
+    });
+
+    await expect(router.ask('hello', { complexity: 'simple', estimatedTokens: 1 }))
+      .resolves.toBe('fallback answer');
+
+    expect(primaryCall).not.toHaveBeenCalled();
+    expect(fallbackCall).toHaveBeenCalledTimes(1);
+    expect(fakeClient.eval).toHaveBeenCalledTimes(2);
+    expect(fakeClient.eval.mock.calls[0][1].keys).toEqual(expect.arrayContaining([
+      expect.stringContaining(':primary:shared-model:'),
+      expect.stringContaining(':primary:shared-model:')
+    ]));
+    expect(fakeClient.eval.mock.calls[1][1].keys).toEqual(expect.arrayContaining([
+      expect.stringContaining(':fallback:shared-model:'),
+      expect.stringContaining(':fallback:shared-model:')
+    ]));
+
+    router.stop();
+    jest.dontMock('redis');
+    jest.resetModules();
   });
 
   test('restores usage and cooldown state from Redis on startup', async () => {
@@ -171,9 +249,9 @@ describe('providerRouter', () => {
     await new Promise((resolve) => setImmediate(resolve));
 
     const stats = router.getStats();
-    expect(stats['shared-model'].rpd_used).toBe(4);
-    expect(stats['shared-model'].tpd_used).toBe(40);
-    expect(stats['shared-model'].cooldown).toBe(true);
+    expect(stats['primary:shared-model'].rpd_used).toBe(4);
+    expect(stats['primary:shared-model'].tpd_used).toBe(40);
+    expect(stats['primary:shared-model'].cooldown).toBe(true);
 
     router.stop();
     expect(fakeClient.disconnect).toHaveBeenCalled();

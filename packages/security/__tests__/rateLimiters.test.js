@@ -12,11 +12,20 @@ const createRes = () => {
 };
 
 describe('rateLimiters', () => {
+  const originalNodeEnv = process.env.NODE_ENV;
+
   beforeEach(() => {
     rateLimit.mockClear();
+    process.env.NODE_ENV = originalNodeEnv;
   });
 
-  test('createApiLimiter builds a localhost-skipping limiter with defaults', () => {
+  afterAll(() => {
+    if (originalNodeEnv === undefined) delete process.env.NODE_ENV;
+    else process.env.NODE_ENV = originalNodeEnv;
+  });
+
+  test('createApiLimiter skips localhost by default only outside production', () => {
+    process.env.NODE_ENV = 'development';
     const limiter = createApiLimiter();
 
     expect(rateLimit).toHaveBeenCalledWith(expect.objectContaining({
@@ -29,6 +38,12 @@ describe('rateLimiters', () => {
     expect(limiter.skip({ ip: '127.0.0.1' })).toBe(true);
     expect(limiter.skip({ ip: '203.0.113.10' })).toBe(false);
     expect(limiter.store).toBeUndefined();
+
+    rateLimit.mockClear();
+    process.env.NODE_ENV = 'production';
+    const productionLimiter = createApiLimiter();
+
+    expect(productionLimiter.skip).toBeUndefined();
   });
 
   test('createApiLimiter uses an explicitly provided store before Redis configuration', () => {

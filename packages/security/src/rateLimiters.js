@@ -145,10 +145,12 @@ const withOptionalStore = (limiterOptions, store) => {
   return { ...limiterOptions, store };
 };
 
+const defaultApiSkip = () => (process.env.NODE_ENV === 'production' ? undefined : skipLocalhost);
+
 const createApiLimiter = (options = {}) => rateLimit(withOptionalStore({
   windowMs: options.windowMs || 15 * 60 * 1000,
   max: options.max || 300,
-  skip: options.skip || skipLocalhost,
+  skip: options.skip ?? defaultApiSkip(),
   standardHeaders: options.standardHeaders ?? true,
   legacyHeaders: options.legacyHeaders ?? false,
   validate: options.validate || { ip: false },

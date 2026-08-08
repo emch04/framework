@@ -28,6 +28,10 @@ const DEFAULT_ROLES = {
 
 function normalizeOptions(options = {}) {
   const jwtSecret = options.jwtSecret || process.env.JWT_SECRET || DEFAULT_JWT_SECRET;
+  if (process.env.NODE_ENV === 'production' && jwtSecret === DEFAULT_JWT_SECRET) {
+    throw new Error('createSaasApp requires options.jwtSecret or JWT_SECRET in production.');
+  }
+
   const jwtAlgorithms = options.jwtAlgorithms || ['HS256'];
   const usersStore = options.usersStore || createMemoryUsersStore();
   const settingsStore = options.settingsStore || createMemorySettingsStore();
@@ -88,7 +92,8 @@ function createSaasApp(options = {}) {
 
   app.use('/users', authMiddleware, createUsersRoutes({
     usersStore: normalized.usersStore,
-    authorizeAdmin
+    authorizeAdmin,
+    publicUserFields: normalized.publicUserFields
   }));
   app.use('/settings', authMiddleware, createSettingsRoutes({
     settingsStore: normalized.settingsStore,

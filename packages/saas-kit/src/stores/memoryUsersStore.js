@@ -65,6 +65,22 @@ function createMemoryUsersStore(options = {}) {
       const updated = { ...current, ...clone(patch), id: current.id };
       users.set(key, updated);
       return clone(updated);
+    },
+
+    async count({ role } = {}) {
+      let items = [...users.values()];
+      if (role) {
+        items = items.filter((user) => user.role === role);
+      }
+      return items.length;
+    },
+
+    async countByRole() {
+      return [...users.values()].reduce((counts, user) => {
+        const role = user.role || 'unknown';
+        counts[role] = (counts[role] || 0) + 1;
+        return counts;
+      }, {});
     }
   };
 }

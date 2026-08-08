@@ -12,15 +12,8 @@ function pickPublicUser(user, fields = DEFAULT_PUBLIC_USER_FIELDS) {
   }, {});
 }
 
-function sanitizeUser(user) {
-  if (!user) return null;
-
-  return Object.entries(user).reduce((safeUser, [key, value]) => {
-    if (!SENSITIVE_USER_FIELDS.has(key)) {
-      safeUser[key] = value;
-    }
-    return safeUser;
-  }, {});
+function sanitizeUser(user, fields = DEFAULT_PUBLIC_USER_FIELDS) {
+  return pickPublicUser(user, fields);
 }
 
 function assertAdapter(adapter, methods, name) {

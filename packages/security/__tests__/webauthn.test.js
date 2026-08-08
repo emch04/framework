@@ -137,6 +137,47 @@ describe('webauthn', () => {
     expect(store.updateCredentialCounter).toHaveBeenCalledWith('credential-1', 2);
   });
 
+  test('rejects authentication when the credential belongs to another user', async () => {
+    const store = createStore();
+    createStoreState.credentials.push({
+      userId: 'u2',
+      credentialID: 'credential-2',
+      publicKey: Buffer.from('public-key').toString('base64url'),
+      counter: 1,
+      transports: ['internal']
+    });
+    const service = createWebauthnService(store);
+    await store.saveChallenge('u1', 'authentication-challenge', 'authentication', {
+      origin: 'https://app.example.com',
+      rpID: 'app.example.com'
+    });
+
+    await expect(service.verifyAuthentication('u1', { id: 'credential-2' }))
+      .rejects.toMatchObject({ statusCode: 401 });
+    expect(simpleWebauthn.verifyAuthenticationResponse).not.toHaveBeenCalled();
+  });
+
+  test('rejects expired authentication challenges', async () => {
+    const store = createStore();
+    createStoreState.credentials.push({
+      userId: 'u1',
+      credentialID: 'credential-1',
+      publicKey: Buffer.from('public-key').toString('base64url'),
+      counter: 1,
+      transports: ['internal']
+    });
+    const service = createWebauthnService(store);
+    await store.saveChallenge('u1', 'authentication-challenge', 'authentication', {
+      origin: 'https://app.example.com',
+      rpID: 'app.example.com',
+      expiresAt: new Date(Date.now() - 1000)
+    });
+
+    await expect(service.verifyAuthentication('u1', { id: 'credential-1' }))
+      .rejects.toMatchObject({ statusCode: 400 });
+    expect(simpleWebauthn.verifyAuthenticationResponse).not.toHaveBeenCalled();
+  });
+
   test('rejects disallowed origins', async () => {
     const service = createWebauthnService(createStore());
 

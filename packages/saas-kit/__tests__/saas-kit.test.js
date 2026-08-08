@@ -1,6 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { PassThrough, Readable, Writable } = require('node:stream');
+const jwt = require('jsonwebtoken');
 const {
   createSaasApp,
   createMemorySettingsStore,
@@ -134,6 +135,29 @@ test('protected routes reject missing tokens and non-admin roles', async () => {
 
   assert.equal(forbidden.status, 403);
   assert.equal(forbidden.body.success, false);
+});
+
+test('login tokens work with configured JWT issuer and audience', async () => {
+  const { app } = createTestApp({
+    jwtAlgorithms: ['HS256'],
+    jwtIssuer: 'astratra-test',
+    jwtAudience: 'astratra-api'
+  });
+
+  const token = await login(app, 'owner@example.test');
+  const decoded = jwt.verify(token, TEST_SECRET, {
+    algorithms: ['HS256'],
+    issuer: 'astratra-test',
+    audience: 'astratra-api'
+  });
+  const response = await request(app, 'GET', '/dashboard/summary', {
+    headers: { authorization: `Bearer ${token}` }
+  });
+
+  assert.equal(decoded.iss, 'astratra-test');
+  assert.equal(decoded.aud, 'astratra-api');
+  assert.equal(response.status, 200);
+  assert.equal(response.body.success, true);
 });
 
 test('users routes support basic admin CRUD through the users store', async () => {

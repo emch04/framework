@@ -10,6 +10,8 @@ const DEFAULT_FORBIDDEN = {
   message: 'Forbidden.'
 };
 
+const DEFAULT_ALGORITHMS = ['HS256'];
+
 const defaultExtractToken = (req) => {
   const cookieToken = req.cookies && req.cookies.token;
   if (cookieToken) return cookieToken;
@@ -22,12 +24,20 @@ const defaultExtractToken = (req) => {
   return null;
 };
 
-const verifyWithRotation = (token, secret, legacySecret) => {
+const verificationOptionsFrom = (options = {}) => ({
+  algorithms: options.algorithms || DEFAULT_ALGORITHMS,
+  ...(options.issuer ? { issuer: options.issuer } : {}),
+  ...(options.audience ? { audience: options.audience } : {}),
+  ...(options.clockTolerance !== undefined ? { clockTolerance: options.clockTolerance } : {}),
+  ...(options.maxAge ? { maxAge: options.maxAge } : {})
+});
+
+const verifyWithRotation = (token, secret, legacySecret, verificationOptions) => {
   try {
-    return jwt.verify(token, secret);
+    return jwt.verify(token, secret, verificationOptions);
   } catch (error) {
     if (legacySecret && error.name === 'JsonWebTokenError') {
-      return jwt.verify(token, legacySecret);
+      return jwt.verify(token, legacySecret, verificationOptions);
     }
     throw error;
   }
@@ -40,6 +50,7 @@ const createAuthMiddleware = (options = {}) => {
 
   const extractToken = options.extractToken || defaultExtractToken;
   const unauthorizedMessage = options.message || DEFAULT_UNAUTHORIZED;
+  const verificationOptions = verificationOptionsFrom(options);
 
   return async (req, res, next) => {
     try {
@@ -48,7 +59,7 @@ const createAuthMiddleware = (options = {}) => {
         return res.status(401).json(unauthorizedMessage);
       }
 
-      const decoded = verifyWithRotation(token, options.secret, options.legacySecret);
+      const decoded = verifyWithRotation(token, options.secret, options.legacySecret, verificationOptions);
 
       if (options.verifySession) {
         const isActive = await options.verifySession(decoded);

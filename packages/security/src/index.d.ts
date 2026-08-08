@@ -23,6 +23,11 @@ export type Awaitable<T> = T | Promise<T>;
 export interface AuthMiddlewareOptions<TDecoded = Record<string, unknown>> {
   secret: string;
   legacySecret?: string;
+  algorithms?: string[];
+  issuer?: string;
+  audience?: string | string[];
+  clockTolerance?: number;
+  maxAge?: string | number;
   message?: unknown;
   extractToken?: (req: RequestLike) => string | null | undefined;
   verifySession?: (decoded: TDecoded) => Awaitable<boolean>;

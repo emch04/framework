@@ -25,7 +25,12 @@ function createAuthRoutes(options) {
     }
 
     const publicUser = pickPublicUser(user, publicUserFields);
-    const token = jwt.sign(publicUser, jwtSecret, { expiresIn: options.jwtExpiresIn || '1h' });
+    const token = jwt.sign(publicUser, jwtSecret, {
+      expiresIn: options.jwtExpiresIn || '1h',
+      algorithm: options.jwtAlgorithms[0],
+      ...(options.jwtIssuer ? { issuer: options.jwtIssuer } : {}),
+      ...(options.jwtAudience ? { audience: options.jwtAudience } : {})
+    });
     return apiResponse(res, 200, 'Login successful', { token, user: publicUser });
   }));
 

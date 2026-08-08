@@ -29,8 +29,8 @@ function packageJson(projectName, template) {
   const dependencies = {
     '@astratra/ai': '^0.1.0',
     '@astratra/core': '^0.1.0',
-    '@astratra/saas-kit': '^0.1.0',
-    '@astratra/security': '^0.1.0',
+    '@astratra/saas-kit': '^0.1.1',
+    '@astratra/security': '^0.1.1',
     '@astratra/store-mongo': '^0.1.0',
     express: '^4.18.3',
     mongoose: '^8.17.0'
@@ -137,6 +137,8 @@ function envConfig() {
   host: process.env.HOST || '127.0.0.1',
   jwtSecret: process.env.JWT_SECRET || 'change-me-in-production',
   legacyJwtSecret: process.env.LEGACY_JWT_SECRET || '',
+  jwtIssuer: process.env.JWT_ISSUER || '',
+  jwtAudience: process.env.JWT_AUDIENCE || '',
   mongoUri: process.env.MONGO_URI || '',
   redisUrl: process.env.REDIS_URL || '',
   corsOrigins: (process.env.CORS_ORIGIN || '')
@@ -183,6 +185,9 @@ function securityAuth() {
   return {
     jwtSecret: env.jwtSecret,
     legacyJwtSecret: env.legacyJwtSecret || undefined,
+    jwtAlgorithms: ['HS256'],
+    jwtIssuer: env.jwtIssuer || undefined,
+    jwtAudience: env.jwtAudience || undefined,
     roles: {
       adminRoles: ['owner', 'admin']
     }
@@ -544,7 +549,7 @@ lise la bonne URL. Laisse \`PORT\` vide pour garder le choix automatique.
 - \`api/config/env.js\` centralise la configuration.
 - \`api/config/cors.js\` gere CORS sans port de developpement fixe.
 - \`api/security/auth.js\`, \`api/security/rateLimit.js\` et
-  \`api/security/waf.js\` branchent la securite Astratra.
+  \`api/security/waf.js\` branchent les primitives de securite Astratra.
 - \`api/stores/memory.js\` lance vite avec des stores en memoire.
 - \`api/db/mongo.js\` et \`api/stores/mongo.js\` preparent MongoDB.
 - \`api/ai/providers.js\`, \`api/ai/tools.js\` et \`api/ai/agent.js\`
@@ -558,7 +563,8 @@ Comptes de test :
 - \`member@example.test\` / \`password\`
 
 Avant la production, remplace \`JWT_SECRET\`, branche de vrais stores et change
-la verification de mot de passe.
+la verification de mot de passe. Definis aussi \`JWT_ISSUER\` et
+\`JWT_AUDIENCE\` quand l'API sort du developpement local.
 `;
 }
 
@@ -619,7 +625,7 @@ export function createProject({ targetDir, template = 'fullstack', force = false
   writeFile(absoluteTarget, 'api/modules/settings.js', settingsModule());
   writeFile(absoluteTarget, 'api/modules/notifications.js', notificationsModule());
   writeFile(absoluteTarget, '.gitignore', 'node_modules\n.env\n.astratra\n');
-  writeFile(absoluteTarget, '.env.example', 'PORT=\nHOST=127.0.0.1\nJWT_SECRET=change-me\nLEGACY_JWT_SECRET=\nCORS_ORIGIN=\nMONGO_URI=\nREDIS_URL=\n');
+  writeFile(absoluteTarget, '.env.example', 'PORT=\nHOST=127.0.0.1\nJWT_SECRET=change-me\nLEGACY_JWT_SECRET=\nJWT_ISSUER=\nJWT_AUDIENCE=\nCORS_ORIGIN=\nMONGO_URI=\nREDIS_URL=\n');
   writeFile(absoluteTarget, 'README.md', readme(projectName, template));
 
   if (template === 'fullstack') {

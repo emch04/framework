@@ -44,9 +44,9 @@ test('createProject writes a fullstack Astratra starter', () => {
   const pkg = JSON.parse(fs.readFileSync(path.join(result.targetDir, 'package.json'), 'utf8'));
   assert.equal(pkg.name, 'demo-app');
   assert.equal(pkg.dependencies['@astratra/core'], '^0.1.0');
-  assert.equal(pkg.dependencies['@astratra/security'], '^0.1.0');
+  assert.equal(pkg.dependencies['@astratra/security'], '^0.1.1');
   assert.equal(pkg.dependencies['@astratra/ai'], '^0.1.0');
-  assert.equal(pkg.dependencies['@astratra/saas-kit'], '^0.1.0');
+  assert.equal(pkg.dependencies['@astratra/saas-kit'], '^0.1.1');
   assert.equal(pkg.dependencies['@astratra/store-mongo'], '^0.1.0');
   assert.equal(pkg.dependencies['@astratra/saas-kit-ui'], '^0.1.0');
   assert.equal(pkg.dependencies.mongoose, '^8.17.0');
@@ -56,7 +56,9 @@ test('createProject writes a fullstack Astratra starter', () => {
   const apiServer = fs.readFileSync(path.join(result.targetDir, 'api/server.js'), 'utf8');
   const envConfig = fs.readFileSync(path.join(result.targetDir, 'api/config/env.js'), 'utf8');
   const corsConfig = fs.readFileSync(path.join(result.targetDir, 'api/config/cors.js'), 'utf8');
+  const authSecurity = fs.readFileSync(path.join(result.targetDir, 'api/security/auth.js'), 'utf8');
   const memoryStores = fs.readFileSync(path.join(result.targetDir, 'api/stores/memory.js'), 'utf8');
+  const envExample = fs.readFileSync(path.join(result.targetDir, '.env.example'), 'utf8');
   assert.equal(apiServer.includes('./config/env.js'), true);
   assert.equal(apiServer.includes('./stores/memory.js'), true);
   assert.equal(apiServer.includes('./security/auth.js'), true);
@@ -64,6 +66,13 @@ test('createProject writes a fullstack Astratra starter', () => {
   assert.equal(apiServer.includes('./modules/notifications.js'), true);
   assert.equal(apiServer.includes('publicUserFields: userPublicFields()'), true);
   assert.match(envConfig, /process\.env\.PORT \? Number\(process\.env\.PORT\) : 0/);
+  assert.equal(envConfig.includes('JWT_ISSUER'), true);
+  assert.equal(envConfig.includes('JWT_AUDIENCE'), true);
+  assert.equal(authSecurity.includes("jwtAlgorithms: ['HS256']"), true);
+  assert.equal(authSecurity.includes('jwtIssuer'), true);
+  assert.equal(authSecurity.includes('jwtAudience'), true);
+  assert.equal(envExample.includes('JWT_ISSUER='), true);
+  assert.equal(envExample.includes('JWT_AUDIENCE='), true);
   assert.equal(memoryStores.includes('../modules/settings.js'), true);
   assert.match(apiServer, /server\.address\(\)/);
   assert.match(apiServer, /Port \$\{port\} is already in use/);

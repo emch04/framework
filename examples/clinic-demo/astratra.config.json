@@ -1,9 +1,0 @@
-{
-  "audit": {
-    "routes": {
-      "dirs": [
-        "src/routes"
-      ]
-    }
-  }
-}

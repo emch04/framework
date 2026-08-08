@@ -28,19 +28,19 @@ export default function Dashboard() {
   return (
     <section className={styles.screen}>
       <header className={styles.header}>
-        <p>Overview</p>
+        <p>Vue d'ensemble</p>
         <h1>Dashboard</h1>
       </header>
       <Notice tone="error">{error}</Notice>
-      {!summary && !error ? <p className={styles.muted}>Loading dashboard...</p> : null}
+      {!summary && !error ? <p className={styles.muted}>Chargement du dashboard...</p> : null}
       {summary ? (
         <div className={styles.grid}>
           <article className={styles.statCard}>
-            <span>Total users</span>
+            <span>Utilisateurs</span>
             <strong>{summary.userCount}</strong>
           </article>
           <article className={styles.wideCard}>
-            <span>Role breakdown</span>
+            <span>Repartition des roles</span>
             <div className={styles.bars}>
               {roles.map(([role, count]) => (
                 <div key={role} className={styles.barRow}>

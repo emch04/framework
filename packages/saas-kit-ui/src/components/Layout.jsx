@@ -4,8 +4,8 @@ import styles from './Layout.module.css';
 
 const NAV_ITEMS = [
   { id: 'dashboard', index: '01', label: 'Dashboard' },
-  { id: 'users', index: '02', label: 'Users' },
-  { id: 'settings', index: '03', label: 'Settings' }
+  { id: 'users', index: '02', label: 'Utilisateurs' },
+  { id: 'settings', index: '03', label: 'Parametres' }
 ];
 
 export default function Layout({ activeView, children, onNavigate }) {
@@ -18,7 +18,7 @@ export default function Layout({ activeView, children, onNavigate }) {
           <img src={logoUrl} alt="Astratra" className={styles.brandMark} />
           <span>
             <strong>Astratra</strong>
-            <small>saas_starter@v0.1.0</small>
+            <small>saas_starter@v1.0.0</small>
           </span>
         </div>
 
@@ -43,8 +43,8 @@ export default function Layout({ activeView, children, onNavigate }) {
 
         <div className={styles.account}>
           <span>{user?.email}</span>
-          <small>role: {user?.role}</small>
-          <button type="button" onClick={logout}>[ logout ]</button>
+          <small>role : {user?.role}</small>
+          <button type="button" onClick={logout}>[ deconnexion ]</button>
         </div>
       </aside>
       <main className={styles.content}>{children}</main>

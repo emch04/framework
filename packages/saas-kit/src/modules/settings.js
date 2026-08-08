@@ -1,6 +1,11 @@
 const express = require('express');
-const { apiResponse, asyncHandler } = require('@astratra/core');
-const { requireBodyFields } = require('../utils');
+const { body, param } = require('express-validator');
+const { apiResponse, asyncHandler, validateMiddleware } = require('@astratra/core');
+
+const updateSettingValidation = [
+  param('key').trim().notEmpty().isLength({ max: 200 }).withMessage('key must be between 1 and 200 characters'),
+  body('value').exists().withMessage('value is required')
+];
 
 function createSettingsRoutes({ settingsStore, authorizeAdmin }) {
   const router = express.Router();
@@ -12,8 +17,7 @@ function createSettingsRoutes({ settingsStore, authorizeAdmin }) {
     return apiResponse(res, 200, 'Settings list', settings);
   }));
 
-  router.patch('/:key', asyncHandler(async (req, res) => {
-    requireBodyFields(req.body || {}, ['value']);
+  router.patch('/:key', validateMiddleware(updateSettingValidation), asyncHandler(async (req, res) => {
     const value = await settingsStore.set(req.params.key, req.body.value);
     return apiResponse(res, 200, 'Setting updated', { key: req.params.key, value });
   }));

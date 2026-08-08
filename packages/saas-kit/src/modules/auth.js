@@ -1,8 +1,14 @@
 const express = require('express');
 const jwt = require('jsonwebtoken');
-const { apiResponse, AppError, asyncHandler } = require('@astratra/core');
+const { body } = require('express-validator');
+const { apiResponse, AppError, asyncHandler, validateMiddleware } = require('@astratra/core');
 const { createWebauthnService } = require('@astratra/security');
-const { pickPublicUser, requireBodyFields } = require('../utils');
+const { pickPublicUser } = require('../utils');
+
+const loginValidation = [
+  body('email').isEmail().withMessage('email must be a valid email address'),
+  body('password').notEmpty().withMessage('password is required')
+];
 
 function createAuthRoutes(options) {
   const router = express.Router();
@@ -15,9 +21,7 @@ function createAuthRoutes(options) {
     webauthn
   } = options;
 
-  router.post('/login', asyncHandler(async (req, res) => {
-    requireBodyFields(req.body || {}, ['email', 'password']);
-
+  router.post('/login', validateMiddleware(loginValidation), asyncHandler(async (req, res) => {
     const user = await usersStore.findByEmail(req.body.email);
     const valid = user ? await verifyPassword(user, req.body.password) : false;
     if (!user || !valid) {

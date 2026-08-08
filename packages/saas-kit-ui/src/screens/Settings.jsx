@@ -17,7 +17,7 @@ export default function Settings() {
       setSettings(data || {});
       setDrafts(Object.fromEntries(Object.entries(data || {}).map(([key, value]) => [key, JSON.stringify(value)])));
     } catch (apiError) {
-      setError(apiError.status === 403 ? 'Not authorized to manage settings.' : apiError.message);
+      setError(apiError.status === 403 ? 'Vous n etes pas autorise a gerer les parametres.' : apiError.message);
     }
   }
 
@@ -42,9 +42,9 @@ export default function Settings() {
       });
       setSettings({ ...settings, [updated.key]: updated.value });
       setDrafts({ ...drafts, [updated.key]: JSON.stringify(updated.value) });
-      setSuccess(`${updated.key} saved.`);
+      setSuccess(`${updated.key} enregistre.`);
     } catch (apiError) {
-      setError(apiError.status === 403 ? 'Not authorized to update settings.' : apiError.message);
+      setError(apiError.status === 403 ? 'Vous n etes pas autorise a modifier les parametres.' : apiError.message);
     }
   }
 
@@ -54,11 +54,11 @@ export default function Settings() {
     <section className={styles.screen}>
       <header className={styles.header}>
         <p>Configuration</p>
-        <h1>Settings</h1>
+        <h1>Parametres</h1>
       </header>
       <Notice tone="error">{error}</Notice>
       <Notice tone="success">{success}</Notice>
-      {rows.length === 0 && !error ? <p className={styles.muted}>No settings yet.</p> : null}
+      {rows.length === 0 && !error ? <p className={styles.muted}>Aucun parametre pour le moment.</p> : null}
       <div className={styles.settingsList}>
         {rows.map(([key]) => (
           <div className={styles.settingRow} key={key}>
@@ -69,7 +69,7 @@ export default function Settings() {
                 onChange={(event) => setDrafts({ ...drafts, [key]: event.target.value })}
               />
             </label>
-            <button type="button" onClick={() => saveSetting(key)}>Save</button>
+            <button type="button" onClick={() => saveSetting(key)}>Enregistrer</button>
           </div>
         ))}
       </div>

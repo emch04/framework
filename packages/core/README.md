@@ -57,5 +57,3 @@ disponible, sinon `console.error`, et ne logge jamais les erreurs client
 ```bash
 npm test --workspace @astratra/core
 ```
-
-20 tests, aucune base de données ni réseau requis.

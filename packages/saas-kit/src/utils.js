@@ -1,5 +1,3 @@
-const { AppError } = require('@astratra/core');
-
 const DEFAULT_PUBLIC_USER_FIELDS = ['id', 'email', 'role'];
 const SENSITIVE_USER_FIELDS = new Set(['password', 'passwordHash', 'hash', 'salt', 'tokens']);
 
@@ -41,19 +39,10 @@ function toPagination(query = {}) {
   };
 }
 
-function requireBodyFields(body, fields) {
-  for (const field of fields) {
-    if (body[field] === undefined || body[field] === null || body[field] === '') {
-      throw new AppError(`${field} is required.`, 400);
-    }
-  }
-}
-
 module.exports = {
   DEFAULT_PUBLIC_USER_FIELDS,
   assertAdapter,
   pickPublicUser,
-  requireBodyFields,
   sanitizeUser,
   toPagination
 };

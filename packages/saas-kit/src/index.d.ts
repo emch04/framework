@@ -1,5 +1,6 @@
 import type {
   AuthMiddlewareOptions,
+  CspOptions,
   LoginLimiterOptions,
   RateLimitOptions,
   WafOptions,
@@ -81,6 +82,7 @@ export interface CreateSaasAppOptions {
   webauthnStore?: WebauthnStore;
   webauthn?: WebauthnOptions;
   waf?: WafOptions;
+  csp?: CspOptions;
   apiRateLimit?: RateLimitOptions;
   loginRateLimit?: LoginLimiterOptions;
   [key: string]: unknown;

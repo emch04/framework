@@ -1,7 +1,7 @@
 {
-  "name": "@astratra/core",
+  "name": "@astratra/store-postgres",
   "version": "1.0.0",
-  "description": "Generic core utilities for Astratra SaaS packages.",
+  "description": "PostgreSQL persistence adapters for Astratra SaaS stores.",
   "main": "src/index.js",
   "types": "src/index.d.ts",
   "type": "commonjs",
@@ -11,27 +11,33 @@
   "scripts": {
     "test": "jest"
   },
+  "jest": {
+    "testMatch": [
+      "**/__tests__/**/*.test.js"
+    ],
+    "testTimeout": 60000
+  },
   "keywords": [
     "astratra",
-    "saas",
-    "core"
+    "postgres",
+    "postgresql",
+    "saas"
   ],
   "license": "MIT",
   "publishConfig": {
     "access": "public"
   },
   "peerDependencies": {
-    "express": ">=4"
+    "pg": ">=8"
   },
   "peerDependenciesMeta": {
-    "express": {
+    "pg": {
       "optional": true
     }
   },
-  "dependencies": {
-    "express-validator": "7.3.2"
-  },
   "devDependencies": {
-    "jest": "30.4.2"
+    "jest": "30.4.2",
+    "pg": "^8.13.1",
+    "pg-mem": "^3.0.5"
   }
 }

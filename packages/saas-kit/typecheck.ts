@@ -37,6 +37,7 @@ const app = createSaasApp({
   publicUserFields: ['id', 'email', 'role'],
   roles: { adminRoles: ['owner', 'admin'] },
   waf: { patterns: [/select/i], message: { success: false } },
+  csp: { reportOnly: true, directives: { 'default-src': ["'self'"] } },
   apiRateLimit: { max: 100 },
   loginRateLimit: { max: 5 },
   webauthnStore: {

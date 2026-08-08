@@ -52,6 +52,3 @@ logique reste dans votre propre projet.
 ```bash
 npm test --workspace @astratra/tooling
 ```
-
-20 tests, avec des fixtures temporaires — aucune dépendance à un vrai
-projet.

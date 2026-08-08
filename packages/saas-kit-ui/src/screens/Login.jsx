@@ -30,14 +30,14 @@ export default function Login({ onLoggedIn }) {
         <div className={styles.frame} aria-hidden="true" />
         <div className={styles.identity}>
           <span className={styles.tag}>astratra/saas-kit</span>
-          <span className={styles.tagMuted}>v0.1.0</span>
+          <span className={styles.tagMuted}>v1.0.0</span>
         </div>
         <h1 id="login-title">
-          <span className={styles.prompt}>&gt;</span> sign_in
+          <span className={styles.prompt}>&gt;</span> connexion
           <span className={styles.cursor} aria-hidden="true" />
         </h1>
         <p className={styles.copy}>
-          // authenticate with the seeded owner account to inspect the generic SaaS API screens
+          // connectez-vous avec le compte owner de demo pour explorer l'API SaaS generique
         </p>
         <Notice tone="error">{error}</Notice>
         <form className={styles.form} onSubmit={handleSubmit}>
@@ -46,10 +46,10 @@ export default function Login({ onLoggedIn }) {
             <input value={email} onChange={(event) => setEmail(event.target.value)} type="email" required />
           </label>
           <label>
-            password
+            mot de passe
             <input value={password} onChange={(event) => setPassword(event.target.value)} type="password" required />
           </label>
-          <button type="submit" disabled={loading}>{loading ? 'authenticating...' : '[ sign in ]'}</button>
+          <button type="submit" disabled={loading}>{loading ? 'connexion...' : '[ se connecter ]'}</button>
         </form>
       </section>
     </main>

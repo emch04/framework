@@ -5,7 +5,6 @@
   "description": "Astratra npm workspace monorepo.",
   "workspaces": [
     "packages/*",
-    "examples/clinic-demo",
     "examples/dashboard-ui"
   ],
   "scripts": {

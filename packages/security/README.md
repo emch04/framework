@@ -1,9 +1,9 @@
 # @astratra/security
 
-Primitives de securite applicative pour l'authentification, l'autorisation,
-le rate limiting, un WAF heuristique et WebAuthn/passkeys — generiques et
-decouplees de toute base de donnees, ORM ou liste de roles fixe. Depend de
-`@astratra/core`.
+Primitives de sécurité applicative pour l'authentification, l'autorisation,
+le rate limiting, une CSP configurable, un WAF heuristique et
+WebAuthn/passkeys — génériques et découplées de toute base de données, ORM
+ou liste de rôles fixe. Dépend de `@astratra/core`.
 
 Partout où un vrai projet a besoin de persistance (révocation de session,
 stockage de credentials WebAuthn, alerte de brute-force), c'est un
@@ -24,15 +24,15 @@ const authMiddleware = createAuthMiddleware({
 });
 
 app.use('/api', authMiddleware);
-app.delete('/api/schools/:id', authorizeRoles('owner', 'admin'), handler);
+app.delete('/api/projects/:id', authorizeRoles('owner', 'admin'), handler);
 ```
 
-Par defaut, le middleware limite la verification a `HS256`. Si ton application
+Par défaut, le middleware limite la vérification à `HS256`. Si ton application
 utilise un autre algorithme, configure explicitement `algorithms`.
 
-Si tu extrais le token depuis un cookie, configure le cookie cote application
+Si tu extrais le token depuis un cookie, configure le cookie côté application
 avec `HttpOnly`, `Secure` en HTTPS et un `SameSite` adapte. Un cookie JWT peut
-necessiter une protection CSRF selon tes routes, tes methodes HTTP et ton
+nécessiter une protection CSRF selon tes routes, tes méthodes HTTP et ton
 mode d'authentification.
 
 ## Rate limiting
@@ -54,10 +54,43 @@ const { createWafMiddleware } = require('@astratra/security');
 app.use(createWafMiddleware({ message: { success: false, message: 'Requête bloquée.' } }));
 ```
 
-Cette couche detecte des patterns evidents SQLi/XSS/traversee de chemin/RCE
+Cette couche détecte des patterns évidents SQLi/XSS/traversée de chemin/RCE
 dans `req.path`, `req.query` et `req.body`. Elle ne remplace pas la
-validation des entrees, les requetes parametrees, une CSP, la sanitation
-adaptee au contexte, ni un WAF/reverse proxy reseau.
+validation des entrées, les requêtes paramétrées, une CSP, la sanitation
+adaptée au contexte, ni un WAF/reverse proxy réseau.
+
+## CSP (Content Security Policy)
+
+```js
+const { createCspMiddleware } = require('@astratra/security');
+app.use(createCspMiddleware());
+```
+
+Sans option, la politique par défaut est `default-src 'none';
+frame-ancestors 'none'; base-uri 'none'` — adaptée à une API qui ne sert que
+du JSON. Pour une app qui sert aussi du HTML/JS (SPA servie par un serveur
+Express, pas juste consommée via fetch), surcharge `directives` :
+
+```js
+app.use(createCspMiddleware({
+  directives: {
+    'default-src': ["'self'"],
+    'script-src': ["'self'"],
+    'style-src': ["'self'", "'unsafe-inline'"],
+    'connect-src': ["'self'", 'https://api.mon-app.test']
+  }
+}));
+```
+
+`reportOnly: true` envoie `Content-Security-Policy-Report-Only` au lieu de
+bloquer, utile pour tester une politique avant de l'appliquer réellement.
+
+Pour une SPA React/Vite consommée séparément (comme `@astratra/saas-kit-ui`),
+la CSP se pose plutôt sur le HTML statique lui-même (balise `<meta
+http-equiv="Content-Security-Policy">` injectée au build, jamais en dev — une
+CSP statique en dev casse le websocket HMR de Vite). Voir
+`examples/dashboard-ui/vite.config.js` pour un exemple qui n'injecte la
+balise que sur `vite build`.
 
 ## WebAuthn / passkeys
 
@@ -76,14 +109,11 @@ const webauthn = createWebauthnService(store, {
 optionnellement `saveRecoveryCodes`/`consumeRecoveryCode` pour les codes de
 récupération. Aucun Mongoose, aucun rôle fixe autorisé à enregistrer une clé
 — ce controle d'acces reste a la charge de l'app consommatrice. Avant de
-presenter WebAuthn comme production-ready, prevois une revue de securite
-externe sur l'integration complete.
+présenter WebAuthn comme un argument de sécurité fort, prévois une revue de
+sécurité externe sur l'intégration complète.
 
 ## Tests
 
 ```bash
 npm test --workspace @astratra/security
 ```
-
-21 tests, aucune vraie base de données ni cérémonie WebAuthn navigateur
-requise.

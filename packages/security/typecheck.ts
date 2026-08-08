@@ -1,11 +1,13 @@
 import {
   CHALLENGE_TTL_MS,
+  DEFAULT_CSP_DIRECTIVES,
   RECOVERY_CODE_COUNT,
   WAF_PATTERNS,
   authorizeRoles,
   createAccountLimiter,
   createApiLimiter,
   createAuthMiddleware,
+  createCspMiddleware,
   createLoginLimiter,
   createWafMiddleware,
   createWebauthnService,
@@ -13,6 +15,15 @@ import {
   rpConfigForRequest,
   skipLocalhost
 } from '@astratra/security';
+
+createCspMiddleware();
+createCspMiddleware({
+  reportOnly: true,
+  directives: {
+    ...DEFAULT_CSP_DIRECTIVES,
+    'default-src': ["'self'"]
+  }
+});
 
 const middleware = createAuthMiddleware({
   secret: 'secret',

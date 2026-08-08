@@ -1,0 +1,43 @@
+.notice {
+  position: relative;
+  padding: 12px 14px 12px 34px;
+  border: 1px solid var(--line-bright);
+  background: var(--panel);
+  color: var(--cream);
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+
+.notice::before {
+  content: "!";
+  position: absolute;
+  top: 12px;
+  left: 14px;
+  color: var(--muted);
+}
+
+.error {
+  border-color: var(--error);
+  background: var(--error-bg);
+  color: var(--cream);
+}
+
+.error::before {
+  content: "x";
+  color: var(--error);
+}
+
+.success {
+  border-color: var(--success);
+  background: var(--success-bg);
+  color: var(--cream);
+}
+
+.success::before {
+  content: ">";
+  color: var(--success);
+}
+
+.neutral {
+  border-color: var(--line-bright);
+}

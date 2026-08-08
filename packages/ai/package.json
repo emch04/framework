@@ -1,0 +1,43 @@
+{
+  "name": "@astratra/ai",
+  "version": "0.1.0",
+  "description": "Generic AI provider routing, tool registry, and agent loop utilities for Astratra.",
+  "main": "src/index.js",
+  "types": "src/index.d.ts",
+  "type": "commonjs",
+  "files": [
+    "src"
+  ],
+  "scripts": {
+    "test": "jest"
+  },
+  "jest": {
+    "testMatch": [
+      "**/__tests__/**/*.test.js"
+    ]
+  },
+  "keywords": [
+    "astratra",
+    "ai",
+    "agents"
+  ],
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
+  "dependencies": {
+    "@astratra/core": "^0.1.0"
+  },
+  "peerDependencies": {
+    "redis": ">=4"
+  },
+  "peerDependenciesMeta": {
+    "redis": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "jest": "30.4.2",
+    "redis": "^4.7.0"
+  }
+}

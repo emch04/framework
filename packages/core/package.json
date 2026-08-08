@@ -1,0 +1,37 @@
+{
+  "name": "@astratra/core",
+  "version": "0.1.0",
+  "description": "Generic core utilities for Astratra SaaS packages.",
+  "main": "src/index.js",
+  "types": "src/index.d.ts",
+  "type": "commonjs",
+  "files": [
+    "src"
+  ],
+  "scripts": {
+    "test": "jest"
+  },
+  "keywords": [
+    "astratra",
+    "saas",
+    "core"
+  ],
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
+  "peerDependencies": {
+    "express": ">=4"
+  },
+  "peerDependenciesMeta": {
+    "express": {
+      "optional": true
+    }
+  },
+  "dependencies": {
+    "express-validator": "7.3.2"
+  },
+  "devDependencies": {
+    "jest": "30.4.2"
+  }
+}

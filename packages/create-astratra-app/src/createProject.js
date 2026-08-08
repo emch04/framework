@@ -46,6 +46,7 @@ function packageJson(projectName, template) {
     private: true,
     type: 'module',
     scripts: {
+      ...(template === 'fullstack' ? { dev: 'node scripts/dev.js' } : {}),
       'dev:api': 'node api/server.js',
       ...(template === 'fullstack' ? { 'dev:web': 'vite --host 127.0.0.1' } : {}),
       start: 'node api/server.js'
@@ -158,6 +159,66 @@ export default defineConfig({
 `;
 }
 
+function devScript() {
+  return `import fs from 'node:fs';
+import { spawn } from 'node:child_process';
+
+const isWindows = process.platform === 'win32';
+const npmCommand = isWindows ? 'npm.cmd' : 'npm';
+const apiConfigPath = '.astratra/api.json';
+const timeoutMs = 15000;
+const pollMs = 150;
+const startedAt = Date.now();
+const children = [];
+let shuttingDown = false;
+
+function run(label, args) {
+  const child = spawn(npmCommand, args, {
+    stdio: 'inherit',
+    env: process.env
+  });
+  children.push(child);
+  child.on('exit', (code, signal) => {
+    if (!shuttingDown && code !== 0) {
+      console.error(\`\${label} exited with \${signal || code}.\`);
+      shutdown(code || 1);
+    }
+  });
+  return child;
+}
+
+function shutdown(code = 0) {
+  shuttingDown = true;
+  for (const child of children) {
+    if (!child.killed) child.kill('SIGTERM');
+  }
+  process.exit(code);
+}
+
+function waitForApiConfig() {
+  if (fs.existsSync(apiConfigPath)) {
+    run('web', ['run', 'dev:web']);
+    return;
+  }
+
+  if (Date.now() - startedAt > timeoutMs) {
+    console.error(\`Timed out waiting for \${apiConfigPath}. Is dev:api still running?\`);
+    shutdown(1);
+    return;
+  }
+
+  setTimeout(waitForApiConfig, pollMs);
+}
+
+process.on('SIGINT', () => shutdown(0));
+process.on('SIGTERM', () => shutdown(0));
+
+fs.rmSync(apiConfigPath, { force: true });
+run('api', ['run', 'dev:api']);
+waitForApiConfig();
+`;
+}
+
 function webIndex() {
   return `<!doctype html>
 <html lang="fr">
@@ -193,9 +254,16 @@ createRoot(document.getElementById('root')).render(
 function readme(projectName, template) {
   const webSteps = template === 'fullstack'
     ? `
-Dans un deuxieme terminal :
+Pour lancer l'API et le frontend ensemble :
 
 \`\`\`bash
+npm run dev
+\`\`\`
+
+Tu peux aussi les lancer separement :
+
+\`\`\`bash
+npm run dev:api
 npm run dev:web
 \`\`\`
 `
@@ -278,6 +346,7 @@ export function createProject({ targetDir, template = 'fullstack', force = false
   writeFile(absoluteTarget, 'README.md', readme(projectName, template));
 
   if (template === 'fullstack') {
+    writeFile(absoluteTarget, 'scripts/dev.js', devScript());
     writeFile(absoluteTarget, 'vite.config.js', viteConfig());
     writeFile(absoluteTarget, 'web/index.html', webIndex());
     writeFile(absoluteTarget, 'web/src/main.jsx', webMain());
@@ -288,8 +357,7 @@ export function createProject({ targetDir, template = 'fullstack', force = false
     nextSteps: [
       `cd ${targetDir}`,
       'npm install',
-      'npm run dev:api',
-      ...(template === 'fullstack' ? ['npm run dev:web'] : [])
+      template === 'fullstack' ? 'npm run dev' : 'npm run dev:api'
     ]
   };
 }

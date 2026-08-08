@@ -43,6 +43,12 @@ npm create astratra-app@latest my-api -- --template api
 ```bash
 cd my-app
 npm install
+npm run dev
+```
+
+Tu peux aussi lancer les deux serveurs separement :
+
+```bash
 npm run dev:api
 npm run dev:web
 ```

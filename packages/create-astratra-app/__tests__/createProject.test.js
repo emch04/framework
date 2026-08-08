@@ -46,11 +46,14 @@ test('createProject writes a fullstack Astratra starter', () => {
   const viteConfig = fs.readFileSync(path.join(result.targetDir, 'vite.config.js'), 'utf8');
   assert.match(viteConfig, /readApiUrl/);
   assert.match(viteConfig, /VITE_API_URL/);
+  assert.doesNotMatch(viteConfig, /port: 5173/);
 
   const devScript = fs.readFileSync(path.join(result.targetDir, 'scripts/dev.js'), 'utf8');
   assert.match(devScript, /dev:api/);
   assert.match(devScript, /dev:web/);
   assert.match(devScript, /api\.json/);
+  assert.match(devScript, /findFreePort/);
+  assert.match(devScript, /--port/);
 });
 
 test('createProject refuses a non-empty directory unless forced', () => {

@@ -61,8 +61,8 @@ bonne URL. Pour forcer un port precis, utilise par exemple
 `PORT=4000 npm run dev:api`.
 
 En developpement, l'API accepte automatiquement les origins
-`localhost`/`127.0.0.1`, meme si Vite choisit un port comme `5174` ou `5175`.
-En production, definis explicitement `CORS_ORIGIN`.
+`localhost`/`127.0.0.1`, quel que soit le port choisi par Vite. En production,
+definis explicitement `CORS_ORIGIN`.
 
 Avant la production, il faut remplacer `JWT_SECRET`, brancher de vrais stores
 et utiliser une vraie verification de mot de passe.

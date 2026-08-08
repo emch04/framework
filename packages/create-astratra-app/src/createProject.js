@@ -57,10 +57,12 @@ function packageJson(projectName, template) {
 
 function apiServer() {
   return `import express from 'express';
+import fs from 'node:fs';
+import path from 'node:path';
 import saasKit from '@astratra/saas-kit';
 
 const { createSaasApp, createMemorySettingsStore } = saasKit;
-const port = Number(process.env.PORT || 4000);
+const preferredPort = Number(process.env.PORT || 4000);
 const host = process.env.HOST || '127.0.0.1';
 const allowedOrigins = new Set((process.env.CORS_ORIGIN || 'http://127.0.0.1:5173,http://localhost:5173')
   .split(',')
@@ -94,17 +96,56 @@ app.use(createSaasApp({
   notify: async (message) => ({ delivered: true, message })
 }));
 
-app.listen(port, host, () => {
-  console.log(\`Astratra API listening on http://\${host}:\${port}\`);
-  console.log('Seeded owner: owner@example.test / password');
-  console.log('Seeded member: member@example.test / password');
-});
+function writeApiRuntimeConfig(port) {
+  const configDir = path.resolve('.astratra');
+  fs.mkdirSync(configDir, { recursive: true });
+  fs.writeFileSync(path.join(configDir, 'api.json'), JSON.stringify({
+    apiUrl: \`http://\${host}:\${port}\`
+  }, null, 2));
+}
+
+function listen(port, attemptsLeft = 20) {
+  const server = app.listen(port, host, () => {
+    writeApiRuntimeConfig(port);
+    console.log(\`Astratra API listening on http://\${host}:\${port}\`);
+    console.log('Seeded owner: owner@example.test / password');
+    console.log('Seeded member: member@example.test / password');
+  });
+
+  server.on('error', (error) => {
+    if (error.code === 'EADDRINUSE' && attemptsLeft > 0 && !process.env.PORT) {
+      const nextPort = port + 1;
+      console.warn(\`Port \${port} is already in use, trying \${nextPort}...\`);
+      listen(nextPort, attemptsLeft - 1);
+      return;
+    }
+
+    console.error(\`Unable to start Astratra API on http://\${host}:\${port}: \${error.message}\`);
+    process.exit(1);
+  });
+}
+
+listen(preferredPort);
 `;
 }
 
 function viteConfig() {
-  return `import react from '@vitejs/plugin-react';
+  return `import fs from 'node:fs';
+import path from 'node:path';
+import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
+
+function readApiUrl() {
+  try {
+    const configPath = path.resolve('.astratra/api.json');
+    const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+    return config.apiUrl || 'http://127.0.0.1:4000';
+  } catch {
+    return 'http://127.0.0.1:4000';
+  }
+}
+
+process.env.VITE_API_URL = process.env.VITE_API_URL || readApiUrl();
 
 export default defineConfig({
   root: 'web',
@@ -176,6 +217,10 @@ npm install
 npm run dev:api
 \`\`\`
 ${webSteps}
+Si le port \`4000\` est deja occupe, l'API essaie automatiquement le port
+suivant et ecrit l'URL choisie dans \`.astratra/api.json\`. Lance \`dev:api\`
+avant \`dev:web\` pour que Vite lise la bonne URL.
+
 Comptes de test :
 
 - \`owner@example.test\` / \`password\`
@@ -228,6 +273,7 @@ export function createProject({ targetDir, template = 'fullstack', force = false
 
   writeFile(absoluteTarget, 'package.json', `${packageJson(projectName, template)}\n`);
   writeFile(absoluteTarget, 'api/server.js', apiServer());
+  writeFile(absoluteTarget, '.gitignore', 'node_modules\n.env\n.astratra\n');
   writeFile(absoluteTarget, '.env.example', 'PORT=4000\nHOST=127.0.0.1\nJWT_SECRET=change-me\nCORS_ORIGIN=http://127.0.0.1:5173,http://localhost:5173\n');
   writeFile(absoluteTarget, 'README.md', readme(projectName, template));
 

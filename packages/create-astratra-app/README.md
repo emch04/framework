@@ -55,9 +55,14 @@ npm run dev:web
 
 Pour le template `api`, seul `npm run dev:api` est cree.
 
-Si le port `4000` est deja occupe, l'API essaie automatiquement le port
-suivant et ecrit l'URL choisie dans `.astratra/api.json`. Lance `dev:api`
-avant `dev:web` pour que Vite lise la bonne URL.
+Par defaut, l'API demande un port libre au systeme et ecrit l'URL choisie dans
+`.astratra/api.json`. Lance `dev:api` avant `dev:web` pour que Vite lise la
+bonne URL. Pour forcer un port precis, utilise par exemple
+`PORT=4000 npm run dev:api`.
+
+En developpement, l'API accepte automatiquement les origins
+`localhost`/`127.0.0.1`, meme si Vite choisit un port comme `5174` ou `5175`.
+En production, definis explicitement `CORS_ORIGIN`.
 
 Avant la production, il faut remplacer `JWT_SECRET`, brancher de vrais stores
 et utiliser une vraie verification de mot de passe.

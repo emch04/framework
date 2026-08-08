@@ -1,6 +1,6 @@
 {
   "name": "create-astratra-app",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "CLI generator for new Astratra SaaS applications.",
   "type": "module",
   "bin": {

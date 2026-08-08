@@ -35,8 +35,13 @@ test('createProject writes a fullstack Astratra starter', () => {
   assert.equal(pkg.scripts['dev:web'], 'vite --host 127.0.0.1');
 
   const apiServer = fs.readFileSync(path.join(result.targetDir, 'api/server.js'), 'utf8');
+  assert.match(apiServer, /process\.env\.PORT \? Number\(process\.env\.PORT\) : 0/);
+  assert.match(apiServer, /server\.address\(\)/);
   assert.match(apiServer, /Port \$\{port\} is already in use/);
   assert.equal(apiServer.includes("path.resolve('.astratra')"), true);
+  assert.match(apiServer, /isAllowedDevOrigin/);
+  assert.equal(apiServer.includes('127.0.0.1'), true);
+  assert.equal(apiServer.includes('localhost'), true);
 
   const viteConfig = fs.readFileSync(path.join(result.targetDir, 'vite.config.js'), 'utf8');
   assert.match(viteConfig, /readApiUrl/);

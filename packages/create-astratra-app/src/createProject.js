@@ -63,17 +63,27 @@ import path from 'node:path';
 import saasKit from '@astratra/saas-kit';
 
 const { createSaasApp, createMemorySettingsStore } = saasKit;
-const preferredPort = Number(process.env.PORT || 4000);
+const preferredPort = process.env.PORT ? Number(process.env.PORT) : 0;
 const host = process.env.HOST || '127.0.0.1';
-const allowedOrigins = new Set((process.env.CORS_ORIGIN || 'http://127.0.0.1:5173,http://localhost:5173')
+const allowedOrigins = new Set((process.env.CORS_ORIGIN || '')
   .split(',')
   .map((origin) => origin.trim())
   .filter(Boolean));
 
+function isAllowedDevOrigin(origin) {
+  if (process.env.NODE_ENV === 'production') return false;
+  try {
+    const url = new URL(origin);
+    return ['127.0.0.1', 'localhost'].includes(url.hostname);
+  } catch {
+    return false;
+  }
+}
+
 const app = express();
 app.use((req, res, next) => {
   const origin = req.headers.origin;
-  if (origin && allowedOrigins.has(origin)) {
+  if (origin && (allowedOrigins.has(origin) || isAllowedDevOrigin(origin))) {
     res.setHeader('Access-Control-Allow-Origin', origin);
     res.setHeader('Vary', 'Origin');
   }
@@ -107,8 +117,10 @@ function writeApiRuntimeConfig(port) {
 
 function listen(port, attemptsLeft = 20) {
   const server = app.listen(port, host, () => {
-    writeApiRuntimeConfig(port);
-    console.log(\`Astratra API listening on http://\${host}:\${port}\`);
+    const address = server.address();
+    const selectedPort = typeof address === 'object' && address ? address.port : port;
+    writeApiRuntimeConfig(selectedPort);
+    console.log(\`Astratra API listening on http://\${host}:\${selectedPort}\`);
     console.log('Seeded owner: owner@example.test / password');
     console.log('Seeded member: member@example.test / password');
   });
@@ -285,9 +297,10 @@ npm install
 npm run dev:api
 \`\`\`
 ${webSteps}
-Si le port \`4000\` est deja occupe, l'API essaie automatiquement le port
-suivant et ecrit l'URL choisie dans \`.astratra/api.json\`. Lance \`dev:api\`
-avant \`dev:web\` pour que Vite lise la bonne URL.
+Par defaut, l'API demande un port libre au systeme et ecrit l'URL choisie
+dans \`.astratra/api.json\`. Lance \`dev:api\` avant \`dev:web\` pour que Vite
+lise la bonne URL. Pour forcer un port precis, utilise par exemple
+\`PORT=4000 npm run dev:api\`.
 
 Comptes de test :
 
@@ -342,7 +355,7 @@ export function createProject({ targetDir, template = 'fullstack', force = false
   writeFile(absoluteTarget, 'package.json', `${packageJson(projectName, template)}\n`);
   writeFile(absoluteTarget, 'api/server.js', apiServer());
   writeFile(absoluteTarget, '.gitignore', 'node_modules\n.env\n.astratra\n');
-  writeFile(absoluteTarget, '.env.example', 'PORT=4000\nHOST=127.0.0.1\nJWT_SECRET=change-me\nCORS_ORIGIN=http://127.0.0.1:5173,http://localhost:5173\n');
+  writeFile(absoluteTarget, '.env.example', 'PORT=\nHOST=127.0.0.1\nJWT_SECRET=change-me\nCORS_ORIGIN=\n');
   writeFile(absoluteTarget, 'README.md', readme(projectName, template));
 
   if (template === 'fullstack') {

@@ -295,3 +295,72 @@ test('webauthn routes are mounted only when a webauthn store is provided', async
   const mounted = await request(withStore.app, 'POST', '/auth/webauthn/register/options');
   assert.equal(mounted.status, 401);
 });
+
+test('every response carries a restrictive default Content-Security-Policy header', async () => {
+  const { app } = createTestApp();
+
+  const response = await request(app, 'POST', '/auth/login', {
+    body: { email: 'owner@example.test', password: 'password' }
+  });
+
+  assert.equal(response.headers['content-security-policy'], "default-src 'none'; frame-ancestors 'none'; base-uri 'none'");
+});
+
+test('login rejects a malformed email with a 400 before touching the users store', async () => {
+  const { app } = createTestApp();
+
+  const response = await request(app, 'POST', '/auth/login', {
+    body: { email: 'not-an-email', password: 'password' }
+  });
+
+  assert.equal(response.status, 400);
+  assert.equal(response.body.success, false);
+});
+
+test('login rejects a missing password with a 400', async () => {
+  const { app } = createTestApp();
+
+  const response = await request(app, 'POST', '/auth/login', {
+    body: { email: 'owner@example.test' }
+  });
+
+  assert.equal(response.status, 400);
+});
+
+test('creating a user with an invalid email is rejected with a 400', async () => {
+  const usersStore = createMemoryUsersStore();
+  const settingsStore = createMemorySettingsStore();
+  const { app } = createTestApp({ usersStore, settingsStore });
+  const token = await login(app, 'owner@example.test');
+
+  const response = await request(app, 'POST', '/users', {
+    headers: { authorization: `Bearer ${token}` },
+    body: { email: 'not-an-email', role: 'member' }
+  });
+
+  assert.equal(response.status, 400);
+});
+
+test('updating a setting without a value is rejected with a 400', async () => {
+  const { app } = createTestApp();
+  const token = await login(app, 'owner@example.test');
+
+  const response = await request(app, 'PATCH', '/settings/theme', {
+    headers: { authorization: `Bearer ${token}` },
+    body: {}
+  });
+
+  assert.equal(response.status, 400);
+});
+
+test('sending a notification without a message is rejected with a 400', async () => {
+  const { app } = createTestApp();
+  const token = await login(app, 'owner@example.test');
+
+  const response = await request(app, 'POST', '/notifications/send', {
+    headers: { authorization: `Bearer ${token}` },
+    body: { userId: 'user-member', title: 'Hello' }
+  });
+
+  assert.equal(response.status, 400);
+});

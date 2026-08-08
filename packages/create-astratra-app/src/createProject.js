@@ -27,18 +27,18 @@ function assertCanCreate(targetDir, force) {
 
 function packageJson(projectName, template) {
   const dependencies = {
-    '@astratra/ai': '^0.1.0',
-    '@astratra/core': '^0.1.0',
-    '@astratra/saas-kit': '^0.1.1',
-    '@astratra/security': '^0.1.1',
-    '@astratra/store-mongo': '^0.1.0',
+    '@astratra/ai': '^1.0.0',
+    '@astratra/core': '^1.0.0',
+    '@astratra/saas-kit': '^1.0.0',
+    '@astratra/security': '^1.0.0',
+    '@astratra/store-mongo': '^1.0.0',
     express: '^4.18.3',
     mongoose: '^8.17.0'
   };
   const devDependencies = {};
 
   if (template === 'fullstack') {
-    dependencies['@astratra/saas-kit-ui'] = '^0.1.0';
+    dependencies['@astratra/saas-kit-ui'] = '^1.0.0';
     dependencies.react = '^19.0.0';
     dependencies['react-dom'] = '^19.0.0';
     devDependencies['@vitejs/plugin-react'] = '^4.3.4';
@@ -526,7 +526,7 @@ npm run dev:web
 
   return `# ${projectName}
 
-Application generee avec Astratra.
+Application créée avec Astratra.
 
 ## Installation
 
@@ -540,22 +540,22 @@ npm install
 npm run dev:api
 \`\`\`
 ${webSteps}
-Par defaut, l'API demande un port libre au systeme et ecrit l'URL choisie
+Par défaut, l'API demande un port libre au système et écrit l'URL choisie
 dans \`.astratra/api.json\`. Lance \`dev:api\` avant \`dev:web\` pour que Vite
 lise la bonne URL. Laisse \`PORT\` vide pour garder le choix automatique.
 
-## Fichiers importants
+## Fichiers Utiles
 
 - \`api/config/env.js\` centralise la configuration.
-- \`api/config/cors.js\` gere CORS sans port de developpement fixe.
+- \`api/config/cors.js\` gère CORS sans port de développement fixe.
 - \`api/security/auth.js\`, \`api/security/rateLimit.js\` et
-  \`api/security/waf.js\` branchent les primitives de securite Astratra.
-- \`api/stores/memory.js\` lance vite avec des stores en memoire.
-- \`api/db/mongo.js\` et \`api/stores/mongo.js\` preparent MongoDB.
+  \`api/security/waf.js\` branchent les primitives de sécurité Astratra.
+- \`api/stores/memory.js\` lance vite avec des stores en mémoire.
+- \`api/db/mongo.js\` et \`api/stores/mongo.js\` préparent MongoDB.
 - \`api/ai/providers.js\`, \`api/ai/tools.js\` et \`api/ai/agent.js\`
-  preparent la logique IA.
+  préparent la logique IA.
 - \`api/modules/users.js\`, \`api/modules/settings.js\` et
-  \`api/modules/notifications.js\` isolent la logique metier de depart.
+  \`api/modules/notifications.js\` isolent la logique métier de départ.
 
 Comptes de test :
 
@@ -563,8 +563,8 @@ Comptes de test :
 - \`member@example.test\` / \`password\`
 
 Avant la production, remplace \`JWT_SECRET\`, branche de vrais stores et change
-la verification de mot de passe. Definis aussi \`JWT_ISSUER\` et
-\`JWT_AUDIENCE\` quand l'API sort du developpement local.
+la vérification de mot de passe. Définis aussi \`JWT_ISSUER\` et
+\`JWT_AUDIENCE\` quand l'API sort du développement local.
 `;
 }
 

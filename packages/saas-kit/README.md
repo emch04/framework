@@ -8,8 +8,9 @@ génériques auth, users, settings, notifications et dashboard. Il assemble :
 
 - `@astratra/core` pour les request IDs, le format de réponse API, le 404 et
   la gestion d'erreurs.
-- `@astratra/security` pour les primitives JWT/RBAC, le rate limiting, le WAF
-  heuristique et le service WebAuthn optionnel.
+- `@astratra/security` pour les primitives JWT/RBAC, le rate limiting, une
+  CSP restrictive par défaut, le WAF heuristique et le service WebAuthn
+  optionnel.
 - `@astratra/ai` en dépendance du package pour qu'un projet puisse composer
   des fonctionnalités IA à côté du starter, sans que le kit n'impose de
   routes IA métier.
@@ -50,12 +51,25 @@ app.listen(3000);
 - `GET /dashboard/summary`
 
 Toutes les routes protégées suivent le même ordre de middlewares de
-sécurité que la mini-app de démo : request id, parseur JSON, WAF heuristique,
-limiteur API, limiteur de login pour `/auth`, auth JWT pour les modules protégés,
-puis 404 et gestion d'erreurs.
+sécurité que la mini-app de démo : request id, CSP (`default-src 'none'` par
+défaut, adapté à une API JSON — surchargeable via `options.csp`), parseur
+JSON, WAF heuristique, limiteur API, limiteur de login pour `/auth`, auth JWT
+pour les modules protégés, puis 404 et gestion d'erreurs.
 
 `jwtAlgorithms` vaut `['HS256']` par defaut. `jwtIssuer` et `jwtAudience` sont
 optionnels, mais recommandes des qu'une app sort du simple developpement local.
+
+## Validation des entrées
+
+`POST /auth/login`, `POST /users`, `PATCH /settings/:key` et
+`POST /notifications/send` valident leur payload via
+`validateMiddleware` (`@astratra/core`) et `express-validator` avant
+d'appeler ton store — email au bon format, champs requis réellement présents
+(pas juste "truthy"), longueurs raisonnables sur les champs texte libres
+(titre, message). Une entrée invalide renvoie `400` avant même de toucher
+`usersStore`/`settingsStore`/`notify`. Le kit ne valide que les champs qu'il
+connaît lui-même — le reste du payload (champs propres à ton store) passe
+tel quel, sans schéma imposé.
 
 ## Adapters requis
 

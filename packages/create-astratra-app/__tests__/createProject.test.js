@@ -43,12 +43,12 @@ test('createProject writes a fullstack Astratra starter', () => {
 
   const pkg = JSON.parse(fs.readFileSync(path.join(result.targetDir, 'package.json'), 'utf8'));
   assert.equal(pkg.name, 'demo-app');
-  assert.equal(pkg.dependencies['@astratra/core'], '^0.1.0');
-  assert.equal(pkg.dependencies['@astratra/security'], '^0.1.1');
-  assert.equal(pkg.dependencies['@astratra/ai'], '^0.1.0');
-  assert.equal(pkg.dependencies['@astratra/saas-kit'], '^0.1.1');
-  assert.equal(pkg.dependencies['@astratra/store-mongo'], '^0.1.0');
-  assert.equal(pkg.dependencies['@astratra/saas-kit-ui'], '^0.1.0');
+  assert.equal(pkg.dependencies['@astratra/core'], '^1.0.0');
+  assert.equal(pkg.dependencies['@astratra/security'], '^1.0.0');
+  assert.equal(pkg.dependencies['@astratra/ai'], '^1.0.0');
+  assert.equal(pkg.dependencies['@astratra/saas-kit'], '^1.0.0');
+  assert.equal(pkg.dependencies['@astratra/store-mongo'], '^1.0.0');
+  assert.equal(pkg.dependencies['@astratra/saas-kit-ui'], '^1.0.0');
   assert.equal(pkg.dependencies.mongoose, '^8.17.0');
   assert.equal(pkg.scripts.dev, 'node scripts/dev.js');
   assert.equal(pkg.scripts['dev:web'], 'vite --host 127.0.0.1');

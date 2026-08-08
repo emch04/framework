@@ -87,6 +87,16 @@ export interface WafOptions {
 }
 
 export function createWafMiddleware(options?: WafOptions): RequestHandler;
+
+export type CspDirectives = Record<string, string[]>;
+
+export interface CspOptions {
+  directives?: CspDirectives;
+  reportOnly?: boolean;
+}
+
+export function createCspMiddleware(options?: CspOptions): RequestHandler;
+export const DEFAULT_CSP_DIRECTIVES: CspDirectives;
 export const WAF_PATTERNS: RegExp[];
 
 export const CHALLENGE_TTL_MS: number;

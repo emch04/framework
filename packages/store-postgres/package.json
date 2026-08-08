@@ -1,0 +1,43 @@
+{
+  "name": "@astratra/store-postgres",
+  "version": "1.0.0",
+  "description": "PostgreSQL persistence adapters for Astratra SaaS stores.",
+  "main": "src/index.js",
+  "types": "src/index.d.ts",
+  "type": "commonjs",
+  "files": [
+    "src"
+  ],
+  "scripts": {
+    "test": "jest"
+  },
+  "jest": {
+    "testMatch": [
+      "**/__tests__/**/*.test.js"
+    ],
+    "testTimeout": 60000
+  },
+  "keywords": [
+    "astratra",
+    "postgres",
+    "postgresql",
+    "saas"
+  ],
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
+  "peerDependencies": {
+    "pg": ">=8"
+  },
+  "peerDependenciesMeta": {
+    "pg": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "jest": "30.4.2",
+    "pg": "^8.13.1",
+    "pg-mem": "^3.0.5"
+  }
+}

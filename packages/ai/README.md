@@ -59,7 +59,7 @@ Vide par défaut — aucun outil pré-enregistré. `registry.formatToolsForPromp
 formate en texte les outils visibles pour un rôle donné, à injecter dans un
 prompt système.
 
-## Boucle d'agent (V0)
+## Boucle d'agent
 
 ```js
 const { runAgentLoop } = require('@astratra/ai');
@@ -91,6 +91,3 @@ dans votre propre boucle, ou à couvrir dans un futur spec.
 ```bash
 npm test --workspace @astratra/ai
 ```
-
-12 tests. Providers et Redis sont mockés — aucune vraie clé API ni serveur
-Redis requis.

@@ -8,6 +8,7 @@ const {
   authorizeRoles,
   createApiLimiter,
   createAuthMiddleware,
+  createCspMiddleware,
   createLoginLimiter,
   createWafMiddleware
 } = require('@astratra/security');
@@ -64,6 +65,7 @@ function createSaasApp(options = {}) {
   const app = express();
 
   app.use(requestIdMiddleware);
+  app.use(createCspMiddleware(normalized.csp));
   app.use(express.json());
   app.use(createWafMiddleware(normalized.waf));
   app.use(createApiLimiter(normalized.apiRateLimit));

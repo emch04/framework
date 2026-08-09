@@ -3,6 +3,47 @@
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Chaque package Astratra est versionné indépendamment.
 
+## 2026-08-09
+
+### Ajoute
+
+- `@astratra/prerender` (`0.1.0`) — première version. Prérendu SEO générique
+  pour un site Vite + React : `prerender()` et le binaire `astratra-prerender`
+  génèrent un `index.html` par route (Playwright + `vite preview`), préservent
+  `dist/_shell.html` vierge pour les visiteurs humains, et exposent
+  `transformHtml(html, context)` / `isReady(page, route)` pour l'adaptation par
+  projet. `audit.js` vérifie titre et description présents, détecte les titres
+  et le contenu visible dupliqués entre pages, et avertit sans bloquer sur un
+  contenu trop mince. Couvert par un test d'intégration bout-en-bout (vrai
+  Vite, vrai Chromium, 14 cas), en plus des tests unitaires des fonctions pures.
+
+### Corrige
+
+- `@astratra/security` (`1.0.1` → `1.0.2`) — `createWafMiddleware()` avertit
+  désormais (une seule fois par instance, via le logger de `@astratra/core`)
+  quand `req.body` vaut `undefined` au moment de son exécution. Monté avant
+  `express.json()`, ce middleware inspectait silencieusement une chaîne vide
+  à la place du corps réel de la requête : un payload SQLi/XSS dans le body
+  passait sans être bloqué, sans la moindre erreur pour le signaler. Trouvé
+  en testant manuellement une injection réelle sur une app consommatrice, pas
+  par les tests existants — aucun n'exerçait ce cas. README mis à jour avec
+  l'ordre de montage requis.
+- `@astratra/security` (`1.0.1` → `1.0.2`) — même défaut trouvé et corrigé
+  dans `createAccountLimiter()` : sa clé de compte par défaut lit aussi
+  `req.body.email`. Monté avant `express.json()`, toutes les tentatives de
+  connexion retombaient sur la clé partagée `"unknown"` — plus de limite par
+  compte, une seule limite globale partagée par tous les comptes (bypass
+  partiel de la protection anti brute-force, et risque de blocage
+  d'utilisateurs sans rapport entre eux). Même avertissement une seule fois,
+  README mis à jour. Trouvé en auditant systématiquement les autres
+  middlewares du package après le premier correctif, pas par hasard.
+- `@astratra/saas-kit` — sa dépendance sur `@astratra/security` resserrée de
+  `^1.0.1` à `^1.0.2`, pour qu'une installation fraîche ne puisse plus jamais
+  résoudre la version vulnérable (`^1.0.1` la couvrait déjà implicitement,
+  mais sans l'exiger explicitement). Aucun changement de code dans
+  `saas-kit` lui-même — il montait déjà `express.json()` avant le WAF
+  correctement.
+
 ## [1.0.0] - 2026-08-08
 
 Première version à API publique stable pour les fondations SaaS Astratra.

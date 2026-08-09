@@ -1,0 +1,47 @@
+{
+  "name": "@astratra/prerender",
+  "version": "0.1.0",
+  "description": "Prérendu générique Vite et React pour pages SEO statiques.",
+  "main": "src/index.js",
+  "bin": {
+    "astratra-prerender": "bin/astratra-prerender.js"
+  },
+  "type": "commonjs",
+  "files": [
+    "bin",
+    "src",
+    "README.md"
+  ],
+  "scripts": {
+    "test": "NODE_OPTIONS=--experimental-vm-modules jest"
+  },
+  "jest": {
+    "testMatch": [
+      "**/__tests__/**/*.test.js"
+    ]
+  },
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
+  "peerDependencies": {
+    "playwright": ">=1.40",
+    "vite": ">=5"
+  },
+  "peerDependenciesMeta": {
+    "playwright": {
+      "optional": true
+    },
+    "vite": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "jest": "30.4.2",
+    "playwright": "^1.62.1",
+    "vite": "^7.0.0",
+    "@vitejs/plugin-react": "^4.3.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  }
+}

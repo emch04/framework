@@ -80,6 +80,42 @@ describe('rateLimiters', () => {
     expect(res.status).toHaveBeenCalledWith(429);
   });
 
+  // Régression : monté avant express.json(), req.body vaut undefined et
+  // toutes les tentatives de connexion retombaient sur la clé partagée
+  // "unknown" — plus de limite par compte, une seule limite globale pour
+  // tous les comptes. Trouvé en auditant createWafMiddleware() (même défaut
+  // exact, voir waf.js) : aucun test existant sur ce fichier n'exerçait un
+  // req.body non défini.
+  describe('createAccountLimiter avec req.body non parsé (mauvais ordre des middlewares)', () => {
+    test('retombe sur la clé "unknown" au lieu de planter, mais avertit', () => {
+      const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+      process.env.NODE_ENV = 'development'; // le logger est un no-op en 'test'
+
+      const limiter = createAccountLimiter({});
+      const req = { ip: '203.0.113.12', body: undefined };
+
+      expect(limiter.keyGenerator(req)).toBe('unknown');
+      expect(warnSpy).toHaveBeenCalledTimes(1);
+      expect(warnSpy.mock.calls[0][0]).toMatch(/express\.json|unknown/i);
+
+      warnSpy.mockRestore();
+    });
+
+    test('un keyGenerator personnalisé contourne complètement ce défaut', () => {
+      const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+      process.env.NODE_ENV = 'development';
+
+      const customKeyGenerator = jest.fn(() => 'clé-personnalisée');
+      const limiter = createAccountLimiter({ keyGenerator: customKeyGenerator });
+      const req = { ip: '203.0.113.13', body: undefined };
+
+      expect(limiter.keyGenerator(req)).toBe('clé-personnalisée');
+      expect(warnSpy).not.toHaveBeenCalled();
+
+      warnSpy.mockRestore();
+    });
+  });
+
   describe('Redis store integration', () => {
     const loadWithRedisMocks = ({ connect, redisStoreIncrement = jest.fn() }) => {
       jest.resetModules();

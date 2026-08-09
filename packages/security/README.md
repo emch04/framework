@@ -47,10 +47,26 @@ app.use('/auth', createLoginLimiter({
 app.use('/auth/login', createAccountLimiter({ onBlocked: ({ identifier }) => { /* ... */ } }));
 ```
 
+`createAccountLimiter()` identifie le compte via `req.body.email` par défaut : comme
+`createWafMiddleware()`, il doit être monté APRÈS `express.json()`/`express.urlencoded()`.
+Avant, `req.body` vaut `undefined` et toutes les tentatives retombent sur la clé
+partagée `"unknown"` — la limite par compte disparaît au profit d'une limite
+globale partagée par tous les comptes. Un avertissement (`console.warn`, une
+seule fois par processus) signale ce cas. Fournir son propre `keyGenerator`
+contourne complètement ce point.
+```
+
 ## WAF
 
 ```js
 const { createWafMiddleware } = require('@astratra/security');
+
+// IMPORTANT : à monter APRÈS express.json()/express.urlencoded(). Avant, req.body
+// vaut undefined et ce middleware n'a rien à inspecter dans le corps de la requête
+// — il continue de fonctionner (bloque toujours sur path/query), mais silencieusement
+// sans jamais voir un payload dangereux envoyé dans le body. Un avertissement
+// (`console.warn`, une seule fois par instance) signale ce cas s'il se produit.
+app.use(express.json());
 app.use(createWafMiddleware({ message: { success: false, message: 'Requête bloquée.' } }));
 ```
 

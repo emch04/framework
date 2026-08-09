@@ -1,6 +1,6 @@
 {
   "name": "@astratra/saas-kit",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Reusable backend starter kit that assembles Astratra core, security, and AI packages.",
   "main": "src/index.js",
   "types": "src/index.d.ts",
@@ -23,7 +23,7 @@
   "dependencies": {
     "@astratra/ai": "^1.0.0",
     "@astratra/core": "^1.0.0",
-    "@astratra/security": "^1.0.1",
+    "@astratra/security": "^1.0.2",
     "express": "^4.18.3",
     "express-validator": "^7.3.2",
     "jsonwebtoken": "^9.0.2"

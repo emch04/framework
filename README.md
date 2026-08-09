@@ -38,6 +38,7 @@ commande.
 | [`@astratra/store-postgres`](packages/store-postgres/README.md) | adapter de persistance réel (PostgreSQL/`pg`) pour `usersStore`/`settingsStore` |
 | [`@astratra/saas-kit-ui`](packages/saas-kit-ui/README.md) | dashboard React réutilisable pour `@astratra/saas-kit` |
 | [`create-astratra-app`](packages/create-astratra-app/README.md) | générateur CLI pour créer une app Astratra rapidement |
+| [`@astratra/prerender`](packages/prerender/README.md) | prérendu SEO générique pour un site Vite + React : un HTML par route, shell SPA préservé |
 | [`examples/dashboard-ui`](examples/dashboard-ui/README.md) | exemple React + Vite consommant `@astratra/saas-kit-ui` et l'API `saas-kit` |
 
 La base est testée, typée et vérifiée localement. Les détails restent dans le

@@ -1,7 +1,10 @@
 {
   "name": "@astratra/security",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "Generic authentication and security middleware for Astratra workspaces.",
+  "engines": {
+    "node": ">=20"
+  },
   "main": "src/index.js",
   "types": "src/index.d.ts",
   "type": "commonjs",

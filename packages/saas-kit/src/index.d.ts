@@ -1,8 +1,11 @@
 import type {
   AuthMiddlewareOptions,
+  CsrfMiddlewareOptions,
   CspOptions,
   LoginLimiterOptions,
   RateLimitOptions,
+  RevocationStore,
+  SessionCookieOptions,
   WafOptions,
   WebauthnOptions,
   WebauthnStore
@@ -78,9 +81,12 @@ export interface CreateSaasAppOptions {
   notify: (userId: string, notification: NotificationPayload) => Awaitable<unknown>;
   verifyPassword: (user: SaasUser, password: string) => Awaitable<boolean>;
   verifySession?: AuthMiddlewareOptions['verifySession'];
+  revocationStore?: RevocationStore;
   extractToken?: AuthMiddlewareOptions['extractToken'];
   roles?: SaasRoles;
   publicUserFields?: string[];
+  cookie?: SessionCookieOptions;
+  csrf?: CsrfMiddlewareOptions;
   webauthnStore?: WebauthnStore;
   webauthn?: WebauthnOptions;
   waf?: WafOptions;

@@ -1,4 +1,7 @@
 const rateLimit = require('express-rate-limit');
+const { createLogger } = require('@astratra/core');
+
+const logger = createLogger('rate-limiters');
 
 const DEFAULT_API_MESSAGE = {
   success: false,
@@ -175,7 +178,30 @@ const createLoginLimiter = (options = {}) => rateLimit(withOptionalStore({
   )
 }, resolveStore(options)));
 
+// Avertit une seule fois par processus (fonction partagée par toute instance
+// de createAccountLimiter utilisant la clé par défaut) : le problème est un
+// ordre de montage figé au démarrage, pas quelque chose qui varie requête par
+// requête.
+let warnedUnparsedBody = false;
+
 const defaultAccountKeyGenerator = (req) => {
+  // Même défaut de conception que le WAF (voir waf.js) : req.body est
+  // `undefined` si createAccountLimiter() est monté avant express.json().
+  // Sans cette détection, toute tentative de connexion retombait alors sur la
+  // clé partagée "unknown" — plus de limite PAR COMPTE, une seule limite
+  // globale pour tous les comptes confondus. Deux effets, tous deux mauvais :
+  // un attaquant peut essayer des mots de passe sur des comptes DIFFÉRENTS
+  // sans jamais être freiné par compte, et des utilisateurs légitimes sans
+  // rapport entre eux peuvent se faire bloquer les uns par les autres.
+  if (req.body === undefined && !warnedUnparsedBody) {
+    warnedUnparsedBody = true;
+    logger.warn(
+      'req.body est undefined dans createAccountLimiter() — à monter APRÈS ' +
+      "express.json()/express.urlencoded(), sinon toutes les tentatives sont " +
+      'regroupées sous la même clé "unknown" au lieu d\'être limitées par compte.'
+    );
+  }
+
   const body = req.body || {};
   const identifier = body.email || body.identifier || 'unknown';
   return String(identifier).toLowerCase();

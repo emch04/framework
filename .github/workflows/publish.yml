@@ -9,6 +9,7 @@ on:
         type: choice
         options:
           - '@astratra/ai'
+          - '@astratra/prerender'
           - '@astratra/core'
           - '@astratra/security'
           - '@astratra/saas-kit'

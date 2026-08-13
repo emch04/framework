@@ -1,7 +1,10 @@
 {
   "name": "@astratra/prerender",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Prérendu générique Vite et React pour pages SEO statiques.",
+  "engines": {
+    "node": ">=20"
+  },
   "main": "src/index.js",
   "bin": {
     "astratra-prerender": "bin/astratra-prerender.js"

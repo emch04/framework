@@ -1,7 +1,10 @@
 {
   "name": "@astratra/store-mongo",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "MongoDB/Mongoose persistence adapters for Astratra SaaS stores.",
+  "engines": {
+    "node": ">=20"
+  },
   "main": "src/index.js",
   "types": "src/index.d.ts",
   "type": "commonjs",

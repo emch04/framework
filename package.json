@@ -3,6 +3,9 @@
   "private": true,
   "version": "0.0.0",
   "description": "Astratra npm workspace monorepo.",
+  "engines": {
+    "node": ">=20"
+  },
   "workspaces": [
     "packages/*",
     "examples/dashboard-ui"

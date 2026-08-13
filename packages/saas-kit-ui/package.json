@@ -1,7 +1,10 @@
 {
   "name": "@astratra/saas-kit-ui",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Reusable React dashboard shell for Astratra SaaS applications.",
+  "engines": {
+    "node": ">=20"
+  },
   "type": "module",
   "main": "src/index.jsx",
   "module": "src/index.jsx",

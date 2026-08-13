@@ -49,4 +49,17 @@ export function App() {
 
 `createApiFetch` utilise toujours `credentials: 'include'`. Le backend doit
 configurer CORS, `HttpOnly`, `Secure`, `SameSite` et une protection CSRF adaptee
-a son environnement. Astratra ne remplace pas cette configuration.
+a son environnement. Astratra ne remplace pas cette configuration —
+`@astratra/security` fournit ces primitives cote backend (voir son README).
+
+## Par rapport a `@astratra/saas-kit-ui`
+
+`@astratra/saas-kit-ui` expose aussi des primitives de session
+(`AuthProvider`/`useAuth`), mais avec un choix different : token JWT garde
+en memoire JS et attache en `Authorization: Bearer`, couple a son dashboard
+complet `AstratraDashboardApp`. Ce package-ci (`@astratra/react`) ne stocke
+aucun token cote client — la session reste dans un cookie `HttpOnly` gere
+par le backend — et n'impose ni dashboard ni ecran. Choisis `saas-kit-ui` si
+`AstratraDashboardApp` te convient tel quel ; choisis `@astratra/react` si
+tu construis ta propre interface par-dessus un backend en sessions cookie
+`HttpOnly`.

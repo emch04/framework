@@ -1,7 +1,10 @@
 {
   "name": "@astratra/ai",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Generic AI provider routing, tool registry, and agent loop utilities for Astratra.",
+  "engines": {
+    "node": ">=20"
+  },
   "main": "src/index.js",
   "types": "src/index.d.ts",
   "type": "commonjs",

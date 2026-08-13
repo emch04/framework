@@ -1,7 +1,10 @@
 {
   "name": "@astratra/tooling",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Generic audit, test, and deploy tooling for Astratra workspaces.",
+  "engines": {
+    "node": ">=20"
+  },
   "main": "src/index.js",
   "types": "src/index.d.ts",
   "type": "commonjs",

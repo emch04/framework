@@ -1,7 +1,10 @@
 {
   "name": "create-astratra-app",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "CLI generator for new Astratra SaaS applications.",
+  "engines": {
+    "node": ">=20"
+  },
   "type": "module",
   "bin": {
     "create-astratra-app": "bin/create-astratra-app.js"

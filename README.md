@@ -36,10 +36,10 @@ commande.
 | [`@astratra/saas-kit`](packages/saas-kit/README.md) | starter : `createSaasApp()` assemblant users/auth/settings/notifications/dashboard, validation d'entrée intégrée |
 | [`@astratra/store-mongo`](packages/store-mongo/README.md) | adapter de persistance réel (MongoDB/Mongoose) pour `usersStore`/`settingsStore` |
 | [`@astratra/store-postgres`](packages/store-postgres/README.md) | adapter de persistance réel (PostgreSQL/`pg`) pour `usersStore`/`settingsStore` |
-| [`@astratra/saas-kit-ui`](packages/saas-kit-ui/README.md) | dashboard React réutilisable pour `@astratra/saas-kit` |
+| [`@astratra/saas-kit-ui`](packages/saas-kit-ui/README.md) | dashboard React complet et prêt à l'emploi pour `@astratra/saas-kit`, session JWT en mémoire (`Authorization: Bearer`) |
 | [`create-astratra-app`](packages/create-astratra-app/README.md) | générateur CLI pour créer une app Astratra rapidement |
 | [`@astratra/prerender`](packages/prerender/README.md) | prérendu SEO générique pour un site Vite + React : un HTML par route, shell SPA préservé |
-| [`@astratra/react`](packages/react/README.md) | primitives React optionnelles : session, permissions, protections et client API avec cookies |
+| [`@astratra/react`](packages/react/README.md) | primitives React nues pour une UI à construire soi-même, session cookie `HttpOnly` sans dashboard imposé — voir son README pour le choix vs `saas-kit-ui` |
 | [`examples/dashboard-ui`](examples/dashboard-ui/README.md) | exemple React + Vite consommant `@astratra/saas-kit-ui` et l'API `saas-kit` |
 
 La base est testée, typée et vérifiée localement. Les détails restent dans le

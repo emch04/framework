@@ -1,7 +1,10 @@
 {
   "name": "@astratra/core",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Generic core utilities for Astratra SaaS packages.",
+  "engines": {
+    "node": ">=20"
+  },
   "main": "src/index.js",
   "types": "src/index.d.ts",
   "type": "commonjs",

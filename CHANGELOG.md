@@ -5,6 +5,24 @@ Chaque package Astratra est versionné indépendamment.
 
 ## 2026-08-09
 
+### Modifie
+
+- Tous les packages publics (`@astratra/ai` `1.0.1`→`1.0.2`, `@astratra/core`
+  `1.0.0`→`1.0.1`, `create-astratra-app` `1.0.1`→`1.0.2`,
+  `@astratra/prerender` `0.1.0`→`0.1.1`, `@astratra/react` `0.1.0`→`0.1.1`,
+  `@astratra/saas-kit` `1.1.0`→`1.1.1`, `@astratra/saas-kit-ui`
+  `1.0.0`→`1.0.1`, `@astratra/security` `1.1.0`→`1.1.1`,
+  `@astratra/store-mongo`/`store-postgres` `1.0.1`→`1.0.2`,
+  `@astratra/tooling` `1.0.0`→`1.0.1`) déclarent maintenant `engines.node
+  ">=20"`, aligné sur la matrice CI. Sans ça, un `npm install` sous Node < 20
+  ne loguait un problème qu'à l'exécution, pas à l'installation.
+- `@astratra/saas-kit-ui` et `@astratra/react` documentent maintenant
+  explicitement leur différence : `saas-kit-ui` reste dashboard complet +
+  JWT en mémoire (`Authorization: Bearer`), `@astratra/react` reste
+  primitives nues + session cookie `HttpOnly`, sans dashboard imposé — ce
+  n'était pas documenté et pouvait passer pour un doublon accidentel entre
+  les deux packages.
+
 ### Ajoute
 
 - `@astratra/prerender` (`0.1.0`) — première version. Prérendu SEO générique

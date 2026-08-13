@@ -117,6 +117,63 @@ describe('jwtAuth', () => {
     expect(next).not.toHaveBeenCalled();
   });
 
+  test('uses revocationStore to reject a revoked token id', async () => {
+    const token = jwt.sign({ id: 'u1', jti: 'revoked-token' }, 'secret', { expiresIn: '1h' });
+    const revocationStore = {
+      isRevoked: jest.fn().mockResolvedValue(true)
+    };
+    const res = createRes();
+    const next = jest.fn();
+
+    await createAuthMiddleware({ secret: 'secret', revocationStore })(
+      { headers: { authorization: `Bearer ${token}` } },
+      res,
+      next
+    );
+
+    expect(revocationStore.isRevoked).toHaveBeenCalledWith('revoked-token');
+    expect(res.status).toHaveBeenCalledWith(401);
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  test('uses revocationStore to reject tokens issued before user logout-all', async () => {
+    const issuedAt = Math.floor(Date.now() / 1000);
+    const token = jwt.sign({ id: 'u1', jti: 'active-token', iat: issuedAt }, 'secret', { expiresIn: '1h' });
+    const revocationStore = {
+      isRevoked: jest.fn().mockResolvedValue(false),
+      isRevokedForUser: jest.fn().mockResolvedValue(true)
+    };
+    const res = createRes();
+    const next = jest.fn();
+
+    await createAuthMiddleware({ secret: 'secret', revocationStore })(
+      { headers: { authorization: `Bearer ${token}` } },
+      res,
+      next
+    );
+
+    expect(revocationStore.isRevoked).toHaveBeenCalledWith('active-token');
+    expect(revocationStore.isRevokedForUser).toHaveBeenCalledWith('u1', issuedAt);
+    expect(res.status).toHaveBeenCalledWith(401);
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  test('keeps explicit verifySession in control when revocationStore is also provided', async () => {
+    const token = jwt.sign({ id: 'u1', jti: 'revoked-token' }, 'secret', { expiresIn: '1h' });
+    const revocationStore = {
+      isRevoked: jest.fn().mockResolvedValue(true)
+    };
+    const verifySession = jest.fn().mockResolvedValue(true);
+    const req = { headers: { authorization: `Bearer ${token}` } };
+    const next = jest.fn();
+
+    await createAuthMiddleware({ secret: 'secret', revocationStore, verifySession })(req, createRes(), next);
+
+    expect(verifySession).toHaveBeenCalledWith(expect.objectContaining({ jti: 'revoked-token' }));
+    expect(revocationStore.isRevoked).not.toHaveBeenCalled();
+    expect(next).toHaveBeenCalledTimes(1);
+  });
+
   test('does not verify sessions when callback is absent', async () => {
     const token = jwt.sign({ id: 'u1', tokenVersion: 2 }, 'secret');
     const req = { headers: { authorization: `Bearer ${token}` } };

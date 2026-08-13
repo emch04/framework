@@ -30,10 +30,69 @@ app.delete('/api/projects/:id', authorizeRoles('owner', 'admin'), handler);
 Par défaut, le middleware limite la vérification à `HS256`. Si ton application
 utilise un autre algorithme, configure explicitement `algorithms`.
 
-Si tu extrais le token depuis un cookie, configure le cookie côté application
-avec `HttpOnly`, `Secure` en HTTPS et un `SameSite` adapte. Un cookie JWT peut
-nécessiter une protection CSRF selon tes routes, tes méthodes HTTP et ton
-mode d'authentification.
+## Sessions cookie HttpOnly + CSRF
+
+```js
+const {
+  cookieParserMiddleware,
+  setSessionCookie,
+  clearSessionCookie,
+  createCsrfMiddleware,
+  DEFAULT_SESSION_COOKIE_NAME // 'astratra_session'
+} = require('@astratra/security');
+
+app.use(cookieParserMiddleware()); // peuple req.cookies, sans dépendance cookie-parser
+
+// au login :
+setSessionCookie(res, token, { sameSite: 'lax' }); // HttpOnly toujours, Secure sauf NODE_ENV=development
+
+// au logout :
+clearSessionCookie(res);
+
+// sur les routes mutantes protégées par cookie :
+app.use('/api', authMiddleware, createCsrfMiddleware({
+  skip: (req) => Boolean(req.headers.authorization?.startsWith('Bearer ')) // les clients Bearer ne sont pas exposés au CSRF
+}));
+```
+
+`createAuthMiddleware`'s `extractToken` par défaut lit le cookie
+`astratra_session` (ou `token`, pour compatibilité) avant de retomber sur
+`Authorization: Bearer`. Si tu personnalises le nom du cookie via
+`setSessionCookie(res, token, { name: 'autre_nom' })`, passe le même nom à
+`extractToken` — sinon le cookie posé au login ne sera jamais relu.
+
+Le CSRF est un middleware double-submit (cookie non-`HttpOnly` +
+header `x-csrf-token`) — à monter explicitement là où tu en as besoin, il
+n'est jamais actif tout seul dans ce package. `@astratra/saas-kit` le monte
+par défaut sur ses routes protégées, avec bypass automatique pour les
+clients `Authorization: Bearer`.
+
+## Révocation de session JWT
+
+```js
+const { createAuthMiddleware, createMemoryRevocationStore } = require('@astratra/security');
+
+const revocationStore = createMemoryRevocationStore(); // dev/single-instance ; Redis/DB en prod multi-instance
+
+const authMiddleware = createAuthMiddleware({
+  secret: process.env.JWT_SECRET,
+  revocationStore // dérive automatiquement verifySession si tu n'en fournis pas un explicite
+});
+
+// au logout, pour invalider CE token précis :
+await revocationStore.revoke(decodedToken.jti, decodedToken.exp * 1000);
+
+// au "déconnecter tous mes appareils", pour invalider TOUS les tokens de l'utilisateur :
+await revocationStore.revokeAllForUser(decodedToken.id, Date.now());
+```
+
+Sans `jti` dans le payload du JWT, `revoke()` par token précis ne peut rien
+faire — c'est à l'app qui signe le token de générer un `jti` unique par
+connexion. `createMemoryRevocationStore()` est un store en mémoire process,
+non partagé entre instances : pour une prod multi-instance, fournis ton
+propre store (Redis, etc.) qui implémente la même interface
+(`revoke`, `isRevoked`, et optionnellement `revokeAllForUser`/
+`isRevokedForUser`).
 
 ## Rate limiting
 

@@ -11,6 +11,8 @@ export interface RequestLike {
 }
 
 export interface ResponseLike {
+  getHeader?(name: string): unknown;
+  setHeader?(name: string, value: unknown): unknown;
   status(statusCode: number): {
     json(payload: unknown): unknown;
   };
@@ -31,10 +33,47 @@ export interface AuthMiddlewareOptions<TDecoded = Record<string, unknown>> {
   message?: unknown;
   extractToken?: (req: RequestLike) => string | null | undefined;
   verifySession?: (decoded: TDecoded) => Awaitable<boolean>;
+  revocationStore?: RevocationStore;
 }
 
 export function createAuthMiddleware<TDecoded = Record<string, unknown>>(options: AuthMiddlewareOptions<TDecoded>): RequestHandler;
 export function authorizeRoles(...roles: string[]): RequestHandler;
+
+export interface RevocationStore {
+  revoke(jti: string, expiresAt: number): Awaitable<void>;
+  isRevoked(jti?: string): Awaitable<boolean>;
+  revokeAllForUser?(userId: string, revokedBeforeMs: number): Awaitable<void>;
+  isRevokedForUser?(userId: string, issuedAtSeconds: number): Awaitable<boolean>;
+}
+
+export function createMemoryRevocationStore(): RevocationStore;
+
+export interface SessionCookieOptions {
+  name?: string;
+  sameSite?: 'lax' | 'strict' | 'none' | string;
+  secure?: boolean;
+  path?: string;
+  domain?: string;
+  maxAgeMs?: number;
+}
+
+export const DEFAULT_SESSION_COOKIE_NAME: string;
+export function parseCookieHeader(header?: string): Record<string, string>;
+export function cookieParserMiddleware(): RequestHandler;
+export function setSessionCookie(res: ResponseLike, token: string, options?: SessionCookieOptions): unknown;
+export function clearSessionCookie(res: ResponseLike, options?: SessionCookieOptions): unknown;
+
+export interface CsrfMiddlewareOptions {
+  name?: string;
+  headerName?: string;
+  sameSite?: 'lax' | 'strict' | 'none' | string;
+  secure?: boolean;
+  path?: string;
+  domain?: string;
+  skip?: (req: RequestLike) => boolean;
+}
+
+export function createCsrfMiddleware(options?: CsrfMiddlewareOptions): RequestHandler;
 
 export interface RateLimitStore {
   init?(options: unknown): unknown;

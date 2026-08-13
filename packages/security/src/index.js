@@ -3,5 +3,8 @@ module.exports = {
   ...require('./rateLimiters'),
   ...require('./waf'),
   ...require('./webauthn'),
-  ...require('./csp')
+  ...require('./csp'),
+  ...require('./cookies'),
+  ...require('./csrf'),
+  ...require('./revocation')
 };

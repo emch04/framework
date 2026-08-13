@@ -6,11 +6,15 @@ const {
 } = require('@astratra/core');
 const {
   authorizeRoles,
+  cookieParserMiddleware,
   createApiLimiter,
   createAuthMiddleware,
   createCspMiddleware,
+  createCsrfMiddleware,
   createLoginLimiter,
-  createWafMiddleware
+  createMemoryRevocationStore,
+  createWafMiddleware,
+  DEFAULT_SESSION_COOKIE_NAME
 } = require('@astratra/security');
 const createAuthRoutes = require('./modules/auth');
 const createDashboardRoutes = require('./modules/dashboard');
@@ -35,6 +39,7 @@ function normalizeOptions(options = {}) {
   const jwtAlgorithms = options.jwtAlgorithms || ['HS256'];
   const usersStore = options.usersStore || createMemoryUsersStore();
   const settingsStore = options.settingsStore || createMemorySettingsStore();
+  const revocationStore = options.revocationStore || createMemoryRevocationStore();
   const notify = options.notify;
   const verifyPassword = options.verifyPassword;
   const roles = { ...DEFAULT_ROLES, ...(options.roles || {}) };
@@ -57,6 +62,7 @@ function normalizeOptions(options = {}) {
     jwtAudience: options.jwtAudience,
     usersStore,
     settingsStore,
+    revocationStore,
     notify,
     verifyPassword,
     roles,
@@ -69,10 +75,22 @@ function createSaasApp(options = {}) {
   const app = express();
 
   app.use(requestIdMiddleware);
+  app.use(cookieParserMiddleware());
   app.use(createCspMiddleware(normalized.csp));
   app.use(express.json());
   app.use(createWafMiddleware(normalized.waf));
   app.use(createApiLimiter(normalized.apiRateLimit));
+
+  const sessionCookieName = (normalized.cookie && normalized.cookie.name) || DEFAULT_SESSION_COOKIE_NAME;
+  const extractToken = normalized.extractToken || ((req) => {
+    const cookieToken = req.cookies && req.cookies[sessionCookieName];
+    if (cookieToken) return cookieToken;
+    const authorization = req.headers && req.headers.authorization;
+    if (authorization && authorization.startsWith('Bearer ')) {
+      return authorization.slice('Bearer '.length);
+    }
+    return null;
+  });
 
   const authMiddleware = createAuthMiddleware({
     secret: normalized.jwtSecret,
@@ -81,29 +99,42 @@ function createSaasApp(options = {}) {
     issuer: normalized.jwtIssuer,
     audience: normalized.jwtAudience,
     verifySession: normalized.verifySession,
-    extractToken: normalized.extractToken
+    revocationStore: normalized.revocationStore,
+    extractToken
   });
   const authorizeAdmin = authorizeRoles(...normalized.roles.adminRoles);
 
+  // Bearer-authenticated clients (mobile/API) aren't vulnerable to CSRF: a browser
+  // never auto-attaches an Authorization header cross-site the way it does a cookie.
+  const isBearerAuthenticated = (req) => {
+    const authorization = req.headers && req.headers.authorization;
+    return Boolean(authorization && authorization.startsWith('Bearer '));
+  };
+  const csrfMiddleware = createCsrfMiddleware({
+    ...normalized.csrf,
+    skip: (req) => isBearerAuthenticated(req) || (normalized.csrf && normalized.csrf.skip && normalized.csrf.skip(req))
+  });
+
   app.use('/auth', createLoginLimiter(normalized.loginRateLimit), createAuthRoutes({
     ...normalized,
-    authMiddleware
+    authMiddleware,
+    csrfMiddleware
   }));
 
-  app.use('/users', authMiddleware, createUsersRoutes({
+  app.use('/users', authMiddleware, csrfMiddleware, createUsersRoutes({
     usersStore: normalized.usersStore,
     authorizeAdmin,
     publicUserFields: normalized.publicUserFields
   }));
-  app.use('/settings', authMiddleware, createSettingsRoutes({
+  app.use('/settings', authMiddleware, csrfMiddleware, createSettingsRoutes({
     settingsStore: normalized.settingsStore,
     authorizeAdmin
   }));
-  app.use('/notifications', authMiddleware, createNotificationsRoutes({
+  app.use('/notifications', authMiddleware, csrfMiddleware, createNotificationsRoutes({
     notify: normalized.notify,
     authorizeAdmin
   }));
-  app.use('/dashboard', authMiddleware, createDashboardRoutes({
+  app.use('/dashboard', authMiddleware, csrfMiddleware, createDashboardRoutes({
     usersStore: normalized.usersStore
   }));
 

@@ -9,6 +9,7 @@ const workspaces = [
   '@astratra/security',
   '@astratra/ai',
   '@astratra/prerender',
+  '@astratra/react',
   '@astratra/tooling',
   '@astratra/saas-kit',
   '@astratra/saas-kit-ui',
@@ -51,6 +52,11 @@ try {
     "require('@astratra/store-mongo')",
     "require('@astratra/store-postgres')"
   ].join(';')], { cwd: projectDir, stdio: 'inherit' });
+
+  execFileSync(process.execPath, ['--input-type=module', '-e', "import('@astratra/react')"], {
+    cwd: projectDir,
+    stdio: 'inherit'
+  });
 
   console.log('All Astratra package archives install and load successfully.');
 } finally {

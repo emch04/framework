@@ -1,18 +1,25 @@
 import {
   CHALLENGE_TTL_MS,
   DEFAULT_CSP_DIRECTIVES,
+  DEFAULT_SESSION_COOKIE_NAME,
   RECOVERY_CODE_COUNT,
   WAF_PATTERNS,
   authorizeRoles,
+  clearSessionCookie,
+  cookieParserMiddleware,
   createAccountLimiter,
   createApiLimiter,
   createAuthMiddleware,
   createCspMiddleware,
+  createCsrfMiddleware,
   createLoginLimiter,
+  createMemoryRevocationStore,
   createWafMiddleware,
   createWebauthnService,
   hashRecoveryCode,
+  parseCookieHeader,
   rpConfigForRequest,
+  setSessionCookie,
   skipLocalhost
 } from '@astratra/security';
 
@@ -31,6 +38,16 @@ const middleware = createAuthMiddleware({
   message: { success: false, message: 'No' },
   extractToken: (req) => req.headers?.authorization ?? null,
   verifySession: async (decoded) => Boolean(decoded)
+});
+
+const revocationStore = createMemoryRevocationStore();
+revocationStore.revoke('token-id', Date.now() + 3600000);
+revocationStore.isRevoked('token-id');
+revocationStore.revokeAllForUser?.('user-id', Date.now());
+revocationStore.isRevokedForUser?.('user-id', Math.floor(Date.now() / 1000));
+createAuthMiddleware({
+  secret: 'secret',
+  revocationStore
 });
 
 middleware({ headers: { authorization: 'Bearer token' } }, { status: () => ({ json: () => undefined }) }, () => {});
@@ -55,6 +72,18 @@ createAccountLimiter({
 });
 
 createWafMiddleware({ message: { success: false }, patterns: WAF_PATTERNS });
+
+const cookieRes = { setHeader: () => undefined, getHeader: () => undefined, status: () => ({ json: () => undefined }) };
+void DEFAULT_SESSION_COOKIE_NAME;
+const parsedCookies: Record<string, string> = parseCookieHeader('a=b; c=d');
+void parsedCookies;
+cookieParserMiddleware()({ headers: { cookie: 'a=b' } }, cookieRes, () => {});
+setSessionCookie(cookieRes, 'jwt-token', { name: 'app_session', sameSite: 'strict', secure: true, maxAgeMs: 3600000 });
+clearSessionCookie(cookieRes, { name: 'app_session' });
+createCsrfMiddleware({
+  headerName: 'x-csrf-token',
+  skip: (req) => req.path === '/webhook'
+})({ method: 'POST', path: '/api', cookies: {}, headers: {} }, cookieRes, () => {});
 const rp = rpConfigForRequest({ headers: { origin: 'http://localhost:3000' } }, { clientUrl: 'http://localhost:3000' });
 const hash: string = hashRecoveryCode('abcd-1234', 'secret');
 

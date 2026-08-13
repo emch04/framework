@@ -1,0 +1,40 @@
+{
+  "name": "@astratra/react",
+  "version": "0.1.0",
+  "description": "Primitives React génériques pour sessions, permissions et appels API Astratra.",
+  "type": "module",
+  "main": "src/index.js",
+  "module": "src/index.js",
+  "types": "src/index.d.ts",
+  "exports": {
+    ".": "./src/index.js"
+  },
+  "files": [
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "test": "node --test --import ./test/setup.js __tests__/*.test.js"
+  },
+  "keywords": [
+    "astratra",
+    "react",
+    "auth",
+    "permissions"
+  ],
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
+  "peerDependencies": {
+    "react": ">=18"
+  },
+  "devDependencies": {
+    "@testing-library/dom": "^10.4.1",
+    "@testing-library/react": "^16.3.2",
+    "@types/react": "^19.2.18",
+    "jsdom": "^30.0.1",
+    "react-dom": "^19.2.8"
+  }
+}

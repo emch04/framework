@@ -16,9 +16,50 @@ Chaque package Astratra est versionné indépendamment.
   et le contenu visible dupliqués entre pages, et avertit sans bloquer sur un
   contenu trop mince. Couvert par un test d'intégration bout-en-bout (vrai
   Vite, vrai Chromium, 14 cas), en plus des tests unitaires des fonctions pures.
+- `@astratra/security` (`1.0.2` → `1.1.0`) — sessions cookie `HttpOnly`
+  intégrées : `setSessionCookie`/`clearSessionCookie` (`HttpOnly` toujours,
+  `Secure` par défaut sauf `NODE_ENV=development`, `SameSite` configurable),
+  `cookieParserMiddleware()` pour peupler `req.cookies` sans dépendance
+  `cookie-parser`, et `createCsrfMiddleware()` (double-submit cookie/header,
+  bypass automatique pour les clients authentifiés par `Authorization:
+  Bearer`). Révocation JWT ajoutée : `createMemoryRevocationStore()` avec
+  `revoke`/`isRevoked` (par `jti`, un token précis) et
+  `revokeAllForUser`/`isRevokedForUser` (par utilisateur et `iat`, pour un
+  logout de tous les appareils). `createAuthMiddleware({ revocationStore })`
+  dérive automatiquement `verifySession` si aucun n'est fourni explicitement.
+  Tous les nouveaux exports typés dans `index.d.ts` et exercés dans
+  `typecheck.ts`.
+- `@astratra/saas-kit` (`1.0.2` → `1.1.0`) — `createSaasApp` monte désormais
+  `cookieParserMiddleware()` et un `revocationStore` mémoire par défaut,
+  branche le CSRF sur toutes les routes mutantes protégées, et ajoute
+  `POST /auth/logout` (invalide le token courant) et `POST /auth/logout-all`
+  (invalide tous les tokens actifs de l'utilisateur). Dépendance sur
+  `@astratra/security` resserrée à `^1.1.0`.
+- `@astratra/react` (`0.1.0`) — première version. Primitives React
+  optionnelles (`SessionProvider`, `useSession`, `useUser`,
+  `usePermissions`, `RequireAuth`, `RequireRole`, `createApiFetch`) pour
+  consommer une session cookie `HttpOnly` côté client sans imposer
+  d'endpoint, de routing ni de configuration CSRF — ça reste la
+  responsabilité de l'application consommatrice. Testé avec
+  `@testing-library/react` sur un DOM `jsdom` monté pour `node --test`.
 
 ### Corrige
 
+- `@astratra/saas-kit` (`1.0.2` → `1.1.0`) — le cookie de session posé au
+  login n'était jamais relu par le middleware d'authentification :
+  `createSaasApp` ne montait aucun cookie-parser (`req.cookies` restait
+  `undefined`) et le nom de cookie par défaut attendu par `jwtAuth.js`
+  (`token`) ne correspondait pas au nom réellement posé
+  (`astratra_session`). Un client web se connectant et rappelant une route
+  protégée avec uniquement ce cookie recevait `401` au lieu de `200`.
+  Confirmé par test de mutation avant correctif (rejeu du cookie posé au
+  login contre une route protégée), pas trouvé par simple lecture de code.
+- `@astratra/saas-kit` (`1.1.0`) — `POST /auth/logout-all` plantait en `500`
+  si un `revocationStore` personnalisé n'implémentait pas la méthode
+  optionnelle `revokeAllForUser` (marquée `?` dans l'interface
+  `RevocationStore`). Dégrade maintenant proprement (`200`, logout-all
+  no-op) quand la méthode est absente. Trouvé par mutation avec un store
+  minimal ne fournissant que `revoke`/`isRevoked`.
 - `@astratra/security` (`1.0.1` → `1.0.2`) — `createWafMiddleware()` avertit
   désormais (une seule fois par instance, via le logger de `@astratra/core`)
   quand `req.body` vaut `undefined` au moment de son exécution. Monté avant

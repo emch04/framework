@@ -1,4 +1,5 @@
 const jwt = require('jsonwebtoken');
+const { DEFAULT_SESSION_COOKIE_NAME } = require('./cookies');
 
 const DEFAULT_UNAUTHORIZED = {
   success: false,
@@ -13,7 +14,8 @@ const DEFAULT_FORBIDDEN = {
 const DEFAULT_ALGORITHMS = ['HS256'];
 
 const defaultExtractToken = (req) => {
-  const cookieToken = req.cookies && req.cookies.token;
+  const cookies = req.cookies || {};
+  const cookieToken = cookies[DEFAULT_SESSION_COOKIE_NAME] || cookies.token;
   if (cookieToken) return cookieToken;
 
   const authorization = req.headers && req.headers.authorization;
@@ -51,6 +53,24 @@ const createAuthMiddleware = (options = {}) => {
   const extractToken = options.extractToken || defaultExtractToken;
   const unauthorizedMessage = options.message || DEFAULT_UNAUTHORIZED;
   const verificationOptions = verificationOptionsFrom(options);
+  const verifySession = options.verifySession || (options.revocationStore
+    ? async (decoded) => {
+        const revokedByToken = await options.revocationStore.isRevoked(decoded && decoded.jti);
+        if (revokedByToken) return false;
+
+        if (
+          decoded &&
+          decoded.id !== undefined &&
+          decoded.iat !== undefined &&
+          typeof options.revocationStore.isRevokedForUser === 'function'
+        ) {
+          const revokedByUser = await options.revocationStore.isRevokedForUser(decoded.id, decoded.iat);
+          if (revokedByUser) return false;
+        }
+
+        return true;
+      }
+    : undefined);
 
   return async (req, res, next) => {
     try {
@@ -61,8 +81,8 @@ const createAuthMiddleware = (options = {}) => {
 
       const decoded = verifyWithRotation(token, options.secret, options.legacySecret, verificationOptions);
 
-      if (options.verifySession) {
-        const isActive = await options.verifySession(decoded);
+      if (verifySession) {
+        const isActive = await verifySession(decoded);
         if (!isActive) {
           return res.status(401).json(unauthorizedMessage);
         }

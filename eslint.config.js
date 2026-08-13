@@ -80,6 +80,22 @@ module.exports = [
     }
   },
   {
+    files: ['packages/react/**/*.js'],
+    languageOptions: {
+      ecmaVersion: 2022,
+      sourceType: 'module',
+      globals: {
+        fetch: 'readonly',
+        Headers: 'readonly',
+        Response: 'readonly',
+        globalThis: 'readonly'
+      }
+    },
+    rules: {
+      'no-undef': 'off'
+    }
+  },
+  {
     files: ['examples/dashboard-ui/**/*.{js,jsx}'],
     languageOptions: {
       ecmaVersion: 2022,

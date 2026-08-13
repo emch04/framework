@@ -114,11 +114,159 @@ test('login returns a JWT and public user data for a valid user', async () => {
   assert.equal(response.body.success, true);
   assert.equal(response.body.message, 'Login successful');
   assert.equal(typeof response.body.data.token, 'string');
+  assert.equal(typeof jwt.decode(response.body.data.token).jti, 'string');
+  assert.match(response.headers['set-cookie'], /Max-Age=3600/);
   assert.deepEqual(response.body.data.user, {
     id: 'user-owner',
     email: 'owner@example.test',
     role: 'owner'
   });
+});
+
+test('login sets a session cookie and logout clears it', async () => {
+  const { app } = createTestApp({
+    jwtExpiresIn: '1h',
+    cookie: {
+      name: 'test_session',
+      secure: false,
+      sameSite: 'strict',
+      path: '/auth'
+    }
+  });
+
+  const loginResponse = await request(app, 'POST', '/auth/login', {
+    body: { email: 'owner@example.test', password: 'password' }
+  });
+  const token = loginResponse.body.data.token;
+
+  assert.equal(loginResponse.status, 200);
+  assert.equal(
+    loginResponse.headers['set-cookie'],
+    'test_session=' + token + '; Max-Age=3600; Path=/auth; HttpOnly; SameSite=Strict'
+  );
+
+  const meViaCookie = await request(app, 'GET', '/auth/me', {
+    headers: { cookie: 'test_session=' + token }
+  });
+  assert.equal(meViaCookie.status, 200, 'the session cookie set at login must authenticate /auth/me on its own, without an Authorization header');
+
+  const logoutResponse = await request(app, 'POST', '/auth/logout', {
+    headers: { authorization: `Bearer ${token}` }
+  });
+
+  assert.equal(logoutResponse.status, 200);
+  assert.equal(logoutResponse.body.success, true);
+  assert.equal(logoutResponse.body.data, undefined);
+  assert.equal(
+    logoutResponse.headers['set-cookie'],
+    'test_session=; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT; Path=/auth; HttpOnly; SameSite=Strict'
+  );
+});
+
+test('logout revokes the current JWT so replaying the same token is rejected', async () => {
+  const { app } = createTestApp();
+  const token = await login(app, 'owner@example.test');
+
+  const beforeLogout = await request(app, 'GET', '/auth/me', {
+    headers: { authorization: `Bearer ${token}` }
+  });
+  assert.equal(beforeLogout.status, 200);
+
+  const logoutResponse = await request(app, 'POST', '/auth/logout', {
+    headers: { authorization: `Bearer ${token}` }
+  });
+  assert.equal(logoutResponse.status, 200);
+
+  const replay = await request(app, 'GET', '/auth/me', {
+    headers: { authorization: `Bearer ${token}` }
+  });
+  assert.equal(replay.status, 401);
+});
+
+test('logout-all revokes all existing JWTs for the user and allows a new login', async () => {
+  const { app } = createTestApp();
+  const tokenA = await login(app, 'owner@example.test');
+  await new Promise((resolve) => setTimeout(resolve, 1100));
+  const tokenB = await login(app, 'owner@example.test');
+
+  assert.notEqual(tokenA, tokenB);
+
+  const beforeLogoutAll = await request(app, 'GET', '/auth/me', {
+    headers: { authorization: `Bearer ${tokenB}` }
+  });
+  assert.equal(beforeLogoutAll.status, 200);
+
+  const logoutAllResponse = await request(app, 'POST', '/auth/logout-all', {
+    headers: { authorization: `Bearer ${tokenA}` }
+  });
+  assert.equal(logoutAllResponse.status, 200);
+  assert.equal(logoutAllResponse.body.success, true);
+
+  const replayA = await request(app, 'GET', '/auth/me', {
+    headers: { authorization: `Bearer ${tokenA}` }
+  });
+  assert.equal(replayA.status, 401);
+
+  const replayB = await request(app, 'GET', '/auth/me', {
+    headers: { authorization: `Bearer ${tokenB}` }
+  });
+  assert.equal(replayB.status, 401);
+
+  await new Promise((resolve) => setTimeout(resolve, 1100));
+  const tokenC = await login(app, 'owner@example.test');
+  const afterLogin = await request(app, 'GET', '/auth/me', {
+    headers: { authorization: `Bearer ${tokenC}` }
+  });
+  assert.equal(afterLogin.status, 200);
+});
+
+test('default session cookie name authenticates protected routes without an Authorization header', async () => {
+  const { app } = createTestApp();
+
+  const token = await login(app, 'owner@example.test');
+
+  const response = await request(app, 'GET', '/auth/me', {
+    headers: { cookie: `astratra_session=${token}` }
+  });
+
+  assert.equal(response.status, 200);
+  assert.equal(response.body.data.email, 'owner@example.test');
+});
+
+test('CSRF: a cookie-authenticated mutating request without a CSRF token is rejected', async () => {
+  const { app } = createTestApp();
+  const token = await login(app, 'owner@example.test');
+  const cookie = `astratra_session=${token}`;
+
+  const withoutCsrfToken = await request(app, 'POST', '/notifications/send', {
+    headers: { cookie },
+    body: { userId: 'user-member', title: 'Hi', message: 'Hello' }
+  });
+  assert.equal(withoutCsrfToken.status, 403);
+
+  const seed = await request(app, 'GET', '/dashboard', { headers: { cookie } });
+  const csrfCookiePair = seed.headers['set-cookie'].split(';')[0];
+  const csrfToken = csrfCookiePair.split('=')[1];
+
+  const withCsrfToken = await request(app, 'POST', '/notifications/send', {
+    headers: {
+      cookie: `${cookie}; ${csrfCookiePair}`,
+      'x-csrf-token': csrfToken
+    },
+    body: { userId: 'user-member', title: 'Hi', message: 'Hello' }
+  });
+  assert.equal(withCsrfToken.status, 200);
+});
+
+test('CSRF: Bearer-authenticated mutating requests bypass the CSRF check', async () => {
+  const { app } = createTestApp();
+  const token = await login(app, 'owner@example.test');
+
+  const response = await request(app, 'POST', '/notifications/send', {
+    headers: { authorization: `Bearer ${token}` },
+    body: { userId: 'user-member', title: 'Hi', message: 'Hello' }
+  });
+  assert.equal(response.status, 200);
 });
 
 test('protected routes reject missing tokens and non-admin roles', async () => {

@@ -40,6 +40,8 @@ app.listen(3000);
 Ça donne immédiatement à un nouveau projet une API fonctionnelle :
 
 - `POST /auth/login`
+- `POST /auth/logout`
+- `POST /auth/logout-all`
 - `GET /auth/me`
 - `GET /users`
 - `GET /users/:id`
@@ -51,13 +53,44 @@ app.listen(3000);
 - `GET /dashboard/summary`
 
 Toutes les routes protégées suivent le même ordre de middlewares de
-sécurité que la mini-app de démo : request id, CSP (`default-src 'none'` par
-défaut, adapté à une API JSON — surchargeable via `options.csp`), parseur
-JSON, WAF heuristique, limiteur API, limiteur de login pour `/auth`, auth JWT
-pour les modules protégés, puis 404 et gestion d'erreurs.
+sécurité que la mini-app de démo : request id, parseur de cookies, CSP
+(`default-src 'none'` par défaut, adapté à une API JSON — surchargeable via
+`options.csp`), parseur JSON, WAF heuristique, limiteur API, limiteur de
+login pour `/auth`, auth JWT (cookie ou `Authorization: Bearer`) pour les
+modules protégés, CSRF pour les routes mutantes, puis 404 et gestion
+d'erreurs.
 
 `jwtAlgorithms` vaut `['HS256']` par defaut. `jwtIssuer` et `jwtAudience` sont
 optionnels, mais recommandes des qu'une app sort du simple developpement local.
+
+## Session cookie HttpOnly, CSRF et révocation
+
+`POST /auth/login` pose toujours un cookie `HttpOnly` (`astratra_session` par
+défaut) en plus de renvoyer `{ token, user }` en JSON — le cookie sert les
+clients web, le token JSON sert les clients API/mobile. Le nom, `sameSite`,
+`secure`, `path`, `domain` et la durée de vie du cookie se configurent via
+`options.cookie` :
+
+```js
+createSaasApp({
+  // ...
+  cookie: { name: 'ma_session', sameSite: 'strict' },
+  csrf: { headerName: 'x-csrf-token' } // optionnel, défauts déjà sensés
+});
+```
+
+Toutes les routes mutantes protégées (`/users`, `/settings`,
+`/notifications`, `/dashboard`, `/auth/logout(-all)`, `/auth/webauthn/*`)
+exigent un token CSRF (cookie non-`HttpOnly` `astratra_csrf` + header
+`x-csrf-token`) **sauf** pour les clients authentifiés par `Authorization:
+Bearer` (mobile/API — non exposés au CSRF) et `POST /auth/login`
+(pas de session préexistante à protéger).
+
+`POST /auth/logout` invalide immédiatement le JWT courant (via un
+`revocationStore` en mémoire fourni par défaut — remplaçable par
+`options.revocationStore` pour une prod multi-instance, ex. Redis).
+`POST /auth/logout-all` invalide tous les JWT actifs de l'utilisateur, pas
+seulement celui de la requête courante.
 
 ## Validation des entrées
 
@@ -123,6 +156,12 @@ stores mémoire dev-only pour que le starter démarre immédiatement.
 `verifyPassword` et `notify` sont toujours injectés par l'app
 consommatrice ; le kit ne fournit ni algorithme de mot de passe ni
 comportement de livraison de notification.
+
+Si `revocationStore` est omis, `createSaasApp` utilise de la même façon
+`createMemoryRevocationStore()` de `@astratra/security` (pas mémorisé entre
+process, ni partagé entre instances). Pour une prod multi-instance, fournis
+ton propre store implémentant la même interface (Redis, etc.) via
+`options.revocationStore`.
 
 ## Tableau de bord
 

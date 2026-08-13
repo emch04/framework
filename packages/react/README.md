@@ -1,0 +1,52 @@
+# @astratra/react
+
+Primitives React optionnelles pour une session, des permissions et des appels
+API. Le package n'impose ni endpoints, ni routes, ni ecrans, ni design.
+
+## Installation
+
+```bash
+npm install @astratra/react react
+```
+
+## Session injectee par l'application
+
+L'application garde le controle de son backend. Elle fournit seulement les
+fonctions qui lisent, ouvrent et ferment une session :
+
+```jsx
+import { createApiFetch, RequireAuth, SessionProvider, useSession } from '@astratra/react';
+
+const apiFetch = createApiFetch({ baseUrl: import.meta.env.VITE_API_URL });
+const getSession = () => apiFetch('/api/auth/session');
+const signIn = (credentials) => apiFetch('/api/auth/login', { method: 'POST', body: credentials });
+const signOut = () => apiFetch('/api/auth/logout', { method: 'POST' });
+
+function Account() {
+  const { user, signOut: logout } = useSession();
+  return <button onClick={logout}>Deconnexion de {user.name}</button>;
+}
+
+export function App() {
+  return (
+    <SessionProvider getSession={getSession} signIn={signIn} signOut={signOut}>
+      <RequireAuth fallback={<p>Connexion requise.</p>}><Account /></RequireAuth>
+    </SessionProvider>
+  );
+}
+```
+
+## Exports
+
+- `SessionProvider` : gere le chargement et l'etat de session a partir de callbacks fournis par l'application.
+- `useSession()` : retourne `status`, `session`, `user`, `signIn`, `signOut` et `refresh`.
+- `useUser()` : retourne l'utilisateur connecte ou `null`.
+- `usePermissions()` : retourne `permissions`, `has(permission)` et `hasAny(permissions)`.
+- `RequireAuth` et `RequireRole` : affichent un `fallback` lorsque l'acces manque. `RequireRole` lit `session.roles`, `user.roles` ou `user.role`.
+- `createApiFetch()` : fabrique un client avec cookies HttpOnly et erreurs `ApiError`.
+
+## Cookies et securite
+
+`createApiFetch` utilise toujours `credentials: 'include'`. Le backend doit
+configurer CORS, `HttpOnly`, `Secure`, `SameSite` et une protection CSRF adaptee
+a son environnement. Astratra ne remplace pas cette configuration.

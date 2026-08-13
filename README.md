@@ -39,6 +39,7 @@ commande.
 | [`@astratra/saas-kit-ui`](packages/saas-kit-ui/README.md) | dashboard React réutilisable pour `@astratra/saas-kit` |
 | [`create-astratra-app`](packages/create-astratra-app/README.md) | générateur CLI pour créer une app Astratra rapidement |
 | [`@astratra/prerender`](packages/prerender/README.md) | prérendu SEO générique pour un site Vite + React : un HTML par route, shell SPA préservé |
+| [`@astratra/react`](packages/react/README.md) | primitives React optionnelles : session, permissions, protections et client API avec cookies |
 | [`examples/dashboard-ui`](examples/dashboard-ui/README.md) | exemple React + Vite consommant `@astratra/saas-kit-ui` et l'API `saas-kit` |
 
 La base est testée, typée et vérifiée localement. Les détails restent dans le
@@ -148,6 +149,12 @@ Dashboard React :
 npm install @astratra/saas-kit-ui react react-dom
 ```
 
+Primitives React sans dashboard :
+
+```bash
+npm install @astratra/react react
+```
+
 ## Commandes utiles
 
 ```bash
@@ -172,6 +179,7 @@ astratra/
 │   ├── store-mongo/
 │   ├── store-postgres/
 │   ├── saas-kit-ui/
+│   ├── react/
 │   └── create-astratra-app/
 ├── examples/
 │   └── dashboard-ui/
@@ -198,6 +206,7 @@ npm publish --workspace @astratra/store-mongo --access public
 npm publish --workspace @astratra/store-postgres --access public
 npm publish --workspace @astratra/saas-kit --access public
 npm publish --workspace @astratra/saas-kit-ui --access public
+npm publish --workspace @astratra/react --access public
 npm publish --workspace create-astratra-app --access public
 ```
 

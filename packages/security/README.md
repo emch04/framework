@@ -1,13 +1,38 @@
 # @astratra/security
 
 Primitives de sécurité applicative pour l'authentification, l'autorisation,
-le rate limiting, une CSP configurable, un WAF heuristique et
+le CORS, le rate limiting, une CSP configurable, un WAF heuristique et
 WebAuthn/passkeys — génériques et découplées de toute base de données, ORM
 ou liste de rôles fixe. Dépend de `@astratra/core`.
 
 Partout où un vrai projet a besoin de persistance (révocation de session,
 stockage de credentials WebAuthn, alerte de brute-force), c'est un
 callback/adapter injecté, jamais un appel base de données codé en dur.
+
+## CORS
+
+```js
+const { createCorsMiddleware } = require('@astratra/security');
+
+// À monter EN PREMIER, avant tout autre middleware — les en-têtes CORS,
+// y compris sur la réponse de preflight OPTIONS, doivent être posés avant
+// qu'un autre handler ne puisse court-circuiter la requête.
+app.use(createCorsMiddleware({
+  allowedOrigins: (process.env.CORS_ORIGIN || '').split(',').filter(Boolean)
+}));
+```
+
+Astratra n'impose aucune politique CORS fixe — les origines autorisées sont
+spécifiques à chaque projet — mais laisse cette primitive disponible plutôt
+que de forcer chaque consommateur à la réécrire (c'était le cas jusqu'ici :
+`create-astratra-app` réimplémentait sa propre version maison de cette
+logique dans le projet généré). `@astratra/saas-kit` l'expose via
+`options.cors`, montée automatiquement au bon endroit — voir son README.
+
+Origines `http://127.0.0.1`/`http://localhost` (tout port) autorisées par
+défaut hors `NODE_ENV=production`, désactivable via `allowDevOrigins: false`.
+`credentials: false` retire `Access-Control-Allow-Credentials` si tu n'as
+pas besoin des cookies cross-origin.
 
 ## Auth JWT + RBAC
 

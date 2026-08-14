@@ -51,6 +51,31 @@ relecture de code — voir le rapport correspondant.
   store mémoire), donc plus besoin d'installer un driver Mongo avant d'avoir
   choisi de s'en servir.
 
+### Ajoute
+
+- `@astratra/security` (`1.2.0`→`1.3.0`) — `createCorsMiddleware(options)`.
+  Astratra n'a jamais imposé de politique CORS fixe (les origines
+  autorisées sont spécifiques à chaque projet) mais ne fournissait aucune
+  primitive non plus, poussant chaque consommateur — y compris le template
+  `create-astratra-app` lui-même — à réimplémenter sa propre version. C'est
+  cette même logique, déjà éprouvée, qui est promue en primitive partagée.
+  Origines `127.0.0.1`/`localhost` autorisées par défaut hors production,
+  `credentials` activé par défaut (sessions cookie), `OPTIONS` court-circuité
+  en 204.
+- `@astratra/saas-kit` (`1.2.0`→`1.3.0`) — `options.cors`, monté tout premier
+  dans la pile de `createSaasApp()`, avant absolument tout le reste — y
+  compris les routes ajoutées via `extendRoutes`. Élimine le piège classique
+  où un `app.use(cors())` ajouté après coup sur l'app retournée ne s'applique
+  jamais aux routes déjà montées en interne (`/auth`, etc.). Omis, rien ne
+  change.
+- `create-astratra-app` (`1.1.0`→`1.2.0`) — le template généré utilise
+  désormais `createSaasApp({ cors: {...} })` au lieu d'envelopper l'app dans
+  un `express()` externe avec un middleware CORS maison
+  (`api/config/cors.js`, supprimé). Planchers `@astratra/saas-kit` et
+  `@astratra/security` relevés à `^1.3.0` en conséquence ; `express` retiré
+  des dépendances directes du projet généré (n'y était plus utilisé
+  directement, disponible en transitif via `saas-kit`).
+
 ## 2026-08-09
 
 ### Modifie

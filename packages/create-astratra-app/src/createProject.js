@@ -29,9 +29,8 @@ function packageJson(projectName, template) {
   const dependencies = {
     '@astratra/ai': '^1.0.0',
     '@astratra/core': '^1.0.0',
-    '@astratra/saas-kit': '^1.0.1',
-    '@astratra/security': '^1.0.1',
-    express: '^4.18.3'
+    '@astratra/saas-kit': '^1.3.0',
+    '@astratra/security': '^1.3.0'
   };
   // Scaffolded (api/stores/mongo.js, api/db/mongo.js) but not wired into
   // api/server.js by default — the project starts on the in-memory store.
@@ -70,12 +69,10 @@ function packageJson(projectName, template) {
 }
 
 function apiServer() {
-  return `import express from 'express';
-import fs from 'node:fs';
+  return `import fs from 'node:fs';
 import path from 'node:path';
 import saasKit from '@astratra/saas-kit';
 import { env } from './config/env.js';
-import { createCorsMiddleware } from './config/cors.js';
 import { createAuthSecurity } from './security/auth.js';
 import { createRateLimitSecurity } from './security/rateLimit.js';
 import { createWafSecurity } from './security/waf.js';
@@ -91,10 +88,12 @@ const stores = createMemoryStores();
 const notifications = createNotificationModule();
 const aiTools = createAiTools();
 
-const app = express();
-app.use(createCorsMiddleware({ allowedOrigins: env.corsOrigins }));
-
-app.use(createSaasApp({
+const app = createSaasApp({
+  // Mounted FIRST, ahead of every other middleware — required for CORS
+  // headers to reach the OPTIONS preflight response too. Astratra has no
+  // fixed opinion on which origins to allow (that's project-specific);
+  // env.corsOrigins comes from CORS_ORIGIN in .env.
+  cors: { allowedOrigins: env.corsOrigins },
   ...createAuthSecurity(env),
   ...createRateLimitSecurity(env),
   ...createWafSecurity(env),
@@ -119,7 +118,7 @@ app.use(createSaasApp({
       }
     });
   }
-}));
+});
 
 function writeApiRuntimeConfig(port) {
   const configDir = path.resolve('.astratra');
@@ -183,37 +182,6 @@ export const env = {
     .map((origin) => origin.trim())
     .filter(Boolean)
 };
-`;
-}
-
-function corsConfig() {
-  return `function isAllowedDevOrigin(origin) {
-  if (process.env.NODE_ENV === 'production') return false;
-  try {
-    const url = new URL(origin);
-    return ['127.0.0.1', 'localhost'].includes(url.hostname);
-  } catch {
-    return false;
-  }
-}
-
-export function createCorsMiddleware({ allowedOrigins = [] } = {}) {
-  const allowed = new Set(allowedOrigins);
-  return (req, res, next) => {
-    const origin = req.headers.origin;
-    if (origin && (allowed.has(origin) || isAllowedDevOrigin(origin))) {
-      res.setHeader('Access-Control-Allow-Origin', origin);
-      res.setHeader('Vary', 'Origin');
-    }
-    res.setHeader('Access-Control-Allow-Headers', 'content-type, authorization');
-    res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PATCH,OPTIONS');
-    if (req.method === 'OPTIONS') {
-      res.status(204).end();
-      return;
-    }
-    next();
-  };
-}
 `;
 }
 
@@ -592,10 +560,13 @@ générique avant de te rendre la main, donc toute route ajoutée ensuite est
 inatteignable. \`extendRoutes\` s'exécute avant ce 404, avec les mêmes
 instances \`authMiddleware\`/\`csrfMiddleware\` que les routes intégrées.
 
+CORS est géré par \`options.cors\` passé directement à \`createSaasApp()\`
+dans \`api/server.js\` (origines autorisées via \`CORS_ORIGIN\` dans \`.env\`,
+plus \`127.0.0.1\`/\`localhost\` autorisés automatiquement hors production).
+
 ## Fichiers Utiles
 
 - \`api/config/env.js\` centralise la configuration.
-- \`api/config/cors.js\` gère CORS sans port de développement fixe.
 - \`api/security/auth.js\`, \`api/security/rateLimit.js\` et
   \`api/security/waf.js\` branchent les primitives de sécurité Astratra.
 - \`api/stores/memory.js\` lance vite avec des stores en mémoire.
@@ -663,7 +634,6 @@ export function createProject({ targetDir, template = 'fullstack', force = false
   writeFile(absoluteTarget, 'package.json', `${packageJson(projectName, template)}\n`);
   writeFile(absoluteTarget, 'api/server.js', apiServer());
   writeFile(absoluteTarget, 'api/config/env.js', envConfig());
-  writeFile(absoluteTarget, 'api/config/cors.js', corsConfig());
   writeFile(absoluteTarget, 'api/security/auth.js', securityAuth());
   writeFile(absoluteTarget, 'api/security/rateLimit.js', securityRateLimit());
   writeFile(absoluteTarget, 'api/security/waf.js', securityWaf());

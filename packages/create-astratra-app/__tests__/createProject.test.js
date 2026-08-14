@@ -24,7 +24,6 @@ test('createProject writes a fullstack Astratra starter', () => {
   assert.equal(result.targetDir, path.join(cwd, 'demo-app'));
   assert.equal(fs.existsSync(path.join(result.targetDir, 'api/server.js')), true);
   assert.equal(fs.existsSync(path.join(result.targetDir, 'api/config/env.js')), true);
-  assert.equal(fs.existsSync(path.join(result.targetDir, 'api/config/cors.js')), true);
   assert.equal(fs.existsSync(path.join(result.targetDir, 'api/security/auth.js')), true);
   assert.equal(fs.existsSync(path.join(result.targetDir, 'api/security/rateLimit.js')), true);
   assert.equal(fs.existsSync(path.join(result.targetDir, 'api/security/waf.js')), true);
@@ -44,12 +43,13 @@ test('createProject writes a fullstack Astratra starter', () => {
   const pkg = JSON.parse(fs.readFileSync(path.join(result.targetDir, 'package.json'), 'utf8'));
   assert.equal(pkg.name, 'demo-app');
   assert.equal(pkg.dependencies['@astratra/core'], '^1.0.0');
-  assert.equal(pkg.dependencies['@astratra/security'], '^1.0.1');
+  assert.equal(pkg.dependencies['@astratra/security'], '^1.3.0');
   assert.equal(pkg.dependencies['@astratra/ai'], '^1.0.0');
-  assert.equal(pkg.dependencies['@astratra/saas-kit'], '^1.0.1');
+  assert.equal(pkg.dependencies['@astratra/saas-kit'], '^1.3.0');
   assert.equal(pkg.dependencies['@astratra/saas-kit-ui'], '^1.0.0');
   assert.equal(pkg.dependencies['@astratra/store-mongo'], undefined);
   assert.equal(pkg.dependencies.mongoose, undefined);
+  assert.equal(pkg.dependencies.express, undefined, 'express is only needed transitively via saas-kit now that the template has no direct express usage');
   assert.equal(pkg.optionalDependencies['@astratra/store-mongo'], '^1.0.1');
   assert.equal(pkg.optionalDependencies.mongoose, '^8.17.0');
   assert.equal(pkg.scripts.dev, 'node scripts/dev.js');
@@ -57,7 +57,6 @@ test('createProject writes a fullstack Astratra starter', () => {
 
   const apiServer = fs.readFileSync(path.join(result.targetDir, 'api/server.js'), 'utf8');
   const envConfig = fs.readFileSync(path.join(result.targetDir, 'api/config/env.js'), 'utf8');
-  const corsConfig = fs.readFileSync(path.join(result.targetDir, 'api/config/cors.js'), 'utf8');
   const authSecurity = fs.readFileSync(path.join(result.targetDir, 'api/security/auth.js'), 'utf8');
   const notificationsModule = fs.readFileSync(path.join(result.targetDir, 'api/modules/notifications.js'), 'utf8');
   const memoryStores = fs.readFileSync(path.join(result.targetDir, 'api/stores/memory.js'), 'utf8');
@@ -71,6 +70,8 @@ test('createProject writes a fullstack Astratra starter', () => {
   assert.equal(apiServer.includes('./ai/tools.js'), true);
   assert.equal(apiServer.includes('extendRoutes:'), true);
   assert.equal(apiServer.includes("saasApp.get('/api/status'"), true);
+  assert.equal(apiServer.includes('cors: { allowedOrigins: env.corsOrigins }'), true);
+  assert.equal(apiServer.includes("from 'express'"), false, 'server.js should not need express directly now that CORS goes through createSaasApp({ cors })');
   assert.match(envConfig, /process\.env\.PORT \? Number\(process\.env\.PORT\) : 0/);
   assert.equal(envConfig.includes('JWT_ISSUER'), true);
   assert.equal(envConfig.includes('JWT_AUDIENCE'), true);
@@ -88,9 +89,6 @@ test('createProject writes a fullstack Astratra starter', () => {
   assert.match(apiServer, /server\.address\(\)/);
   assert.match(apiServer, /Port \$\{port\} is already in use/);
   assert.equal(apiServer.includes("path.resolve('.astratra')"), true);
-  assert.match(corsConfig, /isAllowedDevOrigin/);
-  assert.equal(corsConfig.includes('127.0.0.1'), true);
-  assert.equal(corsConfig.includes('localhost'), true);
 
   const viteConfig = fs.readFileSync(path.join(result.targetDir, 'vite.config.js'), 'utf8');
   assert.match(viteConfig, /readApiUrl/);

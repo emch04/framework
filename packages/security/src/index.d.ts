@@ -22,6 +22,25 @@ export type NextFunction = (error?: unknown) => unknown;
 export type RequestHandler = (req: RequestLike, res: ResponseLike, next: NextFunction) => unknown;
 export type Awaitable<T> = T | Promise<T>;
 
+export interface CorsMiddlewareOptions {
+  /** Explicit list of allowed origins (exact match on the Origin header). */
+  allowedOrigins?: string[];
+  /** Allow http(s)://127.0.0.1|localhost:* outside NODE_ENV=production. Default true. */
+  allowDevOrigins?: boolean;
+  /** Sets Access-Control-Allow-Credentials: true. Default true (matches cookie-based sessions). */
+  credentials?: boolean;
+  allowedHeaders?: string;
+  allowedMethods?: string;
+}
+
+/**
+ * Astratra has no fixed opinion on which origins to allow — that's
+ * project-specific — but leaves this primitive available rather than
+ * making every consumer hand-roll it. Mount first, ahead of every other
+ * middleware, so CORS headers apply to the preflight OPTIONS response too.
+ */
+export function createCorsMiddleware(options?: CorsMiddlewareOptions): RequestHandler;
+
 export interface AuthMiddlewareOptions<TDecoded = Record<string, unknown>> {
   secret: string;
   legacySecret?: string;

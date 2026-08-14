@@ -128,6 +128,7 @@ propre pile par un 404 générique) :
 ```js
 const app = createSaasApp({
   // ...
+  cors: { allowedOrigins: [process.env.WEB_ORIGIN] }, // optionnel, voir README saas-kit
   extendRoutes: (app, { authMiddleware, csrfMiddleware }) => {
     app.get('/api/products', authMiddleware, listProducts);
     app.post('/api/orders', authMiddleware, csrfMiddleware, createOrder);

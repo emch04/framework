@@ -9,6 +9,7 @@ const {
   cookieParserMiddleware,
   createApiLimiter,
   createAuthMiddleware,
+  createCorsMiddleware,
   createCspMiddleware,
   createCsrfCookiePrimer,
   createCsrfMiddleware,
@@ -74,6 +75,16 @@ function normalizeOptions(options = {}) {
 function createSaasApp(options = {}) {
   const normalized = normalizeOptions(options);
   const app = express();
+
+  // Astratra imposes no fixed CORS policy — which origins to allow is
+  // project-specific — but leaves the primitive available so consumers
+  // don't reinvent it. Mounted FIRST, ahead of everything else: CORS
+  // headers (including on the OPTIONS preflight response) must be set
+  // before any other middleware can short-circuit the request. Omit
+  // options.cors and this is a no-op, unchanged from before.
+  if (normalized.cors) {
+    app.use(createCorsMiddleware(normalized.cors === true ? {} : normalized.cors));
+  }
 
   app.use(requestIdMiddleware);
   app.use(cookieParserMiddleware());

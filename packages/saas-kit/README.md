@@ -87,6 +87,25 @@ L'app retournée expose aussi directement `app.authMiddleware`,
 `app.csrfMiddleware` et `app.authorizeAdmin`, au cas où tu préfères les
 monter toi-même après coup plutôt que via `extendRoutes`.
 
+## CORS
+
+`@astratra/saas-kit` n'a pas de politique CORS par défaut — les origines
+autorisées sont spécifiques à chaque projet — mais `options.cors` évite le
+piège classique (CORS ajouté après coup ne s'applique jamais aux routes déjà
+montées en interne) en montant `createCorsMiddleware`
+(`@astratra/security`) tout en premier, avant absolument tout le reste :
+
+```js
+const app = createSaasApp({
+  // ...
+  cors: { allowedOrigins: [process.env.WEB_ORIGIN] }
+});
+```
+
+S'applique aussi bien aux routes intégrées (`/auth`, `/users`, ...) qu'à
+celles ajoutées via `extendRoutes`. Omets `options.cors` et rien ne change —
+comme avant, à toi de gérer CORS si tu en as besoin.
+
 Le cookie CSRF (`astratra_csrf`) est amorcé automatiquement sur toute
 requête sûre (GET/HEAD/OPTIONS) dès le démarrage de l'app — y compris tes
 propres routes `GET` ajoutées via `extendRoutes` — donc pas besoin de monter

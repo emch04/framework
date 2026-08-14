@@ -614,3 +614,58 @@ test('the CSRF cookie is seeded on GET /auth/me, before any mutating request', a
   const setCookie = [].concat(response.headers['set-cookie'] || []);
   assert.ok(setCookie.some((c) => c.startsWith('astratra_csrf=')), 'expected astratra_csrf to be set on GET /auth/me');
 });
+
+test('options.cors is a no-op when omitted (default, unchanged behavior)', async () => {
+  const { app } = createTestApp();
+
+  const response = await request(app, 'GET', '/auth/me', {
+    headers: { origin: 'http://127.0.0.1:5273' }
+  });
+
+  assert.equal(response.headers['access-control-allow-origin'], undefined);
+});
+
+test('options.cors mounts CORS ahead of everything, including the built-in /auth routes', async () => {
+  const { app } = createTestApp({
+    cors: { allowedOrigins: ['http://127.0.0.1:5273'] }
+  });
+
+  const response = await request(app, 'POST', '/auth/login', {
+    headers: { origin: 'http://127.0.0.1:5273' },
+    body: { email: 'owner@example.test', password: 'password' }
+  });
+
+  assert.equal(response.status, 200);
+  assert.equal(response.headers['access-control-allow-origin'], 'http://127.0.0.1:5273');
+  assert.equal(response.headers['access-control-allow-credentials'], 'true');
+});
+
+test('options.cors handles the OPTIONS preflight before any other middleware runs', async () => {
+  const { app } = createTestApp({
+    cors: { allowedOrigins: ['http://127.0.0.1:5273'] }
+  });
+
+  const response = await request(app, 'OPTIONS', '/api/anything', {
+    headers: { origin: 'http://127.0.0.1:5273' }
+  });
+
+  assert.equal(response.status, 204);
+  assert.equal(response.headers['access-control-allow-origin'], 'http://127.0.0.1:5273');
+});
+
+test('options.cors also applies to routes registered via extendRoutes', async () => {
+  const { app } = createTestApp({
+    cors: { allowedOrigins: ['http://127.0.0.1:5273'] },
+    extendRoutes: (extendedApp, { authMiddleware }) => {
+      extendedApp.get('/api/ping', authMiddleware, (req, res) => res.status(200).json({ success: true, data: 'pong' }));
+    }
+  });
+  const token = await login(app, 'owner@example.test');
+
+  const response = await request(app, 'GET', '/api/ping', {
+    headers: { authorization: `Bearer ${token}`, origin: 'http://127.0.0.1:5273' }
+  });
+
+  assert.equal(response.status, 200);
+  assert.equal(response.headers['access-control-allow-origin'], 'http://127.0.0.1:5273');
+});

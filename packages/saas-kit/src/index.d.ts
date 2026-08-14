@@ -1,5 +1,6 @@
 import type {
   AuthMiddlewareOptions,
+  CorsMiddlewareOptions,
   CsrfMiddlewareOptions,
   CspOptions,
   LoginLimiterOptions,
@@ -101,6 +102,14 @@ export interface CreateSaasAppOptions {
   publicUserFields?: string[];
   cookie?: SessionCookieOptions;
   csrf?: CsrfMiddlewareOptions;
+  /**
+   * Mounts createCorsMiddleware as the FIRST middleware, ahead of
+   * everything else — required for CORS headers to reach the preflight
+   * OPTIONS response. `true` uses the default (dev origins only, no
+   * explicit allow-list). Omit entirely for no CORS handling (unchanged
+   * default behavior).
+   */
+  cors?: CorsMiddlewareOptions | true;
   webauthnStore?: WebauthnStore;
   webauthn?: WebauthnOptions;
   waf?: WafOptions;

@@ -47,9 +47,11 @@ test('createProject writes a fullstack Astratra starter', () => {
   assert.equal(pkg.dependencies['@astratra/security'], '^1.0.1');
   assert.equal(pkg.dependencies['@astratra/ai'], '^1.0.0');
   assert.equal(pkg.dependencies['@astratra/saas-kit'], '^1.0.1');
-  assert.equal(pkg.dependencies['@astratra/store-mongo'], '^1.0.1');
   assert.equal(pkg.dependencies['@astratra/saas-kit-ui'], '^1.0.0');
-  assert.equal(pkg.dependencies.mongoose, '^8.17.0');
+  assert.equal(pkg.dependencies['@astratra/store-mongo'], undefined);
+  assert.equal(pkg.dependencies.mongoose, undefined);
+  assert.equal(pkg.optionalDependencies['@astratra/store-mongo'], '^1.0.1');
+  assert.equal(pkg.optionalDependencies.mongoose, '^8.17.0');
   assert.equal(pkg.scripts.dev, 'node scripts/dev.js');
   assert.equal(pkg.scripts['dev:web'], 'vite --host 127.0.0.1');
 
@@ -66,6 +68,9 @@ test('createProject writes a fullstack Astratra starter', () => {
   assert.equal(apiServer.includes('./modules/users.js'), true);
   assert.equal(apiServer.includes('./modules/notifications.js'), true);
   assert.equal(apiServer.includes('publicUserFields: userPublicFields()'), true);
+  assert.equal(apiServer.includes('./ai/tools.js'), true);
+  assert.equal(apiServer.includes('extendRoutes:'), true);
+  assert.equal(apiServer.includes("saasApp.get('/api/status'"), true);
   assert.match(envConfig, /process\.env\.PORT \? Number\(process\.env\.PORT\) : 0/);
   assert.equal(envConfig.includes('JWT_ISSUER'), true);
   assert.equal(envConfig.includes('JWT_AUDIENCE'), true);

@@ -63,6 +63,37 @@ d'erreurs.
 `jwtAlgorithms` vaut `['HS256']` par defaut. `jwtIssuer` et `jwtAudience` sont
 optionnels, mais recommandes des qu'une app sort du simple developpement local.
 
+## Ajouter tes propres routes
+
+`createSaasApp()` termine sa propre pile de middlewares par un
+`notFoundMiddleware`/`errorMiddleware` avant de te rendre l'app. N'ajoute
+donc **pas** tes routes avec `app.get(...)` / `app.use(...)` sur l'objet
+retourné — elles tomberaient systématiquement sur ce 404 interne, puisque
+Express évalue sa pile dans l'ordre d'enregistrement. Passe plutôt
+`options.extendRoutes` : il s'exécute avant ce 404, avec les mêmes instances
+`authMiddleware`/`csrfMiddleware`/`authorizeAdmin` que les routes intégrées.
+
+```js
+const app = createSaasApp({
+  // ...
+  extendRoutes: (app, { authMiddleware, csrfMiddleware, authorizeAdmin }) => {
+    app.get('/api/products', authMiddleware, listProducts);
+    app.post('/api/products', authMiddleware, authorizeAdmin, csrfMiddleware, createProduct);
+  }
+});
+```
+
+L'app retournée expose aussi directement `app.authMiddleware`,
+`app.csrfMiddleware` et `app.authorizeAdmin`, au cas où tu préfères les
+monter toi-même après coup plutôt que via `extendRoutes`.
+
+Le cookie CSRF (`astratra_csrf`) est amorcé automatiquement sur toute
+requête sûre (GET/HEAD/OPTIONS) dès le démarrage de l'app — y compris tes
+propres routes `GET` ajoutées via `extendRoutes` — donc pas besoin de monter
+`csrfMiddleware` toi-même sur des routes qui ne font que lire.
+`csrfMiddleware` reste nécessaire sur tes routes mutantes (POST/PATCH/DELETE)
+pour valider le token.
+
 ## Session cookie HttpOnly, CSRF et révocation
 
 `POST /auth/login` pose toujours un cookie `HttpOnly` (`astratra_session` par

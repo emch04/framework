@@ -10,6 +10,7 @@ const {
   createApiLimiter,
   createAuthMiddleware,
   createCspMiddleware,
+  createCsrfCookiePrimer,
   createCsrfMiddleware,
   createLoginLimiter,
   createMemoryRevocationStore,
@@ -76,6 +77,12 @@ function createSaasApp(options = {}) {
 
   app.use(requestIdMiddleware);
   app.use(cookieParserMiddleware());
+  // Seeds the CSRF cookie on every safe request (GET/HEAD/OPTIONS), globally,
+  // before any route — including custom routes mounted via extendRoutes.
+  // Without this, a route wiring createCsrfMiddleware only on its mutating
+  // handlers issues the cookie in the SAME response that needed it
+  // validated, so the client's first mutating request always fails.
+  app.use(createCsrfCookiePrimer(normalized.csrf));
   app.use(createCspMiddleware(normalized.csp));
   app.use(express.json());
   app.use(createWafMiddleware(normalized.waf));
@@ -137,6 +144,31 @@ function createSaasApp(options = {}) {
   app.use('/dashboard', authMiddleware, csrfMiddleware, createDashboardRoutes({
     usersStore: normalized.usersStore
   }));
+
+  // Exposed so a consumer can reuse the exact same auth/CSRF instances
+  // instead of rebuilding duplicates with (easy to get out of sync)
+  // options — e.g. `app.use('/api', app.authMiddleware, app.csrfMiddleware)`.
+  app.authMiddleware = authMiddleware;
+  app.csrfMiddleware = csrfMiddleware;
+  app.authorizeAdmin = authorizeAdmin;
+
+  // createSaasApp() already terminates its own middleware stack with a
+  // catch-all 404 + error handler below. Any route registered on `app`
+  // AFTER createSaasApp() returns is therefore unreachable — Express
+  // evaluates middleware in registration order, and notFoundMiddleware
+  // matches every path unconditionally. `extendRoutes` is the supported
+  // way to add your own routes: it runs here, before that catch-all.
+  //
+  //   createSaasApp({
+  //     ...,
+  //     extendRoutes: (app, { authMiddleware, csrfMiddleware }) => {
+  //       app.get('/api/products', authMiddleware, asyncHandler(...));
+  //       app.post('/api/products', authMiddleware, csrfMiddleware, asyncHandler(...));
+  //     }
+  //   });
+  if (typeof normalized.extendRoutes === 'function') {
+    normalized.extendRoutes(app, { authMiddleware, csrfMiddleware, authorizeAdmin, authorizeRoles });
+  }
 
   app.use(notFoundMiddleware);
   app.use(errorMiddleware);

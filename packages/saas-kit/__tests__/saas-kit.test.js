@@ -561,3 +561,56 @@ test('sending a notification without a message is rejected with a 400', async ()
 
   assert.equal(response.status, 400);
 });
+
+test('extendRoutes registers custom routes that are actually reachable', async () => {
+  // Regression test: createSaasApp() used to terminate its own middleware
+  // stack with a catch-all notFoundMiddleware before returning the app, so
+  // ANY route a consumer added afterward (app.get(...) on the returned app)
+  // was silently unreachable. extendRoutes runs before that catch-all.
+  const { app } = createTestApp({
+    extendRoutes: (extendedApp, { authMiddleware }) => {
+      extendedApp.get('/api/ping', authMiddleware, (req, res) => {
+        res.status(200).json({ success: true, data: 'pong' });
+      });
+    }
+  });
+  const token = await login(app, 'owner@example.test');
+
+  const response = await request(app, 'GET', '/api/ping', {
+    headers: { authorization: `Bearer ${token}` }
+  });
+
+  assert.equal(response.status, 200);
+  assert.equal(response.body.data, 'pong');
+});
+
+test('extendRoutes routes still 404 through the built-in notFoundMiddleware for unknown paths', async () => {
+  const { app } = createTestApp({
+    extendRoutes: (extendedApp) => {
+      extendedApp.get('/api/ping', (req, res) => res.status(200).json({ success: true }));
+    }
+  });
+
+  const response = await request(app, 'GET', '/api/does-not-exist');
+
+  assert.equal(response.status, 404);
+});
+
+test('the CSRF cookie is seeded on GET /auth/me, before any mutating request', async () => {
+  // Regression test: only /auth/logout and /auth/logout-all mounted
+  // csrfMiddleware among the built-in auth routes, so a client whose first
+  // authenticated call is GET /auth/me (the natural session bootstrap,
+  // e.g. via @astratra/react's getSession) never received a CSRF cookie —
+  // the first mutating request would then always fail, since it would be
+  // the very request that mints the cookie it also needs to validate.
+  const { app } = createTestApp();
+  const token = await login(app, 'owner@example.test');
+
+  const response = await request(app, 'GET', '/auth/me', {
+    headers: { cookie: `astratra_session=${token}` }
+  });
+
+  assert.equal(response.status, 200);
+  const setCookie = [].concat(response.headers['set-cookie'] || []);
+  assert.ok(setCookie.some((c) => c.startsWith('astratra_csrf=')), 'expected astratra_csrf to be set on GET /auth/me');
+});

@@ -120,8 +120,20 @@ npm run dev:web
 ```
 
 Tu obtiens une base SaaS avec auth, rôles, settings, dashboard et
-notifications. Ensuite tu ajoutes le métier e-commerce :
-catalogue, panier, commandes, paiements et gestion des produits.
+notifications. Ensuite tu ajoutes le métier e-commerce : catalogue, panier,
+commandes, paiements et gestion des produits — via `extendRoutes`, pas en
+appelant `app.use()` sur l'app retournée après coup (elle termine déjà sa
+propre pile par un 404 générique) :
+
+```js
+const app = createSaasApp({
+  // ...
+  extendRoutes: (app, { authMiddleware, csrfMiddleware }) => {
+    app.get('/api/products', authMiddleware, listProducts);
+    app.post('/api/orders', authMiddleware, csrfMiddleware, createOrder);
+  }
+});
+```
 
 ## Installation manuelle minimale
 

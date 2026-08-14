@@ -31,8 +31,15 @@ function packageJson(projectName, template) {
     '@astratra/core': '^1.0.0',
     '@astratra/saas-kit': '^1.0.1',
     '@astratra/security': '^1.0.1',
+    express: '^4.18.3'
+  };
+  // Scaffolded (api/stores/mongo.js, api/db/mongo.js) but not wired into
+  // api/server.js by default — the project starts on the in-memory store.
+  // Kept optional so a from-scratch install doesn't pull in mongoose (a
+  // real driver dependency) before the project has ever chosen to use it.
+  // `npm install @astratra/store-mongo mongoose` to switch to MongoDB.
+  const optionalDependencies = {
     '@astratra/store-mongo': '^1.0.1',
-    express: '^4.18.3',
     mongoose: '^8.17.0'
   };
   const devDependencies = {};
@@ -57,6 +64,7 @@ function packageJson(projectName, template) {
       start: 'node api/server.js'
     },
     dependencies,
+    optionalDependencies,
     ...(Object.keys(devDependencies).length > 0 ? { devDependencies } : {})
   }, null, 2);
 }
@@ -74,12 +82,14 @@ import { createWafSecurity } from './security/waf.js';
 import { createMemoryStores } from './stores/memory.js';
 import { userPublicFields } from './modules/users.js';
 import { createNotificationModule } from './modules/notifications.js';
+import { createAiTools } from './ai/tools.js';
 
 const { createSaasApp } = saasKit;
 const preferredPort = env.port;
 const host = env.host;
 const stores = createMemoryStores();
 const notifications = createNotificationModule();
+const aiTools = createAiTools();
 
 const app = express();
 app.use(createCorsMiddleware({ allowedOrigins: env.corsOrigins }));
@@ -92,7 +102,23 @@ app.use(createSaasApp({
   settingsStore: stores.settingsStore,
   publicUserFields: userPublicFields(),
   verifyPassword: async (user, password) => user.password === password,
-  notify: notifications.notify
+  notify: notifications.notify,
+  // This is where YOUR routes go — not app.use()'d after createSaasApp()
+  // returns. createSaasApp() ends its own middleware stack with a
+  // catch-all 404 handler, so anything registered on the app afterward
+  // is unreachable. extendRoutes runs before that catch-all, with the
+  // same authMiddleware/csrfMiddleware instances the built-in routes use.
+  extendRoutes: (saasApp, { authMiddleware }) => {
+    saasApp.get('/api/status', authMiddleware, async (req, res, next) => {
+      try {
+        const healthCheck = aiTools.getToolByName('health_check');
+        const result = await healthCheck.handler({}, { user: req.user });
+        res.status(200).json({ success: true, message: 'Status', data: result });
+      } catch (error) {
+        next(error);
+      }
+    });
+  }
 }));
 
 function writeApiRuntimeConfig(port) {
@@ -556,6 +582,16 @@ Par défaut, l'API demande un port libre au système et écrit l'URL choisie
 dans \`.astratra/api.json\`. Lance \`dev:api\` avant \`dev:web\` pour que Vite
 lise la bonne URL. Laisse \`PORT\` vide pour garder le choix automatique.
 
+## Ajouter tes propres routes
+
+\`api/server.js\` montre le motif à suivre avec \`GET /api/status\` : passe une
+fonction \`extendRoutes(app, { authMiddleware, csrfMiddleware })\` à
+\`createSaasApp()\`, ne fais pas \`app.use()\` sur l'app retournée après coup —
+\`createSaasApp()\` termine sa propre pile de middlewares par un 404
+générique avant de te rendre la main, donc toute route ajoutée ensuite est
+inatteignable. \`extendRoutes\` s'exécute avant ce 404, avec les mêmes
+instances \`authMiddleware\`/\`csrfMiddleware\` que les routes intégrées.
+
 ## Fichiers Utiles
 
 - \`api/config/env.js\` centralise la configuration.
@@ -563,9 +599,13 @@ lise la bonne URL. Laisse \`PORT\` vide pour garder le choix automatique.
 - \`api/security/auth.js\`, \`api/security/rateLimit.js\` et
   \`api/security/waf.js\` branchent les primitives de sécurité Astratra.
 - \`api/stores/memory.js\` lance vite avec des stores en mémoire.
-- \`api/db/mongo.js\` et \`api/stores/mongo.js\` préparent MongoDB.
+- \`api/db/mongo.js\` et \`api/stores/mongo.js\` préparent MongoDB — installe
+  d'abord \`npm install @astratra/store-mongo mongoose\` (dépendances
+  optionnelles, pas installées par défaut) avant de les brancher dans
+  \`api/server.js\`.
 - \`api/ai/providers.js\`, \`api/ai/tools.js\` et \`api/ai/agent.js\`
-  préparent la logique IA.
+  préparent la logique IA — \`api/ai/tools.js\` est déjà branché dans
+  \`api/server.js\` via \`extendRoutes\` (route \`GET /api/status\`).
 - \`api/modules/users.js\`, \`api/modules/settings.js\` et
   \`api/modules/notifications.js\` isolent la logique métier de départ.
 

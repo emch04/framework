@@ -75,6 +75,14 @@ export interface CsrfMiddlewareOptions {
 
 export function createCsrfMiddleware(options?: CsrfMiddlewareOptions): RequestHandler;
 
+/**
+ * Issues the CSRF cookie on safe requests (GET/HEAD/OPTIONS) without ever
+ * validating a token. Mount once, globally, ahead of all routes so the
+ * double-submit cookie exists before a client's first mutating request —
+ * see createCsrfMiddleware's README section on double-submit CSRF.
+ */
+export function createCsrfCookiePrimer(options?: Pick<CsrfMiddlewareOptions, 'name' | 'sameSite' | 'secure' | 'path' | 'domain' | 'skip'>): RequestHandler;
+
 export interface RateLimitStore {
   init?(options: unknown): unknown;
   increment?(...args: unknown[]): unknown;

@@ -1,4 +1,4 @@
-const { createCsrfMiddleware } = require('../src');
+const { createCsrfMiddleware, createCsrfCookiePrimer } = require('../src');
 
 const createRes = () => {
   const headers = {};
@@ -79,5 +79,51 @@ describe('csrf', () => {
 
     expect(next).toHaveBeenCalledTimes(1);
     expect(res.status).not.toHaveBeenCalled();
+  });
+});
+
+describe('createCsrfCookiePrimer', () => {
+  test('sets the CSRF cookie on a GET request when absent', () => {
+    const res = createRes();
+    const next = jest.fn();
+
+    createCsrfCookiePrimer()({ method: 'GET', cookies: {}, headers: {} }, res, next);
+
+    expect(next).toHaveBeenCalledTimes(1);
+    expect(res.headers['set-cookie']).toMatch(/^astratra_csrf=[a-f0-9]{64}; Path=\/; Secure; SameSite=Lax$/);
+  });
+
+  test('does not overwrite an existing CSRF cookie', () => {
+    const res = createRes();
+    const next = jest.fn();
+
+    createCsrfCookiePrimer()({ method: 'HEAD', cookies: { astratra_csrf: 'existing-token' }, headers: {} }, res, next);
+
+    expect(next).toHaveBeenCalledTimes(1);
+    expect(res.setHeader).not.toHaveBeenCalled();
+  });
+
+  test('never validates or rejects a mutating request — that stays createCsrfMiddleware\'s job', () => {
+    const res = createRes();
+    const next = jest.fn();
+
+    createCsrfCookiePrimer()({ method: 'POST', cookies: {}, headers: {} }, res, next);
+
+    expect(next).toHaveBeenCalledTimes(1);
+    expect(res.status).not.toHaveBeenCalled();
+  });
+
+  test('respects skip', () => {
+    const res = createRes();
+    const next = jest.fn();
+
+    createCsrfCookiePrimer({ skip: (req) => req.path === '/health' })(
+      { method: 'GET', path: '/health', cookies: {}, headers: {} },
+      res,
+      next
+    );
+
+    expect(next).toHaveBeenCalledTimes(1);
+    expect(res.setHeader).not.toHaveBeenCalled();
   });
 });

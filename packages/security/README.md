@@ -67,6 +67,31 @@ n'est jamais actif tout seul dans ce package. `@astratra/saas-kit` le monte
 par défaut sur ses routes protégées, avec bypass automatique pour les
 clients `Authorization: Bearer`.
 
+**Piège classique** : si tu ne montes `createCsrfMiddleware` que sur tes
+routes mutantes (POST/PATCH/DELETE — le réflexe naturel), la toute première
+requête mutante d'un client émet elle-même le cookie CSRF *dans sa propre
+réponse* — le client ne peut jamais l'avoir lu à temps, donc elle échoue
+systématiquement avec `403 Invalid CSRF token`, même avec des identifiants
+valides. Le cookie doit exister *avant* la première requête mutante.
+
+`createCsrfCookiePrimer(options)` résout ça : il amorce le cookie sur toute
+requête sûre (GET/HEAD/OPTIONS) sans jamais valider de token, à monter une
+seule fois, globalement, avant toutes les routes.
+
+```js
+app.use(cookieParserMiddleware());
+app.use(createCsrfCookiePrimer()); // amorce le cookie sur tout GET, avant les routes
+
+// ensuite, comme avant : createCsrfMiddleware() valide sur tes routes mutantes
+app.use('/api', authMiddleware, createCsrfMiddleware({
+  skip: (req) => Boolean(req.headers.authorization?.startsWith('Bearer '))
+}));
+```
+
+Les deux vérifient le cookie déjà mis en file sur la même réponse avant d'en
+émettre un nouveau — les monter tous les deux sur la même requête ne pose
+jamais deux cookies différents.
+
 ## Révocation de session JWT
 
 ```js

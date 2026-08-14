@@ -80,6 +80,32 @@ const app = createSaasApp({
 Les méthodes retournent des objets JavaScript simples via Mongoose `.lean()`
 ou `.toObject()`, jamais des documents Mongoose vivants.
 
+## Migrations
+
+Pas un DSL, pas de CLI, pas de diff de schéma — un runner minimal et
+honnête : tu lui donnes du code brut dans l'ordre (création d'index,
+backfill, reformage de documents), il applique une seule fois chaque
+migration non encore vue, suivi par `id` dans une collection dédiée.
+
+```js
+const { createMongoMigrationRunner } = require('@astratra/store-mongo');
+
+const runner = createMongoMigrationRunner({ connection });
+
+await runner.run([
+  { id: '2026-01-01-index-role', up: (conn) => conn.collection('app_users').createIndex({ role: 1 }) }
+]);
+```
+
+Rejoue `run()` avec la même liste (plus les nouvelles migrations ajoutées
+au fil du temps) à chaque déploiement. MongoDB n'a pas de transactions
+inter-collections sur un déploiement standalone — contrairement au runner
+Postgres, celui-ci n'enveloppe **pas** chaque migration dans une transaction.
+Écris des migrations sûres à marquer comme appliquées même si une étape
+intermédiaire de la même `up` échoue, ou utilise un replica set + session
+si tu as besoin d'atomicité. Pas de `down()` : un rollback de schéma se fait
+via une nouvelle migration qui défait l'ancienne.
+
 ## Cycle de vie de connexion
 
 Chemin recommandé : passer une `connection` déjà ouverte par l'application.

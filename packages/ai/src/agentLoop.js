@@ -9,7 +9,9 @@ async function runAgentLoop({
   registry,
   router,
   userRole,
-  maxSteps = DEFAULT_MAX_STEPS
+  maxSteps = DEFAULT_MAX_STEPS,
+  onChunk,
+  confirmTool
 }) {
   if (!registry) throw new AppError('agentLoop requires a registry', 500);
   if (!router || typeof router.ask !== 'function') throw new AppError('agentLoop requires a router', 500);
@@ -19,11 +21,15 @@ async function runAgentLoop({
 
   for (let step = 0; step < maxSteps; step += 1) {
     const modelPrompt = buildPrompt(registry, userRole, messages);
+    // onChunk, when provided, is called with each chunk AS IT ARRIVES if
+    // router.ask() returns a stream — real token-by-token streaming to the
+    // caller. The loop itself still needs the fully-assembled text to
+    // detect a <tool_call>, so it accumulates in parallel regardless.
     const response = await stringifyModelResponse(await router.ask(modelPrompt, {
       complexity: 'agent',
       intent: 'agent_loop',
       estimatedTokens: estimateTokens(modelPrompt)
-    }, ctx));
+    }, ctx), onChunk);
     const toolCall = parseToolCall(response);
 
     if (!toolCall) {
@@ -36,6 +42,23 @@ async function runAgentLoop({
     }
     if (!tool.roles.includes(userRole)) {
       throw new AppError(`Tool "${toolCall.name}" is not allowed for role "${userRole}"`, 403);
+    }
+
+    // confirmTool, when provided, gates execution — e.g. a human approval
+    // step surfaced by the calling app before a write/delete tool actually
+    // runs. Denying doesn't crash the loop: the model gets told and can
+    // adjust course (ask something else, explain, stop), same as it would
+    // handle any other tool result.
+    if (typeof confirmTool === 'function') {
+      const approved = await confirmTool(toolCall, ctx);
+      if (!approved) {
+        messages.push({ role: 'assistant', content: response });
+        messages.push({
+          role: 'tool',
+          content: `<tool_result name="${tool.name}">${JSON.stringify({ denied: true, reason: 'Execution was not approved.' })}</tool_result>`
+        });
+        continue;
+      }
     }
 
     const result = await tool.handler(toolCall.params, ctx);
@@ -76,15 +99,19 @@ function parseToolCall(text) {
   }
 }
 
-async function stringifyModelResponse(value) {
+async function stringifyModelResponse(value, onChunk) {
   if (isAsyncIterable(value)) {
     let output = '';
     for await (const chunk of value) {
-      output += String(chunk);
+      const text = String(chunk);
+      output += text;
+      if (typeof onChunk === 'function') onChunk(text);
     }
     return output;
   }
-  return String(value ?? '');
+  const text = String(value ?? '');
+  if (typeof onChunk === 'function') onChunk(text);
+  return text;
 }
 
 function isAsyncIterable(value) {

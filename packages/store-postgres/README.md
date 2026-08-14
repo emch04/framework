@@ -84,6 +84,30 @@ const app = createSaasApp({
 Les méthodes retournent toujours des objets JavaScript simples (jamais une
 ligne `pg` brute) : `{ ...donnéesJSONB, id }`.
 
+## Migrations
+
+Pas un DSL, pas de CLI, pas d'introspection de schéma — un runner minimal
+et honnête : tu lui donnes du SQL brut dans l'ordre, il applique une seule
+fois chaque migration non encore vue (suivi par `id` dans une table de
+suivi), chacune dans sa propre transaction, annulée en cas d'échec.
+
+```js
+const { createPostgresMigrationRunner } = require('@astratra/store-postgres');
+
+const runner = createPostgresMigrationRunner({ pool });
+
+await runner.run([
+  { id: '2026-01-01-add-name', up: (client) => client.query('ALTER TABLE app_users ADD COLUMN name TEXT') },
+  { id: '2026-01-15-index-role', up: (client) => client.query('CREATE INDEX IF NOT EXISTS app_users_role_idx ON app_users (role)') }
+]);
+```
+
+Rejoue `run()` avec la même liste (plus les nouvelles migrations ajoutées
+au fil du temps) à chaque déploiement — les `id` déjà appliqués sont
+ignorés. `appliedIds()` retourne l'historique. Pas de `down()` : ce runner
+ne fait qu'avancer, un rollback de schéma se fait via une nouvelle migration
+qui défait l'ancienne.
+
 ## Cycle de vie de connexion
 
 Chemin recommandé : passer un `pool` déjà géré par l'application. Dans ce

@@ -299,8 +299,72 @@ const createWebauthnService = (store, options = {}) => {
   return service;
 };
 
+/**
+ * Reference in-memory implementation of the WebauthnStore contract required
+ * by createWebauthnService — matches every method assertStore() checks for,
+ * same pattern as createMemoryUsersStore/createMemorySettingsStore in
+ * @astratra/saas-kit. Fine for local dev and tests; credentials vanish on
+ * restart, so swap in your own persistent store (a real database) before
+ * production — this only removes the "no default at all" gap, it isn't a
+ * production-ready credential store.
+ */
+const createMemoryWebauthnStore = () => {
+  const credentialsByUser = new Map();
+  const credentialsById = new Map();
+  const challenges = new Map();
+  const recoveryCodesByUser = new Map();
+
+  return {
+    async getCredentialsForUser(userId) {
+      return [...(credentialsByUser.get(String(userId)) || [])];
+    },
+
+    async saveCredential(userId, credential) {
+      const record = { ...credential, userId: String(userId), id: credential.credentialID };
+      const list = credentialsByUser.get(String(userId)) || [];
+      list.push(record);
+      credentialsByUser.set(String(userId), list);
+      credentialsById.set(credential.credentialID, record);
+    },
+
+    async getCredentialById(credentialId) {
+      return credentialsById.get(credentialId) || null;
+    },
+
+    async updateCredentialCounter(credentialId, counter) {
+      const record = credentialsById.get(credentialId);
+      if (record) record.counter = counter;
+    },
+
+    async saveChallenge(userId, challenge, type, metadata = {}) {
+      challenges.set(`${userId}:${type}`, { challenge, ...metadata });
+    },
+
+    async consumeChallenge(userId, type) {
+      const key = `${userId}:${type}`;
+      const pending = challenges.get(key) || null;
+      challenges.delete(key);
+      return pending;
+    },
+
+    async saveRecoveryCodes(userId, hashes) {
+      recoveryCodesByUser.set(String(userId), [...hashes]);
+    },
+
+    async consumeRecoveryCode(userId, hash) {
+      const codes = recoveryCodesByUser.get(String(userId)) || [];
+      const index = codes.indexOf(hash);
+      if (index === -1) return false;
+      codes.splice(index, 1);
+      recoveryCodesByUser.set(String(userId), codes);
+      return true;
+    }
+  };
+};
+
 module.exports = {
   createWebauthnService,
+  createMemoryWebauthnStore,
   rpConfigForRequest,
   hashRecoveryCode,
   CHALLENGE_TTL_MS,

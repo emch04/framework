@@ -88,6 +88,11 @@ export interface AgentRouter {
   ask(prompt: string, request?: ProviderRequest, ctx?: Record<string, unknown>): Awaitable<string | AsyncIterable<unknown> | null | undefined>;
 }
 
+export interface ToolCall {
+  name: string;
+  params: Record<string, unknown>;
+}
+
 export interface AgentLoopOptions {
   prompt: string;
   ctx?: Record<string, unknown>;
@@ -96,6 +101,20 @@ export interface AgentLoopOptions {
   router: AgentRouter;
   userRole: string;
   maxSteps?: number;
+  /**
+   * Called with each text chunk as it arrives, when router.ask() returns a
+   * stream — real token-by-token passthrough to your UI. The loop still
+   * needs the fully-assembled text to detect a tool call, so it keeps
+   * accumulating internally regardless of whether you pass this.
+   */
+  onChunk?: (chunk: string) => void;
+  /**
+   * Awaited before a detected tool call actually executes. Return (or
+   * resolve to) false to deny — the loop tells the model the call was not
+   * approved and continues, rather than crashing. Omit to auto-execute
+   * every allowed tool call, unchanged from before.
+   */
+  confirmTool?: (toolCall: ToolCall, ctx: Record<string, unknown>) => Awaitable<boolean>;
 }
 
 export function runAgentLoop(options: AgentLoopOptions): Promise<string>;

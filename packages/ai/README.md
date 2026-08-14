@@ -74,7 +74,9 @@ const reponse = await runAgentLoop({
   registry,
   router,
   userRole: 'doctor',
-  maxSteps: 5
+  maxSteps: 5,
+  onChunk: (chunk) => res.write(chunk),           // streaming token par token, optionnel
+  confirmTool: async (toolCall) => askUser(toolCall) // confirmation avant exécution, optionnel
 });
 ```
 
@@ -83,12 +85,23 @@ modèle, exécute l'outil correspondant enregistré (refuse si le rôle n'y a
 pas accès), réinjecte le résultat sous forme de `<tool_result>`, et boucle
 jusqu'à une réponse finale ou `maxSteps` atteint.
 
-**Périmètre V0 — volontairement exclu :** streaming token par token,
-gestion d'images/vision, et confirmation humaine avant l'exécution d'un
-outil sensible. Ce sont de vraies fonctionnalités non triviales dont une
-boucle d'agent de production a besoin, mais les porter fidèlement a été
-jugé trop ambitieux pour cette première version du package. À construire
-dans votre propre boucle, ou à couvrir dans un futur spec.
+`onChunk(chunk)` est appelé pour chaque morceau reçu si `router.ask()`
+retourne un flux (async iterable) — un vrai passthrough token par token vers
+ton UI. La boucle continue d'accumuler le texte complet en interne (elle en
+a besoin pour détecter un `<tool_call>`), donc le fournir ne change rien au
+comportement, juste un point d'observation en plus.
+
+`confirmTool(toolCall, ctx)` est attendu avant l'exécution d'un appel d'outil
+détecté. Retourne `false` (ou une promesse résolue en `false`) pour refuser
+— la boucle ne plante pas, elle informe le modèle (`{"denied": true, ...}`
+comme résultat d'outil) et continue, il peut réagir (expliquer, proposer
+autre chose, s'arrêter). Omis, chaque outil autorisé s'exécute automatiquement,
+comme avant.
+
+**Périmètre V0 — toujours volontairement exclu :** gestion d'images/vision.
+Fonctionnalité non triviale dont une boucle d'agent de production a besoin,
+mais dont le portage fidèle reste jugé trop ambitieux pour ce package. À
+construire dans votre propre boucle, ou à couvrir dans un futur spec.
 
 ## Tests
 

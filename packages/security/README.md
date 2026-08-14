@@ -1,13 +1,34 @@
 # @astratra/security
 
 Primitives de sécurité applicative pour l'authentification, l'autorisation,
-le CORS, le rate limiting, une CSP configurable, un WAF heuristique et
-WebAuthn/passkeys — génériques et découplées de toute base de données, ORM
-ou liste de rôles fixe. Dépend de `@astratra/core`.
+le CORS, le chiffrement de champ, le rate limiting, une CSP configurable,
+un WAF heuristique et WebAuthn/passkeys — génériques et découplées de toute
+base de données, ORM ou liste de rôles fixe. Dépend de `@astratra/core`.
 
 Partout où un vrai projet a besoin de persistance (révocation de session,
 stockage de credentials WebAuthn, alerte de brute-force), c'est un
 callback/adapter injecté, jamais un appel base de données codé en dur.
+
+## Chiffrement de champ (au repos)
+
+Astratra ne s'intercale jamais entre ton app et ta base de données — rien
+en amont ne chiffre tes données à ta place. `createFieldCipher` fournit une
+primitive AES-256-GCM authentifiée (une donnée altérée ou une mauvaise clé
+échoue au déchiffrement plutôt que de retourner du charabia silencieusement)
+pour chiffrer un champ sensible avant de l'écrire dans n'importe quel store :
+
+```js
+const { createFieldCipher, generateFieldEncryptionKey } = require('@astratra/security');
+
+// Une fois, à la mise en place — garde la clé en secret (variable d'env),
+// jamais dans le dépôt. La faire tourner rend les anciennes valeurs
+// indéchiffrables : prévois un plan de ré-encryption si tu veux la changer.
+console.log(generateFieldEncryptionKey());
+
+const cipher = createFieldCipher({ key: process.env.FIELD_ENCRYPTION_KEY });
+const stored = cipher.encrypt('4242-4242-4242-4242'); // string unique, safe pour n'importe quel champ/colonne
+const plain = cipher.decrypt(stored);
+```
 
 ## CORS
 
@@ -233,6 +254,20 @@ récupération. Aucun Mongoose, aucun rôle fixe autorisé à enregistrer une cl
 — ce controle d'acces reste a la charge de l'app consommatrice. Avant de
 présenter WebAuthn comme un argument de sécurité fort, prévois une revue de
 sécurité externe sur l'intégration complète.
+
+Pour développer/tester sans écrire de store tout de suite,
+`createMemoryWebauthnStore()` fournit une implémentation en mémoire
+conforme au contrat complet — credentials perdues au redémarrage, à
+remplacer par une vraie base avant la prod :
+
+```js
+const { createWebauthnService, createMemoryWebauthnStore } = require('@astratra/security');
+
+const webauthn = createWebauthnService(createMemoryWebauthnStore(), {
+  rpName: 'Mon App',
+  recoveryCodeSecret: process.env.RECOVERY_CODE_SECRET
+});
+```
 
 ## Tests
 

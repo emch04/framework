@@ -75,6 +75,38 @@ relecture de code — voir le rapport correspondant.
   `@astratra/security` relevés à `^1.3.0` en conséquence ; `express` retiré
   des dépendances directes du projet généré (n'y était plus utilisé
   directement, disponible en transitif via `saas-kit`).
+- `@astratra/security` (`1.3.0`→`1.4.0`) — `createMemoryWebauthnStore()`,
+  implémentation de référence en mémoire du contrat `WebauthnStore`, même
+  motif que `createMemoryUsersStore`/`createMemorySettingsStore` : avant,
+  aucun store WebAuthn par défaut n'existait, il fallait en écrire un avant
+  de pouvoir simplement essayer le flux. Credentials perdues au redémarrage
+  — à remplacer par une vraie base avant la prod. Ajoute aussi
+  `createFieldCipher(options)` / `generateFieldEncryptionKey()` : chiffrement
+  de champ AES-256-GCM authentifié pour les valeurs qu'une app écrit
+  elle-même dans son store — Astratra ne s'intercale jamais entre l'app et
+  sa base, donc rien en amont ne pouvait chiffrer les données à sa place.
+- `@astratra/ai` (`1.0.2`→`1.1.0`) — `runAgentLoop` accepte deux nouveaux
+  callbacks optionnels, tous deux sans effet si omis. `onChunk(chunk)` :
+  appelé pour chaque morceau reçu quand `router.ask()` retourne un flux —
+  avant, `stringifyModelResponse` consommait le flux en entier avant de
+  rendre la main, aucun streaming token par token n'atteignait l'appelant
+  même si le provider le supportait. `confirmTool(toolCall, ctx)` : attendu
+  avant l'exécution d'un appel d'outil détecté ; retourner `false` annule
+  l'exécution sans faire planter la boucle (le modèle reçoit
+  `{"denied": true}` comme résultat et peut réagir) — avant, chaque appel
+  d'outil autorisé par le rôle s'exécutait automatiquement, sans point
+  d'arrêt possible pour une confirmation humaine.
+- `@astratra/store-mongo` (`1.0.2`→`1.1.0`) et `@astratra/store-postgres`
+  (`1.0.2`→`1.1.0`) — `createMongoMigrationRunner`/
+  `createPostgresMigrationRunner` : un runner minimal, pas un DSL ni une
+  CLI — étant donné un tableau `{ id, up(client) }`, applique une seule fois
+  chaque migration non encore vue, dans l'ordre, suivi par `id` dans une
+  table/collection dédiée. La variante Postgres enveloppe chaque migration
+  dans sa propre transaction (annulée en cas d'échec) ; la variante Mongo
+  ne le fait pas (pas de transactions inter-collections sur un déploiement
+  standalone) — voir les README respectifs. Avant, aucun outil de ce type
+  n'existait dans le framework : faire évoluer un schéma en prod restait
+  entièrement manuel.
 
 ## 2026-08-09
 

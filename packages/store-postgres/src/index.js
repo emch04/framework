@@ -233,5 +233,6 @@ function createPostgresSettingsStore(options = {}) {
 
 module.exports = {
   createPostgresSettingsStore,
-  createPostgresUsersStore
+  createPostgresUsersStore,
+  ...require('./migrations')
 };

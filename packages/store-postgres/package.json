@@ -1,6 +1,6 @@
 {
   "name": "@astratra/store-postgres",
-  "version": "1.0.2",
+  "version": "1.1.0",
   "description": "PostgreSQL persistence adapters for Astratra SaaS stores.",
   "engines": {
     "node": ">=20"

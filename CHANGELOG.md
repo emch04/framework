@@ -7,6 +7,18 @@ Chaque package Astratra est versionné indépendamment.
 
 ### Ajoute
 
+- `@astratra/security` (`1.4.0`→`1.5.0`) — `createAuthMiddleware` détecte
+  maintenant le cas où `req.cookies` est `undefined` **et** qu'aucun jeton
+  n'a été trouvé par ailleurs (header `Authorization` compris) : au lieu
+  d'un 401 silencieux indiscernable d'une vraie absence de session, il
+  transmet une `AuthConfigurationError` explicite à `next(error)`. Trouvé
+  en construisant un projet consommateur réel qui montait son propre
+  routeur avant `createSaasApp()` sans `cookieParserMiddleware()` — l'auth
+  échouait sans aucun indice sur la cause. Le garde-fou ne se déclenche
+  jamais pour un flux 100% `Authorization: Bearer` (les cookies ne sont
+  regardés qu'en dernier recours). Nouveau : `docs/guides/custom-routes-wiring.md`,
+  qui documente le pattern `extendRoutes` recommandé et pourquoi un
+  routeur monté en parallèle doit reconstruire cookies + CSRF à la main.
 - `@astratra/security` (`1.3.0`→`1.4.0`) :
   - `hashPassword(password)` / `verifyPasswordHash(password, hash)` —
     scrypt (natif à Node, aucune dépendance bcrypt/argon2 ajoutée), sel

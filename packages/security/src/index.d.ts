@@ -141,6 +141,13 @@ export interface AuthMiddlewareOptions<TDecoded = Record<string, unknown>> {
 export function createAuthMiddleware<TDecoded = Record<string, unknown>>(options: AuthMiddlewareOptions<TDecoded>): RequestHandler;
 export function authorizeRoles(...roles: string[]): RequestHandler;
 
+/**
+ * Thrown by the default token extractor — and passed to `next(error)`,
+ * never swallowed into a 401 — when `req.cookies` is `undefined` (no
+ * cookie parser mounted) and no token was found by any other means either.
+ */
+export class AuthConfigurationError extends Error {}
+
 export interface RevocationStore {
   revoke(jti: string, expiresAt: number): Awaitable<void>;
   isRevoked(jti?: string): Awaitable<boolean>;

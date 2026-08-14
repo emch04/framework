@@ -96,6 +96,10 @@ function request(app, method, url, options = {}) {
           parsedBody = rawBody;
         }
       }
+      // A real http.ServerResponse emits 'finish' once the response is sent —
+      // this override replaces res.end() entirely, so it has to emit it too,
+      // or anything listening for 'finish' (createSecurityAuditLogger) never fires.
+      res.emit('finish');
       resolve({ status: res.statusCode, headers: responseHeaders, body: parsedBody });
     };
 
@@ -668,4 +672,60 @@ test('options.cors also applies to routes registered via extendRoutes', async ()
 
   assert.equal(response.status, 200);
   assert.equal(response.headers['access-control-allow-origin'], 'http://127.0.0.1:5273');
+});
+
+test('standard security headers are set by default (X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy)', async () => {
+  const { app } = createTestApp();
+
+  const response = await request(app, 'GET', '/auth/me', { headers: {} });
+
+  assert.equal(response.headers['x-frame-options'], 'DENY');
+  assert.equal(response.headers['x-content-type-options'], 'nosniff');
+  assert.equal(response.headers['referrer-policy'], 'strict-origin-when-cross-origin');
+  assert.match(response.headers['permissions-policy'], /geolocation=\(\)/);
+});
+
+test('options.securityHeaders can be customized', async () => {
+  const { app } = createTestApp({ securityHeaders: { frameOptions: 'SAMEORIGIN' } });
+
+  const response = await request(app, 'GET', '/auth/me', { headers: {} });
+
+  assert.equal(response.headers['x-frame-options'], 'SAMEORIGIN');
+});
+
+test('security audit logging is on by default: a rejected request (missing token) logs a security_event', async () => {
+  const events = [];
+  const { app } = createTestApp({ securityAudit: { log: (message, event) => events.push({ message, event }) } });
+
+  const response = await request(app, 'GET', '/users', { headers: {} });
+
+  assert.equal(response.status, 401);
+  assert.equal(events.length, 1);
+  assert.equal(events[0].message, 'security_event');
+  assert.equal(events[0].event.status, 401);
+  assert.equal(events[0].event.path, '/users');
+});
+
+test('security audit logging does not fire for a successful request', async () => {
+  const events = [];
+  const { app } = createTestApp({ securityAudit: { log: (message, event) => events.push({ message, event }) } });
+  const token = await login(app, 'owner@example.test');
+
+  await request(app, 'GET', '/auth/me', { headers: { authorization: `Bearer ${token}` } });
+
+  assert.equal(events.length, 0);
+});
+
+test('options.securityAudit: false disables audit logging entirely', async () => {
+  const events = [];
+  const originalLog = console.warn;
+  console.warn = () => events.push('called');
+  try {
+    const { app } = createTestApp({ securityAudit: false });
+    await request(app, 'GET', '/users', { headers: {} });
+  } finally {
+    console.warn = originalLog;
+  }
+
+  assert.equal(events.length, 0);
 });

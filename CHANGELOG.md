@@ -3,11 +3,35 @@
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Chaque package Astratra est versionné indépendamment.
 
-## 2026-08-14
+## 2026-08-15
 
-Constats remontés en construisant une vraie application (Hireloop, un ATS)
-100% sur les packages publiés, avec des appels HTTP réels plutôt qu'une
-relecture de code — voir le rapport correspondant.
+### Ajoute
+
+- `@astratra/security` (`1.3.0`→`1.4.0`) :
+  - `hashPassword(password)` / `verifyPasswordHash(password, hash)` —
+    scrypt (natif à Node, aucune dépendance bcrypt/argon2 ajoutée), sel
+    aléatoire par hash, comparaison à temps constant. `verifyPassword`
+    reste un callback fourni par l'app ; avant, aucune primitive de hachage
+    n'existait, rien n'empêchait un `===` en clair.
+  - `createSecurityHeadersMiddleware()` — `X-Frame-Options`,
+    `X-Content-Type-Options`, `Referrer-Policy`, `Permissions-Policy`, et
+    `Strict-Transport-Security` (actif automatiquement seulement en
+    production). Seul CSP était couvert avant ; ce set standard manquait
+    entièrement.
+  - `createSecurityAuditLogger()` — journalise une ligne structurée pour
+    toute requête qui se termine en `401`/`403`/`429` (configurable),
+    peu importe quelle couche (CSRF, WAF, rate limit, JWT) l'a produite.
+    Avant, aucune de ces couches ne journalisait quoi que ce soit : une
+    tentative d'attaque restait invisible tant qu'elle n'avait pas réussi.
+- `@astratra/saas-kit` (`1.3.0`→`1.4.0`) — `createSaasApp()` monte
+  désormais `createSecurityHeadersMiddleware` et `createSecurityAuditLogger`
+  sans condition (comme CSP), au même titre que les couches déjà actives
+  par défaut. `options.securityHeaders` personnalise les en-têtes ;
+  `options.securityAudit: false` désactive le journal, un objet ou `true`
+  le personnalise (sink de log personnalisé, codes de statut surveillés).
+  Plancher `@astratra/security` relevé à `^1.4.0` en conséquence.
+
+## 2026-08-14
 
 ### Corrige
 

@@ -7,6 +7,8 @@ import type {
   RateLimitOptions,
   RequestHandler,
   RevocationStore,
+  SecurityAuditLoggerOptions,
+  SecurityHeadersOptions,
   SessionCookieOptions,
   WafOptions,
   WebauthnOptions,
@@ -110,6 +112,15 @@ export interface CreateSaasAppOptions {
    * default behavior).
    */
   cors?: CorsMiddlewareOptions | true;
+  /** X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy, HSTS. Every option has a safe default; mounted unconditionally like csp. */
+  securityHeaders?: SecurityHeadersOptions;
+  /**
+   * Structured logging for any request ending in 401/403/429 (failed auth,
+   * CSRF/WAF block, rate limit). Mounted by default — pass `false` to
+   * disable, `true` or an options object to customize (custom `log` sink,
+   * different `statusCodes`).
+   */
+  securityAudit?: SecurityAuditLoggerOptions | boolean;
   webauthnStore?: WebauthnStore;
   webauthn?: WebauthnOptions;
   waf?: WafOptions;

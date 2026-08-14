@@ -196,11 +196,11 @@ astratra/
 │   └── create-astratra-app/
 ├── examples/
 │   └── dashboard-ui/
-├── docs/specs/   — un design doc par package, écrit avant l'implémentation
+├── docs/design/  — un design doc par package, écrit avant l'implémentation
 └── LICENSE                    — MIT
 ```
 
-Chaque package a été construit à partir d'un spec écrit dans `docs/specs/`
+Chaque package a été construit à partir d'un spec écrit dans `docs/design/`
 avant de coder quoi que ce soit, et chaque implémentation a ensuite été
 vérifiée à la main : dépendances installées avec un vrai accès réseau, tests
 réellement exécutés, code relu, grep pour s'assurer qu'aucune logique métier
@@ -260,7 +260,7 @@ produit.
 ## Contribuer / étendre
 
 Ajouter un nouveau package en écrivant d'abord son spec de design
-(`docs/specs/AAAA-MM-JJ-astratra-<nom>-design.md`), en suivant
+(`docs/design/AAAA-MM-JJ-astratra-<nom>-design.md`), en suivant
 la même forme que les specs existants : ce qui est extrait, ce qui est
 explicitement exclu, et comment ça reste découplé de la logique métier d'un
 produit précis.

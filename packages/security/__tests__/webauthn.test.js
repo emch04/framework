@@ -202,3 +202,53 @@ describe('webauthn', () => {
     expect(store.consumeRecoveryCode).toHaveBeenCalledWith('u1', expect.any(String));
   });
 });
+
+describe('createMemoryWebauthnStore', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    process.env.WEBAUTHN_ALLOWED_ORIGINS = 'https://app.example.com';
+    delete process.env.CLIENT_URL;
+  });
+
+  test('satisfies the full WebauthnStore contract through a real registration + authentication cycle', async () => {
+    const { createMemoryWebauthnStore } = require('../src');
+    const store = createMemoryWebauthnStore();
+    const service = createWebauthnService(store, { rpName: 'Example', recoveryCodeSecret: 'pepper' });
+
+    // Registration
+    await service.getRegistrationOptions({ headers: { origin: 'https://app.example.com' } }, 'u1', 'alice@example.com');
+    const registration = await service.verifyRegistration('u1', {}, 'MacBook');
+    expect(registration.verified).toBe(true);
+    expect(registration.isFirstDevice).toBe(true);
+    expect(registration.recoveryCodes).toHaveLength(10);
+    expect(await service.hasCredentials('u1')).toBe(true);
+
+    // Authentication (before a second user registers — the mocked
+    // verifyRegistrationResponse always returns the same fake credential
+    // id, which would otherwise collide across users the way two real
+    // WebAuthn ceremonies never would)
+    await service.getAuthenticationOptions({ headers: { origin: 'https://app.example.com' } }, 'u1');
+    const authenticated = await service.verifyAuthentication('u1', { id: 'credential-1' });
+    expect(authenticated).toBe(true);
+
+    // The counter update from verifyAuthentication (newCounter: 2, per the mock) persisted
+    const [credential] = await store.getCredentialsForUser('u1');
+    expect(credential.counter).toBe(2);
+
+    // Challenges are one-time use
+    await expect(service.verifyAuthentication('u1', { id: 'credential-1' })).rejects.toMatchObject({ statusCode: 400 });
+
+    // Recovery codes: one-time use, scoped per user
+    const firstUse = await service.verifyRecoveryCode('u1', registration.recoveryCodes[0]);
+    const secondUse = await service.verifyRecoveryCode('u1', registration.recoveryCodes[0]);
+    expect(firstUse).toBe(true);
+    expect(secondUse).toBe(false);
+
+    // A second user's credential list is independent of the first's
+    await service.getRegistrationOptions({ headers: { origin: 'https://app.example.com' } }, 'u2', 'bob@example.com');
+    await service.verifyRegistration('u2', {}, 'iPhone');
+    const u1Credentials = await store.getCredentialsForUser('u1');
+    expect(u1Credentials).toHaveLength(1);
+    expect(await service.hasCredentials('u2')).toBe(true);
+  });
+});

@@ -41,6 +41,28 @@ export interface CorsMiddlewareOptions {
  */
 export function createCorsMiddleware(options?: CorsMiddlewareOptions): RequestHandler;
 
+export interface FieldCipherOptions {
+  /** A 32-byte AES-256 key, as a Buffer or a base64/hex-encoded string. */
+  key: Buffer | string;
+}
+
+export interface FieldCipher {
+  /** Encrypts a value (AES-256-GCM) into a single opaque string, safe to store in any field/column. */
+  encrypt(plaintext: string | number): string;
+  /** Decrypts a value produced by encrypt(). Throws if the key is wrong or the payload was tampered with. */
+  decrypt(payload: string): string;
+}
+
+/**
+ * Field-level encryption for values written to a store you control — Astratra
+ * doesn't sit between your app and your database, so nothing upstream
+ * encrypts data for you. Generate a key with generateFieldEncryptionKey()
+ * once and keep it as a secret; rotating it makes old ciphertexts
+ * undecryptable.
+ */
+export function createFieldCipher(options: FieldCipherOptions): FieldCipher;
+export function generateFieldEncryptionKey(): string;
+
 export interface AuthMiddlewareOptions<TDecoded = Record<string, unknown>> {
   secret: string;
   legacySecret?: string;
@@ -246,3 +268,10 @@ export interface WebauthnService {
 export function createWebauthnService(store: WebauthnStore, options?: WebauthnOptions): WebauthnService;
 export function rpConfigForRequest(req: RequestLike, options?: WebauthnOptions): RpConfig;
 export function hashRecoveryCode(code: string, secret: string): string;
+
+/**
+ * Reference in-memory WebauthnStore implementation. Fine for local dev and
+ * tests — credentials are lost on restart, so this is not a production
+ * credential store.
+ */
+export function createMemoryWebauthnStore(): WebauthnStore;

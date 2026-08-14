@@ -1,5 +1,6 @@
 module.exports = {
   ...require('./cors'),
+  ...require('./encryption'),
   ...require('./jwtAuth'),
   ...require('./rateLimiters'),
   ...require('./waf'),

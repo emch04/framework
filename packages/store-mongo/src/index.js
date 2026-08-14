@@ -245,5 +245,6 @@ function createMongoSettingsStore(options = {}) {
 
 module.exports = {
   createMongoSettingsStore,
-  createMongoUsersStore
+  createMongoUsersStore,
+  ...require('./migrations')
 };

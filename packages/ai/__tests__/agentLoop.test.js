@@ -90,4 +90,107 @@ describe('agentLoop', () => {
       maxSteps: 2
     })).rejects.toThrow('maxSteps');
   });
+
+  test('onChunk streams each piece of an async-iterable response as it arrives', async () => {
+    const registry = createToolRegistry();
+    async function* stream() {
+      yield 'plain ';
+      yield 'answer';
+    }
+    const router = { ask: jest.fn(async () => stream()) };
+    const chunks = [];
+
+    const result = await runAgentLoop({
+      prompt: 'question',
+      ctx: {},
+      registry,
+      router,
+      userRole: 'member',
+      onChunk: (chunk) => chunks.push(chunk)
+    });
+
+    expect(result).toBe('plain answer');
+    expect(chunks).toEqual(['plain ', 'answer']);
+  });
+
+  test('onChunk is also called for a plain (non-streamed) response', async () => {
+    const registry = createToolRegistry();
+    const router = { ask: jest.fn(async () => 'plain answer') };
+    const chunks = [];
+
+    await runAgentLoop({
+      prompt: 'question',
+      ctx: {},
+      registry,
+      router,
+      userRole: 'member',
+      onChunk: (chunk) => chunks.push(chunk)
+    });
+
+    expect(chunks).toEqual(['plain answer']);
+  });
+
+  test('confirmTool gates execution: approved calls run normally', async () => {
+    const registry = createToolRegistry();
+    const handler = jest.fn(async () => ({ ok: true }));
+    registry.register({
+      name: 'delete_case',
+      description: 'Delete a case',
+      type: 'write',
+      roles: ['admin'],
+      params: { id: 'string' },
+      handler
+    });
+    const router = {
+      ask: jest.fn()
+        .mockResolvedValueOnce('<tool_call name="delete_case">{"id":"A-1"}</tool_call>')
+        .mockResolvedValueOnce('done')
+    };
+    const confirmTool = jest.fn(async () => true);
+
+    const result = await runAgentLoop({
+      prompt: 'delete it',
+      ctx: {},
+      registry,
+      router,
+      userRole: 'admin',
+      confirmTool
+    });
+
+    expect(result).toBe('done');
+    expect(handler).toHaveBeenCalledWith({ id: 'A-1' }, {});
+    expect(confirmTool).toHaveBeenCalledWith({ name: 'delete_case', params: { id: 'A-1' } }, {});
+  });
+
+  test('confirmTool gates execution: denied calls never run the handler, loop continues', async () => {
+    const registry = createToolRegistry();
+    const handler = jest.fn(async () => ({ ok: true }));
+    registry.register({
+      name: 'delete_case',
+      description: 'Delete a case',
+      type: 'write',
+      roles: ['admin'],
+      params: { id: 'string' },
+      handler
+    });
+    const router = {
+      ask: jest.fn()
+        .mockResolvedValueOnce('<tool_call name="delete_case">{"id":"A-1"}</tool_call>')
+        .mockResolvedValueOnce('understood, not deleting')
+    };
+    const confirmTool = jest.fn(async () => false);
+
+    const result = await runAgentLoop({
+      prompt: 'delete it',
+      ctx: {},
+      registry,
+      router,
+      userRole: 'admin',
+      confirmTool
+    });
+
+    expect(result).toBe('understood, not deleting');
+    expect(handler).not.toHaveBeenCalled();
+    expect(router.ask.mock.calls[1][0]).toContain('"denied":true');
+  });
 });

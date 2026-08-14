@@ -1,5 +1,5 @@
 const jwt = require('jsonwebtoken');
-const { createAuthMiddleware, authorizeRoles } = require('../src');
+const { createAuthMiddleware, authorizeRoles, AuthConfigurationError } = require('../src');
 
 const createRes = () => {
   const res = {};
@@ -11,7 +11,7 @@ const createRes = () => {
 describe('jwtAuth', () => {
   test('injects decoded user for a valid bearer token', async () => {
     const token = jwt.sign({ id: 'u1', role: 'admin' }, 'secret');
-    const req = { headers: { authorization: `Bearer ${token}` } };
+    const req = { cookies: {}, headers: { authorization: `Bearer ${token}` } };
     const res = createRes();
     const next = jest.fn();
 
@@ -26,7 +26,7 @@ describe('jwtAuth', () => {
     const res = createRes();
     const next = jest.fn();
 
-    await createAuthMiddleware({ secret: 'secret' })({ headers: {} }, res, next);
+    await createAuthMiddleware({ secret: 'secret' })({ cookies: {}, headers: {} }, res, next);
 
     expect(res.status).toHaveBeenCalledWith(401);
     expect(next).not.toHaveBeenCalled();
@@ -37,7 +37,11 @@ describe('jwtAuth', () => {
     const res = createRes();
     const next = jest.fn();
 
-    await createAuthMiddleware({ secret: 'secret' })({ headers: { authorization: `Bearer ${token}` } }, res, next);
+    await createAuthMiddleware({ secret: 'secret' })(
+      { cookies: {}, headers: { authorization: `Bearer ${token}` } },
+      res,
+      next
+    );
 
     expect(res.status).toHaveBeenCalledWith(401);
     expect(next).not.toHaveBeenCalled();
@@ -48,7 +52,7 @@ describe('jwtAuth', () => {
     const res = createRes();
     const next = jest.fn();
 
-    await createAuthMiddleware({ secret: 'secret' })({ cookies: { token } }, res, next);
+    await createAuthMiddleware({ secret: 'secret' })({ cookies: { token }, headers: {} }, res, next);
 
     expect(res.status).toHaveBeenCalledWith(401);
     expect(next).not.toHaveBeenCalled();
@@ -60,7 +64,7 @@ describe('jwtAuth', () => {
     const next = jest.fn();
 
     await createAuthMiddleware({ secret: 'secret', algorithms: ['HS256'] })(
-      { headers: { authorization: `Bearer ${token}` } },
+      { cookies: {}, headers: { authorization: `Bearer ${token}` } },
       res,
       next
     );
@@ -83,7 +87,7 @@ describe('jwtAuth', () => {
       algorithms: ['HS256'],
       issuer: 'my-app',
       audience: 'my-api'
-    })({ headers: { authorization: `Bearer ${token}` } }, res, next);
+    })({ cookies: {}, headers: { authorization: `Bearer ${token}` } }, res, next);
 
     expect(res.status).toHaveBeenCalledWith(401);
     expect(next).not.toHaveBeenCalled();
@@ -107,7 +111,7 @@ describe('jwtAuth', () => {
     const next = jest.fn();
 
     await createAuthMiddleware({ secret: 'secret', verifySession })(
-      { headers: { authorization: `Bearer ${token}` } },
+      { cookies: {}, headers: { authorization: `Bearer ${token}` } },
       res,
       next
     );
@@ -126,7 +130,7 @@ describe('jwtAuth', () => {
     const next = jest.fn();
 
     await createAuthMiddleware({ secret: 'secret', revocationStore })(
-      { headers: { authorization: `Bearer ${token}` } },
+      { cookies: {}, headers: { authorization: `Bearer ${token}` } },
       res,
       next
     );
@@ -147,7 +151,7 @@ describe('jwtAuth', () => {
     const next = jest.fn();
 
     await createAuthMiddleware({ secret: 'secret', revocationStore })(
-      { headers: { authorization: `Bearer ${token}` } },
+      { cookies: {}, headers: { authorization: `Bearer ${token}` } },
       res,
       next
     );
@@ -164,7 +168,7 @@ describe('jwtAuth', () => {
       isRevoked: jest.fn().mockResolvedValue(true)
     };
     const verifySession = jest.fn().mockResolvedValue(true);
-    const req = { headers: { authorization: `Bearer ${token}` } };
+    const req = { cookies: {}, headers: { authorization: `Bearer ${token}` } };
     const next = jest.fn();
 
     await createAuthMiddleware({ secret: 'secret', revocationStore, verifySession })(req, createRes(), next);
@@ -176,7 +180,7 @@ describe('jwtAuth', () => {
 
   test('does not verify sessions when callback is absent', async () => {
     const token = jwt.sign({ id: 'u1', tokenVersion: 2 }, 'secret');
-    const req = { headers: { authorization: `Bearer ${token}` } };
+    const req = { cookies: {}, headers: { authorization: `Bearer ${token}` } };
     const next = jest.fn();
 
     await createAuthMiddleware({ secret: 'secret' })(req, createRes(), next);
@@ -192,5 +196,49 @@ describe('jwtAuth', () => {
     const deniedRes = createRes();
     authorizeRoles('owner')({ user: { role: 'viewer' } }, deniedRes, jest.fn());
     expect(deniedRes.status).toHaveBeenCalledWith(403);
+  });
+
+  describe('missing cookieParserMiddleware', () => {
+    test('surfaces an AuthConfigurationError via next(), instead of a masked 401, when req.cookies is undefined', async () => {
+      const res = createRes();
+      const next = jest.fn();
+
+      await createAuthMiddleware({ secret: 'secret' })({ headers: {} }, res, next);
+
+      expect(res.status).not.toHaveBeenCalled();
+      expect(next).toHaveBeenCalledTimes(1);
+      const [error] = next.mock.calls[0];
+      expect(error).toBeInstanceOf(AuthConfigurationError);
+      expect(error.message).toMatch(/cookieParserMiddleware/);
+    });
+
+    test('does not trigger the guard for a valid bearer token with cookies never parsed', async () => {
+      // A header-only auth flow never touches req.cookies, so it must not
+      // be penalized for a parser it does not need.
+      const token = jwt.sign({ id: 'u1' }, 'secret');
+      const req = { headers: { authorization: `Bearer ${token}` } };
+      const res = createRes();
+      const next = jest.fn();
+
+      await createAuthMiddleware({ secret: 'secret' })(req, res, next);
+
+      expect(next).toHaveBeenCalledTimes(1);
+      expect(next).toHaveBeenCalledWith();
+      expect(req.user).toMatchObject({ id: 'u1' });
+    });
+
+    test('a custom options.extractToken bypasses the guard entirely', async () => {
+      const token = jwt.sign({ id: 'u1' }, 'secret');
+      const res = createRes();
+      const next = jest.fn();
+
+      await createAuthMiddleware({
+        secret: 'secret',
+        extractToken: (req) => req.headers['x-api-token']
+      })({ headers: { 'x-api-token': token } }, res, next);
+
+      expect(next).toHaveBeenCalledTimes(1);
+      expect(res.status).not.toHaveBeenCalled();
+    });
   });
 });

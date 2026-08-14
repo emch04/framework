@@ -103,6 +103,18 @@ app.delete('/api/projects/:id', authorizeRoles('owner', 'admin'), handler);
 Par défaut, le middleware limite la vérification à `HS256`. Si ton application
 utilise un autre algorithme, configure explicitement `algorithms`.
 
+**Session par cookie sans `cookieParserMiddleware()` monté en amont** :
+`createAuthMiddleware` a besoin de `req.cookies` pour lire un cookie de
+session. Si aucun token n'est trouvé (ni cookie, ni header `Authorization`)
+**et** que `req.cookies` est `undefined` — c'est-à-dire que
+`cookieParserMiddleware()` (section suivante) n'a jamais tourné — le
+middleware ne renvoie pas un 401 silencieux : il transmet une
+`AuthConfigurationError` à `next(error)`, pour distinguer une vraie
+absence de session d'un pipeline mal monté. Un routeur monté séparément de
+`createSaasApp()` (au lieu de passer par `options.extendRoutes`) est le cas
+le plus courant où ça arrive — voir
+[`docs/guides/custom-routes-wiring.md`](../../docs/guides/custom-routes-wiring.md).
+
 ## Sessions cookie HttpOnly + CSRF
 
 ```js

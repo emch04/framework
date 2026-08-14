@@ -19,6 +19,11 @@ Chaque package Astratra est versionné indépendamment.
   regardés qu'en dernier recours). Nouveau : `docs/guides/custom-routes-wiring.md`,
   qui documente le pattern `extendRoutes` recommandé et pourquoi un
   routeur monté en parallèle doit reconstruire cookies + CSRF à la main.
+- `@astratra/saas-kit` (`1.4.0`→`1.4.1`) — aucun changement de code, mais
+  `createSaasApp()` utilise `createAuthMiddleware` en interne : le
+  comportement décrit ci-dessus (erreur explicite au lieu d'un 401 masqué)
+  s'applique donc aussi à toute app construite sur le kit. Plancher
+  `@astratra/security` relevé à `^1.5.0` en conséquence.
 - `@astratra/security` (`1.3.0`→`1.4.0`) :
   - `hashPassword(password)` / `verifyPasswordHash(password, hash)` —
     scrypt (natif à Node, aucune dépendance bcrypt/argon2 ajoutée), sel

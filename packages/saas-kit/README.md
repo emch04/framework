@@ -53,12 +53,15 @@ app.listen(3000);
 - `GET /dashboard/summary`
 
 Toutes les routes protégées suivent le même ordre de middlewares de
-sécurité que la mini-app de démo : request id, parseur de cookies, CSP
-(`default-src 'none'` par défaut, adapté à une API JSON — surchargeable via
-`options.csp`), parseur JSON, WAF heuristique, limiteur API, limiteur de
-login pour `/auth`, auth JWT (cookie ou `Authorization: Bearer`) pour les
-modules protégés, CSRF pour les routes mutantes, puis 404 et gestion
-d'erreurs.
+sécurité que la mini-app de démo : request id, journal d'événements de
+sécurité (`options.securityAudit`, actif par défaut), parseur de cookies,
+amorçage CSRF, CSP (`default-src 'none'` par défaut, adapté à une API JSON
+— surchargeable via `options.csp`), en-têtes de sécurité standard
+(`options.securityHeaders` — X-Frame-Options, X-Content-Type-Options,
+Referrer-Policy, Permissions-Policy, HSTS en production), parseur JSON, WAF
+heuristique, limiteur API, limiteur de login pour `/auth`, auth JWT (cookie
+ou `Authorization: Bearer`) pour les modules protégés, CSRF pour les routes
+mutantes, puis 404 et gestion d'erreurs.
 
 `jwtAlgorithms` vaut `['HS256']` par defaut. `jwtIssuer` et `jwtAudience` sont
 optionnels, mais recommandes des qu'une app sort du simple developpement local.

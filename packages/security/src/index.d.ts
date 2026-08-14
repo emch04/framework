@@ -41,6 +41,67 @@ export interface CorsMiddlewareOptions {
  */
 export function createCorsMiddleware(options?: CorsMiddlewareOptions): RequestHandler;
 
+export interface SecurityHeadersOptions {
+  /** X-Frame-Options value, or false to omit. Defaults to "DENY". */
+  frameOptions?: string | false;
+  /** Sets X-Content-Type-Options: nosniff. Defaults to true. */
+  contentTypeOptions?: boolean;
+  /** Referrer-Policy value, or false to omit. Defaults to "strict-origin-when-cross-origin". */
+  referrerPolicy?: string | false;
+  /** Permissions-Policy value, or false to omit. Defaults to a minimal deny-list (geolocation, camera, microphone, payment). */
+  permissionsPolicy?: string | false;
+  /** Strict-Transport-Security: true/false, or { maxAge, includeSubDomains } to customize. Defaults to true only when NODE_ENV=production (HSTS on plain HTTP dev breaks things). */
+  hsts?: boolean | { maxAge?: number; includeSubDomains?: boolean };
+}
+
+/**
+ * The standard header-hardening set beyond CSP: clickjacking (X-Frame-Options),
+ * MIME sniffing (X-Content-Type-Options), referrer leakage (Referrer-Policy),
+ * browser feature access (Permissions-Policy), and HTTP downgrade (HSTS).
+ * Every option has a safe universal default, so createSaasApp mounts this
+ * unconditionally.
+ */
+export function createSecurityHeadersMiddleware(options?: SecurityHeadersOptions): RequestHandler;
+
+export interface SecurityEvent {
+  status: number;
+  method: string;
+  path: string;
+  ip: string | undefined;
+  requestId: string | undefined;
+  timestamp: string;
+}
+
+export interface SecurityAuditLoggerOptions {
+  /** Response status codes that trigger a log line. Defaults to [401, 403, 429]. */
+  statusCodes?: number[];
+  /** Custom sink, e.g. (message, event) => yourLogger.warn(message, event). Defaults to @astratra/core's createLogger('astratra-security-audit').warn. */
+  log?: (message: string, event: SecurityEvent) => void;
+}
+
+/**
+ * Logs a structured event for any request whose response lands on one of
+ * statusCodes (401/403/429 by default) — auth failures, CSRF/WAF blocks,
+ * and rate limiting all end up here without each layer needing its own
+ * logging call, since this observes the response rather than the
+ * middleware that produced it.
+ */
+export function createSecurityAuditLogger(options?: SecurityAuditLoggerOptions): RequestHandler;
+
+export interface PasswordHashOptions {
+  /** scrypt cost factor (N), must be a power of 2. Defaults to 16384. */
+  cost?: number;
+  /** scrypt block size (r). Defaults to 8. */
+  blockSize?: number;
+  /** scrypt parallelization (p). Defaults to 1. */
+  parallelization?: number;
+}
+
+/** Hashes a password with scrypt (Node built-in, no bcrypt/argon2 dependency). The salt and cost factor travel with the returned string. */
+export function hashPassword(password: string, options?: PasswordHashOptions): Promise<string>;
+/** Verifies a password against a hash from hashPassword(). Constant-time; returns false (never throws) for a wrong password or a malformed/foreign hash. */
+export function verifyPasswordHash(password: string, hash: string): Promise<boolean>;
+
 export interface FieldCipherOptions {
   /** A 32-byte AES-256 key, as a Buffer or a base64/hex-encoded string. */
   key: Buffer | string;

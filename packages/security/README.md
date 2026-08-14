@@ -52,6 +52,36 @@ défaut hors `NODE_ENV=production`, désactivable via `allowDevOrigins: false`.
 `credentials: false` retire `Access-Control-Allow-Credentials` si tu n'as
 pas besoin des cookies cross-origin.
 
+## Hachage de mot de passe
+
+`verifyPassword` reste un callback fourni par l'app consommatrice —
+Astratra ne décide toujours pas comment tu authentifies un utilisateur.
+Mais avant, aucune primitive n'existait pour le hachage lui-même : rien
+n'empêchait un `===` en clair ou un MD5 sans sel. `hashPassword`/
+`verifyPasswordHash` utilisent scrypt (natif à Node, aucune dépendance
+bcrypt/argon2 à ajouter), avec sel aléatoire et comparaison à temps
+constant :
+
+```js
+const { hashPassword, verifyPasswordHash } = require('@astratra/security');
+
+// à l'inscription
+const passwordHash = await hashPassword(rawPassword);
+await usersStore.create({ email, passwordHash });
+
+// dans verifyPassword passé à createSaasApp
+const app = createSaasApp({
+  // ...
+  verifyPassword: async (user, password) => verifyPasswordHash(password, user.passwordHash)
+});
+```
+
+Le sel et le facteur de coût scrypt voyagent avec la chaîne retournée — pas
+besoin de colonnes séparées. `verifyPasswordHash` ne lève jamais d'exception
+sur une entrée invalide (mot de passe erroné, hash étranger ou corrompu) :
+elle retourne toujours `false`, donc un appelant peut traiter le résultat
+comme un booléen sans `try/catch`.
+
 ## Auth JWT + RBAC
 
 ```js
@@ -234,6 +264,52 @@ http-equiv="Content-Security-Policy">` injectée au build, jamais en dev — une
 CSP statique en dev casse le websocket HMR de Vite). Voir
 `examples/dashboard-ui/vite.config.js` pour un exemple qui n'injecte la
 balise que sur `vite build`.
+
+## En-têtes de sécurité (au-delà de CSP)
+
+```js
+const { createSecurityHeadersMiddleware } = require('@astratra/security');
+app.use(createSecurityHeadersMiddleware());
+```
+
+Complète CSP avec le reste du set standard, chacun avec une valeur par
+défaut sûre pour n'importe quel projet — contrairement à CORS, rien ici ne
+demande une décision spécifique au projet, donc `@astratra/saas-kit` le
+monte sans condition, comme CSP :
+
+- `X-Frame-Options: DENY` — anti clickjacking
+- `X-Content-Type-Options: nosniff` — anti détection de type MIME
+- `Referrer-Policy: strict-origin-when-cross-origin` — limite la fuite d'URL vers des origines tierces
+- `Permissions-Policy` — refuse géoloc/caméra/micro/paiement par défaut
+- `Strict-Transport-Security` (HSTS) — actif automatiquement seulement si
+  `NODE_ENV=production` (le forcer en dev casse le HTTP local)
+
+Chaque en-tête est désactivable/personnalisable individuellement
+(`frameOptions: false`, `hsts: { maxAge, includeSubDomains }`, etc.).
+
+## Journal d'événements de sécurité
+
+```js
+const { createSecurityAuditLogger } = require('@astratra/security');
+app.use(createSecurityAuditLogger());
+```
+
+Avant, aucune des autres couches (rejet CSRF, blocage WAF, rate limit, échec
+JWT) ne journalisait quoi que ce soit — une tentative d'attaque restait
+invisible tant qu'elle n'avait pas réussi. Plutôt que d'accrocher un log à
+chaque middleware séparément, celui-ci observe la réponse : toute requête
+qui se termine en `401`/`403`/`429` (configurable via `statusCodes`) produit
+une ligne structurée, peu importe quelle couche l'a produite.
+
+```js
+app.use(createSecurityAuditLogger({
+  log: (message, event) => myLogger.warn(message, event), // par défaut : @astratra/core createLogger
+  statusCodes: [401, 403, 429]
+}));
+```
+
+`@astratra/saas-kit` le monte par défaut ; `options.securityAudit: false`
+le désactive.
 
 ## WebAuthn / passkeys
 

@@ -15,6 +15,8 @@ const {
   createCsrfMiddleware,
   createLoginLimiter,
   createMemoryRevocationStore,
+  createSecurityAuditLogger,
+  createSecurityHeadersMiddleware,
   createWafMiddleware,
   DEFAULT_SESSION_COOKIE_NAME
 } = require('@astratra/security');
@@ -87,6 +89,16 @@ function createSaasApp(options = {}) {
   }
 
   app.use(requestIdMiddleware);
+  // Every request that ends in 401/403/429 (failed auth, CSRF/WAF block,
+  // rate limit) gets a structured log line — none of those layers logged
+  // anything anywhere before this, so an attack attempt was invisible
+  // until it succeeded. Mounted early so req.id is already set; observes
+  // the response rather than hooking each layer individually, so where
+  // exactly it sits in the stack otherwise doesn't matter. Pass
+  // options.securityAudit: false to disable.
+  if (normalized.securityAudit !== false) {
+    app.use(createSecurityAuditLogger(normalized.securityAudit === true ? {} : normalized.securityAudit));
+  }
   app.use(cookieParserMiddleware());
   // Seeds the CSRF cookie on every safe request (GET/HEAD/OPTIONS), globally,
   // before any route — including custom routes mounted via extendRoutes.
@@ -95,6 +107,9 @@ function createSaasApp(options = {}) {
   // validated, so the client's first mutating request always fails.
   app.use(createCsrfCookiePrimer(normalized.csrf));
   app.use(createCspMiddleware(normalized.csp));
+  // Every option here has a safe universal default (unlike CORS, nothing
+  // needs a project-specific decision), so this is unconditional like CSP.
+  app.use(createSecurityHeadersMiddleware(normalized.securityHeaders));
   app.use(express.json());
   app.use(createWafMiddleware(normalized.waf));
   app.use(createApiLimiter(normalized.apiRateLimit));

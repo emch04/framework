@@ -3,6 +3,54 @@
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Chaque package Astratra est versionné indépendamment.
 
+## 2026-08-14
+
+Constats remontés en construisant une vraie application (Hireloop, un ATS)
+100% sur les packages publiés, avec des appels HTTP réels plutôt qu'une
+relecture de code — voir le rapport correspondant.
+
+### Corrige
+
+- `@astratra/saas-kit` (`1.1.1`→`1.2.0`) — **les routes ajoutées après
+  `createSaasApp()` étaient silencieusement inatteignables.**
+  `createSaasApp()` termine sa propre pile de middlewares par un
+  `notFoundMiddleware`/`errorMiddleware` avant de retourner l'app ; toute
+  route enregistrée ensuite par l'appelant (`app.get(...)` sur l'objet
+  retourné) tombait donc systématiquement sur ce 404 interne. Ajoute
+  `options.extendRoutes(app, { authMiddleware, csrfMiddleware,
+  authorizeAdmin, authorizeRoles })`, exécuté avant le 404 — c'est
+  désormais la façon documentée d'ajouter ses propres routes. L'app
+  retournée expose aussi directement `app.authMiddleware`,
+  `app.csrfMiddleware` et `app.authorizeAdmin` pour éviter d'en reconstruire
+  des doublons divergents.
+- `@astratra/saas-kit` / `@astratra/security` (`1.1.1`→`1.2.0`) — **le
+  cookie CSRF n'était jamais amorcé par `GET /auth/me`**, le point d'entrée
+  naturel d'une session (utilisé par `getSession` de `@astratra/react`).
+  Seuls `/auth/logout` et `/auth/logout-all` montaient `csrfMiddleware`
+  parmi les routes `/auth`. Une route métier qui ne monte
+  `csrfMiddleware` que sur ses handlers mutants (le réflexe naturel)
+  finissait par émettre le cookie CSRF dans la même réponse que la requête
+  censée le valider — un 403 `Invalid CSRF token` permanent, puisque le
+  client n'avait jamais pu lire le cookie à temps. `@astratra/security`
+  ajoute `createCsrfCookiePrimer()` : amorce le cookie sur toute requête
+  sûre (GET/HEAD/OPTIONS) sans jamais valider de token. `createSaasApp()`
+  le monte désormais globalement, avant toutes les routes — y compris
+  celles ajoutées via `extendRoutes`. `createCsrfMiddleware()` et le primer
+  vérifient aussi les cookies déjà mis en file sur la même réponse avant
+  d'en émettre un nouveau, pour rester idempotents quand les deux
+  s'exécutent sur une même requête.
+- `create-astratra-app` (`1.0.2`→`1.1.0`) — le template généré n'illustrait
+  nulle part comment ajouter une route métier, alors que c'est le tout
+  premier geste de quiconque démarre un projet avec le starter.
+  `api/server.js` montre maintenant `extendRoutes` avec un exemple concret
+  (`GET /api/status`, branché sur l'outil `health_check` d'`api/ai/tools.js`
+  — jusque-là scaffoldé mais jamais câblé). `@astratra/store-mongo` et
+  `mongoose` passent de `dependencies` à `optionalDependencies` dans le
+  `package.json` généré : ils sont scaffoldés (`api/stores/mongo.js`,
+  `api/db/mongo.js`) mais pas utilisés par défaut (le projet démarre sur le
+  store mémoire), donc plus besoin d'installer un driver Mongo avant d'avoir
+  choisi de s'en servir.
+
 ## 2026-08-09
 
 ### Modifie

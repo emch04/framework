@@ -89,11 +89,13 @@ monter toi-même après coup plutôt que via `extendRoutes`.
 
 ## CORS
 
-`@astratra/saas-kit` n'a pas de politique CORS par défaut — les origines
-autorisées sont spécifiques à chaque projet — mais `options.cors` évite le
-piège classique (CORS ajouté après coup ne s'applique jamais aux routes déjà
-montées en interne) en montant `createCorsMiddleware`
-(`@astratra/security`) tout en premier, avant absolument tout le reste :
+`options.cors` active le CORS pour toute l'app en un seul champ de
+configuration — origines autorisées, credentials, headers/méthodes — sans
+middleware à écrire ni à monter toi-même. Astratra ne fixe pas de liste
+d'origines par défaut (chaque projet a la sienne), mais gère le montage :
+`createCorsMiddleware` (`@astratra/security`) est posé tout en premier,
+avant absolument tout le reste, garantissant que les en-têtes CORS
+s'appliquent à chaque route — y compris la réponse de preflight `OPTIONS` :
 
 ```js
 const app = createSaasApp({

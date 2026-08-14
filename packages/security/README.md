@@ -23,10 +23,7 @@ app.use(createCorsMiddleware({
 ```
 
 Astratra n'impose aucune politique CORS fixe — les origines autorisées sont
-spécifiques à chaque projet — mais laisse cette primitive disponible plutôt
-que de forcer chaque consommateur à la réécrire (c'était le cas jusqu'ici :
-`create-astratra-app` réimplémentait sa propre version maison de cette
-logique dans le projet généré). `@astratra/saas-kit` l'expose via
+spécifiques à chaque projet. `@astratra/saas-kit` expose cette primitive via
 `options.cors`, montée automatiquement au bon endroit — voir son README.
 
 Origines `http://127.0.0.1`/`http://localhost` (tout port) autorisées par

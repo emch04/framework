@@ -11,15 +11,23 @@ une valeur par défaut neutre, surchargeable via `astratra.config.json` (ou
 ## Commandes
 
 ```bash
-astratra audit:secrets [--dir=<path>]   # détecte les secrets littéraux loggés ou renvoyés dans des réponses API
-astratra audit:routes  [--dir=<path>]   # détecte les routes Express *.routes.js sans middleware d'auth apparent
-astratra audit:i18n    [--dir=<path>]   # détecte les incohérences de clés de traduction entre langues
-astratra test                           # lance le script 'test' de chaque workspace et agrège le résultat
-astratra deploy [--mode=<name>]         # exécute les étapes de déploiement définies dans votre propre config — aucune logique de déploiement intégrée
+astratra audit:secrets [--dir=<path>]        # détecte les secrets littéraux loggés ou renvoyés dans des réponses API
+astratra audit:routes  [--dir=<path>]        # détecte les routes Express *.routes.js sans middleware d'auth apparent
+astratra audit:i18n    [--dir=<path>]        # détecte les incohérences de clés de traduction entre langues
+astratra audit:deps    [--severity=<level>]  # relaie "npm audit" et échoue si une dépendance a une CVE >= seuil
+astratra test                                # lance le script 'test' de chaque workspace et agrège le résultat
+astratra deploy [--mode=<name>]              # exécute les étapes de déploiement définies dans votre propre config — aucune logique de déploiement intégrée
 ```
 
 Chaque commande retourne un exit code non-zéro en cas de findings/échecs —
 utilisable directement en CI.
+
+`audit:deps` ne réimplémente rien : il lance `npm audit --json` dans le
+projet consommateur et filtre le rapport par sévérité (`info` < `low` <
+`moderate` < `high` < `critical`, seuil par défaut `moderate`, l'échelle de
+npm elle-même). Ce que ça ajoute par rapport à un simple `npm audit` : un
+exit code homogène avec les autres commandes `audit:*` pour la CI, et un
+seuil configurable au lieu du tout-ou-rien de npm.
 
 ## Configuration (`astratra.config.json`)
 
@@ -32,7 +40,8 @@ utilisable directement en CI.
       "authMiddlewarePatterns": ["authMiddleware", "authorizeRoles"],
       "publicMarkers": ["public", "webhook", "health"]
     },
-    "i18n": { "localesDir": "locales", "sourceDirs": ["src"] }
+    "i18n": { "localesDir": "locales", "sourceDirs": ["src"] },
+    "deps": { "severityThreshold": "moderate" }
   },
   "test": { "workspaces": null },
   "deploy": {

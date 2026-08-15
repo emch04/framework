@@ -16,6 +16,12 @@ export interface CreateApiFetchOptions {
   baseUrl?: string;
   onUnauthorized?: () => void;
   fetchImpl?: typeof fetch;
+  /** Attach the CSRF header on mutating requests. Default: true. */
+  csrf?: boolean;
+  /** Cookie read for the token. Default: 'astratra_csrf' (matches @astratra/security). */
+  csrfCookieName?: string;
+  /** Header the token is sent on. Default: 'x-csrf-token' (matches @astratra/security). */
+  csrfHeaderName?: string;
 }
 
 export type ApiFetch = (path: string, options?: ApiFetchOptions) => Promise<unknown>;

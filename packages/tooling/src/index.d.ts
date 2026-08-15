@@ -11,6 +11,9 @@ export interface AstratraConfig {
       sourceDirs: string[];
       referenceLocale: string | null;
     };
+    deps: {
+      severityThreshold: DepsSeverity;
+    };
   };
   test: {
     workspaces: null | Array<string | { path: string; name?: string }>;
@@ -95,6 +98,34 @@ export function flattenKeys(value: Record<string, unknown>, prefix?: string): st
 export function readCatalogs(localesDir: string): TranslationCatalogs;
 export function auditI18n(rootDir: string, config: AstratraConfig, options?: CommandOptions): AuditI18nResult;
 export function runAuditI18n(rootDir: string, config: AstratraConfig, options?: CommandOptions): AuditI18nResult;
+
+export type DepsSeverity = 'info' | 'low' | 'moderate' | 'high' | 'critical';
+
+export interface DepsFinding {
+  name: string;
+  severity: DepsSeverity;
+  range: string;
+  fixAvailable: boolean | string;
+  isDirect: boolean;
+}
+
+export interface AuditDepsResult extends CommandResult {
+  parsed: boolean;
+  threshold?: DepsSeverity;
+  totalVulnerabilities?: Record<string, number> | null;
+  findings: DepsFinding[];
+  error?: string;
+}
+
+export interface AuditDepsOptions extends CommandOptions {
+  severity?: DepsSeverity;
+}
+
+export function severityRank(severity: string): number;
+export function parseNpmAuditJson(rawOutput: string): Record<string, unknown> | null;
+export function extractFindings(report: Record<string, unknown>, thresholdRank: number): DepsFinding[];
+export function auditDeps(rootDir: string, config: AstratraConfig, options?: AuditDepsOptions): Promise<AuditDepsResult>;
+export function runAuditDeps(rootDir: string, config: AstratraConfig, options?: AuditDepsOptions): Promise<AuditDepsResult>;
 
 export interface WorkspaceEntry {
   name: string;

@@ -4,6 +4,7 @@ const { loadConfig } = require('./config');
 const { runAuditSecrets } = require('./commands/auditSecrets');
 const { runAuditRoutes } = require('./commands/auditRoutes');
 const { runAuditI18n } = require('./commands/auditI18n');
+const { runAuditDeps } = require('./commands/auditDeps');
 const { runTests } = require('./commands/test');
 const { runDeploy } = require('./commands/deploy');
 
@@ -11,6 +12,7 @@ const COMMANDS = {
   'audit:secrets': runAuditSecrets,
   'audit:routes': runAuditRoutes,
   'audit:i18n': runAuditI18n,
+  'audit:deps': runAuditDeps,
   test: runTests,
   deploy: runDeploy
 };

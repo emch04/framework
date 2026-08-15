@@ -7,6 +7,21 @@ Chaque package Astratra est versionné indépendamment.
 
 ### Ajoute
 
+- `@astratra/react` (`0.1.1`→`0.2.0`) — `createApiFetch` attache maintenant
+  lui-même le jeton CSRF (cookie `astratra_csrf` → header `x-csrf-token`,
+  mêmes noms que `@astratra/security` par défaut) sur toute requête mutante.
+  Avant, chaque projet consommateur devait réécrire le même enrobage à la
+  main — trouvé en construisant un projet réel qui l'avait fait deux fois
+  indépendamment. N'écrase jamais un header explicite ; désactivable via
+  `csrf: false` ; noms de cookie/header personnalisables.
+- `@astratra/tooling` (`1.0.1`→`1.1.0`) — nouvelle commande
+  `astratra audit:deps [--severity=<level>]` : relaie `npm audit --json` et
+  échoue (exit code non-zéro, exploitable en CI) si une dépendance a une CVE
+  au-dessus du seuil configuré (`moderate` par défaut). Ne réimplémente pas
+  la détection — seulement le filtrage par sévérité et un format cohérent
+  avec les autres commandes `audit:*`. Trouvé en manquant deux CVE modérées
+  sur `react-router-dom` dans un projet consommateur avant de penser à lancer
+  `npm audit` à la main.
 - `@astratra/security` (`1.4.0`→`1.5.0`) — `createAuthMiddleware` détecte
   maintenant le cas où `req.cookies` est `undefined` **et** qu'aucun jeton
   n'a été trouvé par ailleurs (header `Authorization` compris) : au lieu

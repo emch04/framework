@@ -52,6 +52,21 @@ configurer CORS, `HttpOnly`, `Secure`, `SameSite` et une protection CSRF adaptee
 a son environnement. Astratra ne remplace pas cette configuration —
 `@astratra/security` fournit ces primitives cote backend (voir son README).
 
+**CSRF** : depuis `0.2.0`, `createApiFetch` lit lui-meme le cookie
+`astratra_csrf` et l'attache en header `x-csrf-token` sur toute requete
+mutante (tout sauf `GET`/`HEAD`/`OPTIONS`) — les noms par defaut
+correspondent exactement a ceux de `@astratra/security`, aucune config
+requise pour la paire habituelle backend/frontend Astratra. N'ecrase jamais
+un header `x-csrf-token` deja fourni explicitement. Options :
+
+```jsx
+createApiFetch({
+  csrf: false,                     // desactive completement l'auto-attachement
+  csrfCookieName: 'mon_cookie',    // si le backend ne suit pas les noms par defaut
+  csrfHeaderName: 'x-mon-header'
+});
+```
+
 ## Par rapport a `@astratra/saas-kit-ui`
 
 `@astratra/saas-kit-ui` expose aussi des primitives de session

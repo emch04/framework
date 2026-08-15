@@ -28,6 +28,10 @@ const DEFAULT_CONFIG = {
       localesDir: 'locales',
       sourceDirs: ['src'],
       referenceLocale: null
+    },
+    deps: {
+      // npm's own severity scale: info < low < moderate < high < critical.
+      severityThreshold: 'moderate'
     }
   },
   test: {

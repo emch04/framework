@@ -85,7 +85,40 @@ async function verifyPasswordHash(password, hash) {
   return crypto.timingSafeEqual(derivedKey, expectedKey);
 }
 
+const DEFAULT_MIN_LENGTH = 8;
+const REGEX_UPPERCASE = /[A-Z]/;
+const REGEX_LOWERCASE = /[a-z]/;
+const REGEX_DIGIT = /\d/;
+const REGEX_SPECIAL = /[^A-Za-z0-9]/;
+
+/**
+ * Astratra hashed passwords (above) but never judged whether one was worth
+ * hashing in the first place — every consumer app was free to accept
+ * "aaaaaaaa" or "12345678" as a new password. Found by a real consumer app
+ * that had to hand-roll this check itself, with no way to share it with its
+ * other Astratra-based projects.
+ *
+ * All four categories are required by default (length, uppercase, lowercase,
+ * digit, special character) — each individually toggleable for a consumer
+ * with different requirements.
+ *
+ * const ok = isStrongPassword(candidate);
+ * const relaxed = isStrongPassword(candidate, { requireSpecial: false, minLength: 10 });
+ */
+function isStrongPassword(password, options = {}) {
+  if (typeof password !== 'string') return false;
+  const minLength = options.minLength || DEFAULT_MIN_LENGTH;
+  if (password.length < minLength) return false;
+  if (options.requireUppercase !== false && !REGEX_UPPERCASE.test(password)) return false;
+  if (options.requireLowercase !== false && !REGEX_LOWERCASE.test(password)) return false;
+  if (options.requireDigit !== false && !REGEX_DIGIT.test(password)) return false;
+  if (options.requireSpecial !== false && !REGEX_SPECIAL.test(password)) return false;
+  return true;
+}
+
 module.exports = {
   hashPassword,
-  verifyPasswordHash
+  verifyPasswordHash,
+  isStrongPassword,
+  DEFAULT_PASSWORD_MIN_LENGTH: DEFAULT_MIN_LENGTH
 };

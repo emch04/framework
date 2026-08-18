@@ -3,6 +3,7 @@ module.exports = {
   ...require('./encryption'),
   ...require('./jwtAuth'),
   ...require('./passwordHashing'),
+  ...require('./mongoSanitize'),
   ...require('./rateLimiters'),
   ...require('./securityHeaders'),
   ...require('./auditLogger'),

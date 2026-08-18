@@ -102,6 +102,39 @@ export function hashPassword(password: string, options?: PasswordHashOptions): P
 /** Verifies a password against a hash from hashPassword(). Constant-time; returns false (never throws) for a wrong password or a malformed/foreign hash. */
 export function verifyPasswordHash(password: string, hash: string): Promise<boolean>;
 
+export interface PasswordStrengthOptions {
+  /** Minimum length. Defaults to 8. */
+  minLength?: number;
+  /** Require at least one A-Z character. Defaults to true. */
+  requireUppercase?: boolean;
+  /** Require at least one a-z character. Defaults to true. */
+  requireLowercase?: boolean;
+  /** Require at least one 0-9 character. Defaults to true. */
+  requireDigit?: boolean;
+  /** Require at least one non-alphanumeric character. Defaults to true. */
+  requireSpecial?: boolean;
+}
+
+/** Checks password strength (length + character categories) — a policy Astratra never enforced before, left entirely to each consumer app. */
+export function isStrongPassword(password: string, options?: PasswordStrengthOptions): boolean;
+export const DEFAULT_PASSWORD_MIN_LENGTH: number;
+
+export interface MongoSanitizeOptions {
+  /** Which request properties to clean. Defaults to ['body', 'query', 'params']. */
+  targets?: Array<'body' | 'query' | 'params'>;
+  /** If set, a stripped key is kept under this renamed key instead of being dropped silently — useful for logging what was blocked. */
+  replaceWith?: string;
+}
+
+/**
+ * Strips `$`-prefixed and dotted keys (Mongo operator injection, e.g.
+ * `?date[$gt]=` via Express's bracket-notation query parsing) from
+ * req.body/req.query/req.params before a route can pass them into a
+ * database filter. Mutates in place — never reassigns req.query, which is
+ * getter-only on some Express/router setups.
+ */
+export function createMongoSanitizeMiddleware(options?: MongoSanitizeOptions): RequestHandler;
+
 export interface FieldCipherOptions {
   /** A 32-byte AES-256 key, as a Buffer or a base64/hex-encoded string. */
   key: Buffer | string;

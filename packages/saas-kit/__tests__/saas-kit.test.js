@@ -729,3 +729,76 @@ test('options.securityAudit: false disables audit logging entirely', async () =>
 
   assert.equal(events.length, 0);
 });
+
+test('trustProxy unset (default): req.ip ignores X-Forwarded-For, stays the socket address', async () => {
+  const { app } = createTestApp({
+    extendRoutes: (extendedApp) => {
+      extendedApp.get('/api/whoami', (req, res) => res.status(200).json({ success: true, data: req.ip }));
+    }
+  });
+
+  const response = await request(app, 'GET', '/api/whoami', {
+    headers: { 'x-forwarded-for': '203.0.113.7' }
+  });
+
+  assert.equal(response.body.data, '127.0.0.1');
+});
+
+test('trustProxy: 1 makes req.ip trust one proxy hop (X-Forwarded-For)', async () => {
+  // Regression test: a real consumer app deployed behind nginx without this
+  // had every visitor share nginx's own loopback IP in the rate limiter's
+  // eyes — one bucket for the whole site instead of one per real client.
+  const { app } = createTestApp({
+    trustProxy: 1,
+    extendRoutes: (extendedApp) => {
+      extendedApp.get('/api/whoami', (req, res) => res.status(200).json({ success: true, data: req.ip }));
+    }
+  });
+
+  const response = await request(app, 'GET', '/api/whoami', {
+    headers: { 'x-forwarded-for': '203.0.113.7' }
+  });
+
+  assert.equal(response.body.data, '203.0.113.7');
+});
+
+test('mongoSanitize is on by default: strips a $ operator from req.body reaching a custom route', async () => {
+  const { app } = createTestApp({
+    extendRoutes: (extendedApp) => {
+      extendedApp.post('/api/echo', (req, res) => res.status(200).json({ success: true, data: req.body }));
+    }
+  });
+
+  const response = await request(app, 'POST', '/api/echo', {
+    body: { date: { $gt: '' }, nom: 'Jo' }
+  });
+
+  assert.deepEqual(response.body.data, { date: {}, nom: 'Jo' });
+});
+
+test('mongoSanitize is on by default: strips a $ operator from req.query (bracket-notation injection)', async () => {
+  const { app } = createTestApp({
+    extendRoutes: (extendedApp) => {
+      extendedApp.get('/api/echo', (req, res) => res.status(200).json({ success: true, data: req.query }));
+    }
+  });
+
+  const response = await request(app, 'GET', '/api/echo?date[$gt]=x&nom=Jo');
+
+  assert.deepEqual(response.body.data, { date: {}, nom: 'Jo' });
+});
+
+test('options.mongoSanitize: false disables the sanitizer entirely', async () => {
+  const { app } = createTestApp({
+    mongoSanitize: false,
+    extendRoutes: (extendedApp) => {
+      extendedApp.post('/api/echo', (req, res) => res.status(200).json({ success: true, data: req.body }));
+    }
+  });
+
+  const response = await request(app, 'POST', '/api/echo', {
+    body: { date: { $gt: '' } }
+  });
+
+  assert.deepEqual(response.body.data, { date: { $gt: '' } });
+});

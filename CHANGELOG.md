@@ -3,6 +3,45 @@
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Chaque package Astratra est versionné indépendamment.
 
+## 2026-08-18
+
+### Ajoute
+
+- `@astratra/security` (`1.5.0`→`1.6.0`) — deux primitives qu'aucun projet
+  consommateur n'avait à l'origine :
+  - `isStrongPassword(password, options?)` — `hashPassword` existait déjà,
+    mais rien ne jugeait si un mot de passe valait la peine d'être haché ;
+    chaque projet devait écrire sa propre vérification, sans partage
+    possible entre projets Astratra. 8 caractères + majuscule + minuscule +
+    chiffre + caractère spécial par défaut, chaque catégorie
+    individuellement désactivable, pas de message imposé (chaque app garde
+    la main sur son propre texte/langue).
+  - `createMongoSanitizeMiddleware(options?)` — retire les clés `$...`
+    (opérateurs Mongo) et les clés à point (`"a.b"`) de
+    `req.body`/`req.query`/`req.params` avant qu'une route ne les transmette
+    à un filtre de base de données. Trouvé en construisant un projet
+    consommateur réel : une route passait `req.query.date` tel quel dans un
+    filtre Mongoose, et `?date[$gt]=` (notation crochet du parseur `qs`
+    d'Express) devenait un opérateur Mongo choisi par l'appelant au lieu
+    d'une simple chaîne — une injection NoSQL sur une route publique, non
+    authentifiée. Mute les objets en place (jamais de réassignation de
+    `req.query`, getter seul sur certaines configurations Express/routeur).
+- `@astratra/saas-kit` (`1.4.1`→`1.5.0`, dépendance `@astratra/security`
+  resserrée à `^1.6.0`) —
+  - `createMongoSanitizeMiddleware` (ci-dessus) est désormais monté par
+    défaut dans `createSaasApp()`, comme la CSP et les en-têtes de
+    sécurité — protège aussi les routes ajoutées via `extendRoutes`, pas
+    seulement les routes intégrées du kit. Désactivable via
+    `mongoSanitize: false`.
+  - Nouvelle option `trustProxy`, relayée à `app.set('trust proxy', ...)`.
+    Non définie par défaut (comportement Express inchangé). Trouvé sur le
+    même projet consommateur, déployé derrière nginx en production : sans
+    ça, Express ignore `X-Forwarded-For` et voit l'IP du proxy pour tous
+    les visiteurs — `apiRateLimit`/`loginRateLimit` traitaient alors tout
+    le trafic du site comme un seul client, invisible en dev (pas de proxy
+    là pour révéler le problème), découvert via le monitoring d'erreurs en
+    prod.
+
 ## 2026-08-15
 
 ### Ajoute

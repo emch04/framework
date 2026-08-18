@@ -1,4 +1,4 @@
-const { hashPassword, verifyPasswordHash } = require('../src');
+const { hashPassword, verifyPasswordHash, isStrongPassword } = require('../src');
 
 describe('password hashing', () => {
   test('hash then verify round-trips correctly', async () => {
@@ -45,5 +45,48 @@ describe('password hashing', () => {
 
   test('hashPassword rejects an empty password', async () => {
     await expect(hashPassword('')).rejects.toThrow(/non-empty/);
+  });
+});
+
+describe('isStrongPassword', () => {
+  test('accepts a password with all 4 categories and default min length', () => {
+    expect(isStrongPassword('Correct1!')).toBe(true);
+  });
+
+  test('rejects missing uppercase', () => {
+    expect(isStrongPassword('correct1!')).toBe(false);
+  });
+
+  test('rejects missing lowercase', () => {
+    expect(isStrongPassword('CORRECT1!')).toBe(false);
+  });
+
+  test('rejects missing digit', () => {
+    expect(isStrongPassword('Correctly!')).toBe(false);
+  });
+
+  test('rejects missing special character', () => {
+    expect(isStrongPassword('Correct123')).toBe(false);
+  });
+
+  test('rejects below the minimum length even with all categories', () => {
+    expect(isStrongPassword('C1!')).toBe(false);
+  });
+
+  test('rejects non-string input instead of throwing', () => {
+    expect(isStrongPassword(undefined)).toBe(false);
+    expect(isStrongPassword(null)).toBe(false);
+    expect(isStrongPassword(12345678)).toBe(false);
+  });
+
+  test('honors individually disabled categories', () => {
+    expect(isStrongPassword('correctlylongenough', {
+      requireUppercase: false, requireDigit: false, requireSpecial: false
+    })).toBe(true);
+  });
+
+  test('honors a custom minLength', () => {
+    expect(isStrongPassword('Ab1!Ab1!', { minLength: 12 })).toBe(false);
+    expect(isStrongPassword('Ab1!Ab1!Ab1!', { minLength: 12 })).toBe(true);
   });
 });

@@ -15,6 +15,7 @@ const {
   createCsrfMiddleware,
   createLoginLimiter,
   createMemoryRevocationStore,
+  createMongoSanitizeMiddleware,
   createSecurityAuditLogger,
   createSecurityHeadersMiddleware,
   createWafMiddleware,
@@ -78,6 +79,19 @@ function createSaasApp(options = {}) {
   const normalized = normalizeOptions(options);
   const app = express();
 
+  // Off by default — whether an app sits behind a reverse proxy (nginx,
+  // an ALB...) is a deployment detail Astratra can't guess, and trusting
+  // X-Forwarded-For blindly when there's no proxy in front lets a client
+  // spoof its own IP straight past the rate limiters below. Found on a real
+  // consumer app deployed behind nginx: without this, every visitor shared
+  // the same rate-limit bucket (nginx's own loopback IP), because Express
+  // never trusted the header carrying the real client IP.
+  // `1` = trust exactly one hop (nginx as the sole proxy); see Express's
+  // `trust proxy` docs for other topologies (multiple proxies, IP ranges).
+  if (normalized.trustProxy !== undefined) {
+    app.set('trust proxy', normalized.trustProxy);
+  }
+
   // Astratra imposes no fixed CORS policy — which origins to allow is
   // project-specific — but leaves the primitive available so consumers
   // don't reinvent it. Mounted FIRST, ahead of everything else: CORS
@@ -111,6 +125,12 @@ function createSaasApp(options = {}) {
   // needs a project-specific decision), so this is unconditional like CSP.
   app.use(createSecurityHeadersMiddleware(normalized.securityHeaders));
   app.use(express.json());
+  // Every option here has a safe universal default (no legitimate client
+  // ever sends a `$`-prefixed or dotted JSON key), so unconditional like
+  // CSP/securityHeaders — pass `mongoSanitize: false` to disable.
+  if (normalized.mongoSanitize !== false) {
+    app.use(createMongoSanitizeMiddleware(normalized.mongoSanitize === true ? {} : normalized.mongoSanitize));
+  }
   app.use(createWafMiddleware(normalized.waf));
   app.use(createApiLimiter(normalized.apiRateLimit));
 

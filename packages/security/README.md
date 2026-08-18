@@ -1,9 +1,10 @@
 # @astratra/security
 
 Primitives de sécurité applicative pour l'authentification, l'autorisation,
-le CORS, le chiffrement de champ, le rate limiting, une CSP configurable,
-un WAF heuristique et WebAuthn/passkeys — génériques et découplées de toute
-base de données, ORM ou liste de rôles fixe. Dépend de `@astratra/core`.
+le CORS, le chiffrement de champ, la force du mot de passe, l'anti-injection
+Mongo, le rate limiting, une CSP configurable, un WAF heuristique et
+WebAuthn/passkeys — génériques et découplées de toute base de données, ORM
+ou liste de rôles fixe. Dépend de `@astratra/core`.
 
 Partout où un vrai projet a besoin de persistance (révocation de session,
 stockage de credentials WebAuthn, alerte de brute-force), c'est un
@@ -81,6 +82,29 @@ besoin de colonnes séparées. `verifyPasswordHash` ne lève jamais d'exception
 sur une entrée invalide (mot de passe erroné, hash étranger ou corrompu) :
 elle retourne toujours `false`, donc un appelant peut traiter le résultat
 comme un booléen sans `try/catch`.
+
+### Force du mot de passe
+
+`hashPassword` ne jugeait jamais si un mot de passe valait la peine d'être
+haché — n'importe quel projet consommateur pouvait accepter `"aaaaaaaa"` ou
+`"12345678"` comme nouveau mot de passe. `isStrongPassword` comble ce trou,
+sans imposer de message d'erreur ni de langue (chaque app garde la main sur
+son propre texte) :
+
+```js
+const { isStrongPassword } = require('@astratra/security');
+
+if (!isStrongPassword(nouveauMotDePasse)) {
+  return res.status(400).json({ message: 'Mot de passe trop faible.' });
+}
+```
+
+8 caractères minimum + majuscule + minuscule + chiffre + caractère spécial,
+toutes exigences activées par défaut et individuellement désactivables :
+
+```js
+isStrongPassword(candidat, { minLength: 12, requireSpecial: false });
+```
 
 ## Auth JWT + RBAC
 
@@ -243,6 +267,30 @@ Cette couche détecte des patterns évidents SQLi/XSS/traversée de chemin/RCE
 dans `req.path`, `req.query` et `req.body`. Elle ne remplace pas la
 validation des entrées, les requêtes paramétrées, une CSP, la sanitation
 adaptée au contexte, ni un WAF/reverse proxy réseau.
+
+## Anti-injection Mongo (opérateurs `$`/`.`)
+
+```js
+const { createMongoSanitizeMiddleware } = require('@astratra/security');
+app.use(createMongoSanitizeMiddleware());
+```
+
+Retire de `req.body`/`req.query`/`req.params` toute clé qui commence par
+`$` ou contient un `.` — les opérateurs Mongo (`$gt`, `$ne`, `$where`...) et
+les chemins imbriqués. Trouvé sur un projet consommateur réel : une route
+passait `req.query.date` tel quel dans un filtre Mongoose ; comme le
+parseur `qs` d'Express transforme `?date[$gt]=` en objet imbriqué plutôt
+qu'en chaîne, ce paramètre non typé devenait un opérateur Mongo choisi par
+l'appelant. Aucune requête légitime n'envoie une clé JSON littéralement
+préfixée par `$` ou contenant un point — sans risque de faux positif sur un
+usage normal.
+
+Mute les objets en place plutôt que de réassigner `req.query` (getter
+seul sur certaines configurations Express/routeur — une réassignation y
+échouerait silencieusement ou lèverait selon la version).
+
+Monté par défaut, sans configuration, par `createSaasApp()` (voir
+`@astratra/saas-kit`) — pas besoin d'y penser route par route.
 
 ## CSP (Content Security Policy)
 

@@ -111,6 +111,24 @@ S'applique aussi bien aux routes intégrées (`/auth`, `/users`, ...) qu'à
 celles ajoutées via `extendRoutes`. Omets `options.cors` et rien ne change —
 comme avant, à toi de gérer CORS si tu en as besoin.
 
+**Derrière un reverse proxy (nginx, un load balancer...)**, passe aussi
+`trustProxy` — sinon Express ignore `X-Forwarded-For` et voit l'IP du proxy
+pour absolument tous les visiteurs, y compris dans les rate limiters
+ci-dessous (`apiRateLimit`, `loginRateLimit`) : un seul client "vu", donc un
+seul quota partagé par tout le monde. Trouvé sur un projet consommateur
+déployé derrière nginx, en production, via le monitoring d'erreurs — pas en
+dev, où il n'y a pas de proxy pour révéler le problème.
+
+```js
+createSaasApp({
+  // ...
+  trustProxy: 1 // fait confiance à exactement un saut de proxy (nginx)
+});
+```
+
+Non défini par défaut (comportement Express standard, inchangé) — dépend du
+déploiement, Astratra ne peut pas le deviner à ta place.
+
 Le cookie CSRF (`astratra_csrf`) est amorcé automatiquement sur toute
 requête sûre (GET/HEAD/OPTIONS) dès le démarrage de l'app — y compris tes
 propres routes `GET` ajoutées via `extendRoutes` — donc pas besoin de monter
@@ -158,6 +176,30 @@ d'appeler ton store — email au bon format, champs requis réellement présents
 `usersStore`/`settingsStore`/`notify`. Le kit ne valide que les champs qu'il
 connaît lui-même — le reste du payload (champs propres à ton store) passe
 tel quel, sans schéma imposé.
+
+Ça ne couvre que les routes intégrées ci-dessus. Pour tes propres routes
+(via `extendRoutes`), voir « Anti-injection Mongo » juste en dessous —
+appliqué automatiquement, lui, à toute la surface de l'app.
+
+## Anti-injection Mongo (par défaut, y compris `extendRoutes`)
+
+`createMongoSanitizeMiddleware` (`@astratra/security`) est monté
+automatiquement, sans configuration, sur `req.body`/`req.query`/
+`req.params` — retire toute clé `$...` (opérateur Mongo) ou contenant un
+`.` avant qu'elle n'atteigne une route, **y compris les tiennes** ajoutées
+via `extendRoutes`. Trouvé sur un projet consommateur réel : une route
+personnalisée passait `req.query.date` tel quel dans un filtre Mongoose, et
+`?date[$gt]=` (notation crochet du parseur `qs` d'Express) devenait un
+opérateur Mongo choisi par l'appelant plutôt qu'une simple chaîne — la
+« Validation des entrées » ci-dessus ne protège que les routes intégrées,
+pas le code que tu ajoutes toi-même.
+
+```js
+createSaasApp({
+  // ...
+  mongoSanitize: false // désactive complètement, si besoin
+});
+```
 
 ## Adapters requis
 

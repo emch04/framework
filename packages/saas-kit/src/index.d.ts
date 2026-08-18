@@ -4,6 +4,7 @@ import type {
   CsrfMiddlewareOptions,
   CspOptions,
   LoginLimiterOptions,
+  MongoSanitizeOptions,
   RateLimitOptions,
   RequestHandler,
   RevocationStore,
@@ -112,8 +113,25 @@ export interface CreateSaasAppOptions {
    * default behavior).
    */
   cors?: CorsMiddlewareOptions | true;
+  /**
+   * Forwarded to Express's `app.set('trust proxy', value)`. Unset by
+   * default (Express trusts nothing beyond the direct socket) — set this
+   * explicitly when the app runs behind a reverse proxy (nginx, an ALB...),
+   * otherwise every client shares the same rate-limit bucket (the proxy's
+   * own IP) instead of one bucket per real visitor. `1` trusts exactly one
+   * hop; see Express's `trust proxy` docs for other topologies.
+   */
+  trustProxy?: boolean | number | string | string[];
   /** X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy, HSTS. Every option has a safe default; mounted unconditionally like csp. */
   securityHeaders?: SecurityHeadersOptions;
+  /**
+   * Strips `$`-prefixed/dotted keys from req.body/req.query/req.params
+   * before any route (built-in or via extendRoutes) can see them — closes
+   * Mongo operator injection by default. Every option has a safe universal
+   * default; mounted unconditionally like csp/securityHeaders. Pass `false`
+   * to disable.
+   */
+  mongoSanitize?: MongoSanitizeOptions | boolean;
   /**
    * Structured logging for any request ending in 401/403/429 (failed auth,
    * CSRF/WAF block, rate limit). Mounted by default — pass `false` to

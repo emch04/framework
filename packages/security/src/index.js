@@ -1,4 +1,5 @@
 module.exports = {
+  ...require('./codes'),
   ...require('./cors'),
   ...require('./encryption'),
   ...require('./jwtAuth'),

@@ -3,6 +3,21 @@
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Chaque package Astratra est versionné indépendamment.
 
+## 2026-08-20 (2)
+
+### Ajoute
+
+- `@astratra/security` (`1.7.0`→`1.8.0`) — `createRandomCode({ prefix?, tokenBytes? })` /
+  `generateUniqueCodes({ quantity, prefix?, isTaken?, maxAttempts? })` :
+  génération de codes à usage unique via `crypto.randomBytes` (code promo,
+  invitation, carte cadeau...). `generateUniqueCodes` vérifie l'unicité
+  contre le store fourni par l'appelant (`isTaken`) AVANT de renvoyer quoi
+  que ce soit, jamais après une tentative d'insertion — aucun risque de
+  double insertion partielle sur un nouvel essai. Extrait de Barber Clean
+  (`makeCode` + boucle de retry ajoutée sur demande explicite après examen
+  du risque de collision, cf. session du 2026-08-20). `@astratra/saas-kit`
+  n'a pas besoin de bump : sa dépendance `^1.7.0` couvre déjà `1.8.0`.
+
 ## 2026-08-20
 
 ### Ajoute

@@ -228,6 +228,43 @@ propre store (Redis, etc.) qui implémente la même interface
 (`revoke`, `isRevoked`, et optionnellement `revokeAllForUser`/
 `isRevokedForUser`).
 
+## Codes uniques
+
+```js
+const { createRandomCode, generateUniqueCodes } = require('@astratra/security');
+
+createRandomCode();                       // "A1B2C3D4E5"
+createRandomCode({ prefix: 'ete2026' });  // "ETE2026-A1B2C3D4E5"
+```
+
+Génère un token à usage unique via `crypto.randomBytes` (jamais `Math.random`) —
+utile pour un code promo, une invitation, une carte cadeau... Le préfixe est
+assaini (lettres/chiffres uniquement, tronqué à 12 caractères) avant d'être
+collé au token, pour ne jamais casser le format si le préfixe vient d'une
+saisie admin.
+
+Pour générer plusieurs codes garantis uniques :
+
+```js
+const codes = await generateUniqueCodes({
+  quantity: 20,
+  prefix: 'PROMO',
+  // Optionnel : vérifie l'unicité contre TON store avant de renvoyer quoi
+  // que ce soit — jamais après une tentative d'insertion, donc aucun risque
+  // de double insertion partielle si un nouvel essai est nécessaire.
+  isTaken: async (candidates) => {
+    const existing = await MyCodeModel.find({ code: { $in: candidates } }).select('code');
+    return new Set(existing.map((doc) => doc.code));
+  }
+});
+```
+
+Une collision entre deux codes générés par `crypto.randomBytes(5)` (défaut,
+~1 billion de combinaisons) est déjà astronomiquement improbable ; `isTaken`
+ne fait que fermer ce cas rarissime proprement (régénère seulement les codes
+rejetés, jusqu'à `maxAttempts`, défaut 5) plutôt que de laisser une erreur de
+contrainte unique remonter au milieu d'une insertion.
+
 ## Rate limiting
 
 ```js

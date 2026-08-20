@@ -249,6 +249,36 @@ seule fois par processus) signale ce cas. Fournir son propre `keyGenerator`
 contourne complètement ce point.
 ```
 
+### Store Redis namespacé
+
+Par défaut, `redisUrl` seul suffit à activer un store Redis partagé entre
+tous les limiteurs. Pour isoler les compteurs par domaine (connexion,
+réservation, avis...) sur la même instance Redis, construis le store avec
+un préfixe et passe-le via `options.store` :
+
+```js
+const { createApiLimiter, createLoginLimiter, createRedisRateLimitStore } = require('@astratra/security');
+
+const loginStore = createRedisRateLimitStore({
+  redisUrl: process.env.REDIS_URL,
+  prefix: 'mon-app:rate:connexion:'
+});
+app.use('/auth', createLoginLimiter({ store: loginStore }));
+
+const bookingStore = createRedisRateLimitStore({
+  redisUrl: process.env.REDIS_URL,
+  prefix: 'mon-app:rate:reservation:'
+});
+app.use('/bookings', createApiLimiter({ store: bookingStore }));
+```
+
+`prefix` est entièrement libre et défini par le projet consommateur — Astratra
+ne connaît aucun nom de domaine métier. Si Redis n'est pas joignable au
+démarrage ou perd la connexion, le store bascule automatiquement sur un
+store en mémoire process (mêmes garanties que le store par défaut sans
+`prefix`), donc aucune configuration additionnelle n'est nécessaire pour
+gérer l'indisponibilité de Redis.
+
 ## WAF
 
 ```js

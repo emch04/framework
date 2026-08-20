@@ -142,9 +142,13 @@ describe('rateLimiters', () => {
       jest.doMock('redis', () => ({ createClient: jest.fn(() => fakeClient) }), { virtual: true });
       jest.doMock('rate-limit-redis', () => ({ RedisStore }), { virtual: true });
 
-      const { createApiLimiter: createApiLimiterWithMocks } = require('../src');
+      const {
+        createApiLimiter: createApiLimiterWithMocks,
+        createRedisRateLimitStore: createRedisRateLimitStoreWithMocks
+      } = require('../src');
       return {
         createApiLimiter: createApiLimiterWithMocks,
+        createRedisRateLimitStore: createRedisRateLimitStoreWithMocks,
         fakeClient,
         memoryStoreIncrement,
         rateLimitMock,
@@ -174,6 +178,19 @@ describe('rateLimiters', () => {
       expect(fakeClient.connect).toHaveBeenCalled();
       expect(RedisStore).toHaveBeenCalled();
       expect(redisStoreIncrement).toHaveBeenCalledWith('api:key');
+    });
+
+    test('createRedisRateLimitStore transmet le préfixe défini par le projet', async () => {
+      const { createRedisRateLimitStore: createStore, RedisStore } = loadWithRedisMocks({
+        connect: jest.fn().mockResolvedValue()
+      });
+
+      createStore({ redisUrl: 'redis://localhost:6379', prefix: 'application:rate:admin:' });
+      await new Promise((resolve) => setImmediate(resolve));
+
+      expect(RedisStore).toHaveBeenCalledWith(expect.objectContaining({
+        prefix: 'application:rate:admin:'
+      }));
     });
 
     test('createApiLimiter falls back to memory store when Redis connect rejects', async () => {

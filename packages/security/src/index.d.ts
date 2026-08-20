@@ -247,6 +247,19 @@ export interface RateLimitOptions {
   redisUrl?: string;
 }
 
+export interface RedisRateLimitStoreOptions {
+  /** URL de connexion Redis. */
+  redisUrl?: string;
+  /** Préfixe Redis librement défini par le projet consommateur. */
+  prefix?: string;
+}
+
+/**
+ * Crée un store express-rate-limit Redis avec bascule mémoire si Redis est
+ * indisponible. Le préfixe est optionnel et entièrement défini par le projet.
+ */
+export function createRedisRateLimitStore(options?: RedisRateLimitStoreOptions): RateLimitStore | undefined;
+
 export interface LoginBlockedContext {
   ip: string;
   req: RequestLike;

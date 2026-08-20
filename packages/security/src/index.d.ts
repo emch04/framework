@@ -22,6 +22,32 @@ export type NextFunction = (error?: unknown) => unknown;
 export type RequestHandler = (req: RequestLike, res: ResponseLike, next: NextFunction) => unknown;
 export type Awaitable<T> = T | Promise<T>;
 
+export interface CreateRandomCodeOptions {
+  /** Préfixe librement défini par le projet consommateur (lettres/chiffres uniquement, tronqué à 12). */
+  prefix?: string;
+  /** Nombre d'octets aléatoires du token (hex, donc 2x plus de caractères). Défaut 5. */
+  tokenBytes?: number;
+}
+
+/** Génère un code à usage unique (`PREFIX-A1B2C3D4E5`), via crypto.randomBytes. */
+export function createRandomCode(options?: CreateRandomCodeOptions): string;
+
+export interface GenerateUniqueCodesOptions extends CreateRandomCodeOptions {
+  /** Nombre de codes à générer. */
+  quantity: number;
+  /**
+   * Reçoit les codes candidats et renvoie les codes déjà pris parmi eux
+   * (Set<string> ou équivalent avec .has()). Optionnel : sans lui, seule
+   * l'unicité au sein du lot généré est garantie.
+   */
+  isTaken?: (candidates: string[]) => Awaitable<{ has(code: string): boolean }>;
+  /** Nombre de tentatives avant d'abandonner. Défaut 5. */
+  maxAttempts?: number;
+}
+
+/** Génère `quantity` codes uniques, vérifiés avant tout retour (jamais après une tentative d'insertion). */
+export function generateUniqueCodes(options: GenerateUniqueCodesOptions): Promise<string[]>;
+
 export interface CorsMiddlewareOptions {
   /** Explicit list of allowed origins (exact match on the Origin header). */
   allowedOrigins?: string[];

@@ -98,7 +98,7 @@ const createFailoverStore = (redisStore, memoryStore, connectPromise) => {
   };
 };
 
-const createRedisStore = (redisUrl) => {
+const createRedisStore = (redisUrl, prefix) => {
   if (!redisUrl) return undefined;
 
   let RedisModule;
@@ -122,6 +122,7 @@ const createRedisStore = (redisUrl) => {
     }
 
     const redisStore = new RedisStore({
+      ...(prefix ? { prefix } : {}),
       sendCommand: (...args) => client.sendCommand(args)
     });
     const memoryStore = createMemoryStore();
@@ -137,6 +138,10 @@ const createRedisStore = (redisUrl) => {
     return createMemoryStore() || undefined;
   }
 };
+
+// Store Redis générique : le namespace est choisi par le projet consommateur.
+// Astratra ne connaît donc aucun domaine métier (auth, commandes, réservations…).
+const createRedisRateLimitStore = ({ redisUrl, prefix } = {}) => createRedisStore(redisUrl, prefix);
 
 const resolveStore = (options) => {
   if (options.store) return options.store;
@@ -235,6 +240,7 @@ const createAccountLimiter = (options = {}) => {
 };
 
 module.exports = {
+  createRedisRateLimitStore,
   createApiLimiter,
   createLoginLimiter,
   createAccountLimiter,

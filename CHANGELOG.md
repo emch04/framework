@@ -3,6 +3,24 @@
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Chaque package Astratra est versionné indépendamment.
 
+## 2026-08-20
+
+### Ajoute
+
+- `@astratra/security` (`1.6.0`→`1.7.0`) — `createRedisRateLimitStore({ redisUrl, prefix? })` :
+  construit un store `express-rate-limit` Redis avec un préfixe de clés
+  librement choisi par le projet consommateur, pour isoler les compteurs de
+  plusieurs limiteurs (connexion, réservation, avis...) sur une même
+  instance Redis. Garde la bascule automatique vers un store en mémoire déjà
+  présente dans `createApiLimiter`/`createLoginLimiter` si Redis est
+  indisponible ou perd la connexion. Aucun nom de domaine métier dans
+  Astratra — le préfixe est entièrement défini par l'appelant.
+- `@astratra/saas-kit` (`1.5.0`→`1.5.1`, dépendance `@astratra/security`
+  resserrée à `^1.7.0`) — aucun changement de comportement propre ; `store`
+  était déjà relayé tel quel à `apiRateLimit`/`loginRateLimit`, donc
+  `createRedisRateLimitStore` (ci-dessus) s'y branche sans modification de
+  code, seule la doc README a été complétée avec un exemple.
+
 ## 2026-08-18
 
 ### Ajoute

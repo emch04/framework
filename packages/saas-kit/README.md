@@ -129,6 +129,25 @@ createSaasApp({
 Non défini par défaut (comportement Express standard, inchangé) — dépend du
 déploiement, Astratra ne peut pas le deviner à ta place.
 
+`apiRateLimit`/`loginRateLimit` sont transmis tels quels à
+`createApiLimiter`/`createLoginLimiter` (`@astratra/security`) : pour isoler
+leurs compteurs sur une même instance Redis, fournis un store namespacé via
+`createRedisRateLimitStore({ redisUrl, prefix })` :
+
+```js
+const { createRedisRateLimitStore } = require('@astratra/security');
+
+createSaasApp({
+  // ...
+  apiRateLimit: {
+    store: createRedisRateLimitStore({ redisUrl, prefix: 'mon-app:rate:api:' })
+  },
+  loginRateLimit: {
+    store: createRedisRateLimitStore({ redisUrl, prefix: 'mon-app:rate:connexion:' })
+  }
+});
+```
+
 Le cookie CSRF (`astratra_csrf`) est amorcé automatiquement sur toute
 requête sûre (GET/HEAD/OPTIONS) dès le démarrage de l'app — y compris tes
 propres routes `GET` ajoutées via `extendRoutes` — donc pas besoin de monter

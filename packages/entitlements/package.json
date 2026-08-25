@@ -1,0 +1,40 @@
+{
+  "name": "@astratra/entitlements",
+  "version": "0.3.0",
+  "description": "Who may do what: plans and features, billing and status guards, screen/role matrix, fail-closed tenant isolation, and invite-by-link with hashed tokens.",
+  "engines": {
+    "node": ">=20"
+  },
+  "main": "src/index.js",
+  "types": "src/index.d.ts",
+  "type": "commonjs",
+  "files": [
+    "src"
+  ],
+  "scripts": {
+    "test": "jest"
+  },
+  "jest": {
+    "testMatch": [
+      "**/__tests__/**/*.test.js"
+    ]
+  },
+  "keywords": [
+    "astratra",
+    "entitlements",
+    "plans",
+    "feature-flags",
+    "invitations",
+    "multi-tenant",
+    "saas"
+  ],
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
+  "devDependencies": {
+    "express": "^4.18.3",
+    "jest": "30.4.2",
+    "supertest": "^7.0.0"
+  }
+}

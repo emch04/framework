@@ -56,3 +56,51 @@ runAgentLoop({
   maxSteps: 2
 });
 void stats;
+
+import {
+  createDeterministicFallback,
+  createMemoryActionStore,
+  createPendingActions
+} from './src';
+import type { DeterministicFallback, PendingAction, PendingActions } from './src';
+
+const actionStore = createMemoryActionStore();
+
+const airlock: PendingActions = createPendingActions({
+  store: actionStore,
+  tools: {
+    send_email: async (payload, { approvedBy }) => void [payload.to, approvedBy]
+  },
+  onPending: async (action: PendingAction) => void action.description,
+  now: () => new Date(),
+  logger: { info: () => {}, warn: () => {}, error: () => {} }
+});
+
+interface Question { question: string; grades?: number[]; intent?: string }
+
+const fallback: DeterministicFallback<Question> = createDeterministicFallback<Question>({
+  responders: {
+    average: async ({ grades }) => (grades && grades.length ? { text: String(grades.length) } : null)
+  },
+  classify: (input) => (input.question.includes('moyenne') ? 'average' : null),
+  markDegraded: (answer) => ({ ...answer, degraded: true })
+});
+
+async function exercisePending(): Promise<void> {
+  const { action } = await airlock.propose({
+    action: 'send_email',
+    payload: { to: 'x@y.cd' },
+    proposedBy: 'agent',
+    dedupeKey: 'k'
+  });
+  const outcome = await airlock.approve(action.id, { approvedBy: 'director', amend: { to: 'z@y.cd' } });
+  await airlock.reject(action.id, { rejectedBy: 'director', note: 'non' }).catch(() => null);
+  const waiting: PendingAction[] = await airlock.pending();
+
+  const fallen = await fallback.answer({ question: 'sa moyenne ?', grades: [10] });
+  const wrapped = await fallback.withFallback(async () => ({ text: 'model' }), { question: 'x' });
+
+  void [outcome.executed, waiting, fallen.handled, wrapped.degraded, airlock.tools, fallback.intents];
+}
+
+void exercisePending;

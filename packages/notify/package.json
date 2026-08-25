@@ -1,0 +1,37 @@
+{
+  "name": "@astratra/notify",
+  "version": "0.2.0",
+  "description": "Outbound messages done once \u2014 email, SMS and push. Transport injected, never throws, header-injection safe, loud simulation when unconfigured, dead push subscriptions handed back for pruning.",
+  "engines": {
+    "node": ">=20"
+  },
+  "main": "src/index.js",
+  "types": "src/index.d.ts",
+  "type": "commonjs",
+  "files": [
+    "src"
+  ],
+  "scripts": {
+    "test": "jest"
+  },
+  "jest": {
+    "testMatch": [
+      "**/__tests__/**/*.test.js"
+    ]
+  },
+  "keywords": [
+    "astratra",
+    "email",
+    "sms",
+    "push",
+    "notifications",
+    "transactional"
+  ],
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
+  "devDependencies": {
+    "jest": "30.4.2"
+  }
+}

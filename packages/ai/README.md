@@ -108,3 +108,80 @@ construire dans votre propre boucle, ou à couvrir dans un futur spec.
 ```bash
 npm test --workspace @astratra/ai
 ```
+
+## Le sas : un agent propose, un humain dispose
+
+Un agent autorisé à écrire est dangereux d'une façon qu'un agent qui répond
+n'est pas. Le mode de panne n'est pas la malveillance, c'est l'assurance : le
+modèle appelle `send_email` avec un destinataire plausible et un corps
+plausible, et une vraie famille reçoit un vrai message que personne n'a
+approuvé.
+
+```js
+const { createPendingActions } = require('@astratra/ai');
+
+const sas = createPendingActions({
+  store,
+  // Seul ce qui figure ici peut JAMAIS s'exécuter.
+  tools: {
+    send_email: async (payload) => mailer.send(payload),
+    send_fee_reminders: async (payload) => finance.remind(payload),
+  },
+  onPending: (action) => notifier.tell(action),   // « quelque chose attend »
+});
+
+// L'agent propose — rien ne part.
+await sas.propose({ action: 'send_email', payload, proposedBy: 'agent', dedupeKey });
+
+// Un humain tranche.
+await sas.approve(id, { approvedBy: userId, amend: { to: 'bonne-adresse@x.cd' } });
+await sas.reject(id,  { rejectedBy: userId, note: 'mauvais destinataire' });
+```
+
+`createMemoryActionStore()` fournit un store en mémoire pour les tests et le
+développement — non persistant, donc à remplacer par une vraie table dès qu'il
+y a plusieurs instances : la revendication atomique n'a de sens que partagée.
+
+Ce que le cycle garantit :
+
+- **une exécution, jamais deux** — la transition vers `executing` est une
+  revendication atomique : deux approbations simultanées produisent un envoi ;
+- **`dedupeKey`** empêche un modèle insistant d'empiler cinq propositions
+  identiques ;
+- **`amend`** : l'humain corrige le brouillon du modèle — destinataire, liste —
+  et la correction est consignée ;
+- un outil qui **retourne** une erreur est marqué `failed`, jamais `executed` :
+  « Envoyé » à l'écran pour un message jamais parti est le mensonge que ce sas
+  existe pour empêcher ;
+- un canal de notification mort ne fait pas échouer l'agent — l'action reste
+  visible dans sa liste.
+
+## Le repli déterministe : répondre quand tout est tombé
+
+La norme, quand le dernier fournisseur de la chaîne échoue, est un message
+d'erreur. L'alternative est une réponse calculée SANS modèle, depuis les données
+qu'on a déjà. Ce n'est pas aussi bien — et ce n'est jamais un écran vide.
+
+```js
+const { createDeterministicFallback } = require('@astratra/ai');
+
+const repli = createDeterministicFallback({
+  responders: {
+    average: async ({ grades }) => ({ text: `La moyenne est de ${mean(grades)}/20.` }),
+  },
+  classify: (input) => input.question.includes('moyenne') ? 'average' : null,
+});
+
+const { degraded, answer, providerError } = await repli.withFallback(
+  (input) => router.ask(input),
+  input,
+);
+```
+
+La règle d'honnêteté est la partie qui compte : une réponse de repli **dit**
+qu'elle en est une (`degraded: true`). Servir une réponse dégradée comme si de
+rien n'était apprend aux utilisateurs à se méfier des bonnes.
+
+Et l'erreur du fournisseur est **transportée**, pas avalée : la gober en
+silence cacherait la panne à ta propre supervision. Une question sans réponse
+déterministe est déclinée, pas inventée.

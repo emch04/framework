@@ -3,6 +3,7 @@ const { resolve } = require('path');
 const { pathToFileURL } = require('url');
 const { cleanHtml, assertFreshShell } = require('./html');
 const { auditPages } = require('./audit');
+const { buildSitemap, auditSitemap, normalizeRoutes } = require('./sitemap');
 
 // import() dynamique plutôt que require() : Vite 7 est ESM-only pour son API
 // Node (preview()), et un require() CommonJS ne sait pas charger un module
@@ -31,8 +32,13 @@ function writeRoute(distDir, route, html) {
 }
 
 async function prerender(options = {}) {
-  const { routes, siteUrl, distDir = 'dist', apiPatterns = ['**/api/**'], retries = 1, audit = true } = options;
+  const { routes, siteUrl, distDir = 'dist', apiPatterns = ['**/api/**'], retries = 1, audit = true, sitemap = false } = options;
   if (!Array.isArray(routes) || routes.length === 0) throw new Error('prerender requires a non-empty routes array.');
+  // Les routes acceptent une chaîne ou une ligne de table portant ses
+  // métadonnées SEO. Les deux formes coexistent : un appelant existant qui
+  // passe des chaînes ne change rien.
+  const routeTable = normalizeRoutes(routes);
+  const routePaths = routeTable.map((route) => route.path);
   if (!siteUrl) throw new Error('prerender requires siteUrl.');
   const output = resolve(process.cwd(), distDir);
   const indexPath = resolve(output, 'index.html');
@@ -80,7 +86,7 @@ async function prerender(options = {}) {
     // siennes. Capturer d'abord TOUT, puis écrire, garantit que chaque route
     // parte toujours du build Vite original, jamais d'un dist/ déjà modifié
     // par cette même exécution.
-    for (const route of routes) {
+    for (const route of routePaths) {
       let lastError;
       for (let attempt = 0; attempt <= retries; attempt++) {
         const page = await context.newPage();
@@ -112,7 +118,37 @@ async function prerender(options = {}) {
     // laisse donc jamais un dist/ à moitié réécrit derrière elle.
     for (const { route, html } of pages) writeRoute(output, route, html);
 
-    return { pages, warnings: report.warnings };
+    const warnings = [...report.warnings];
+    let sitemapPath = null;
+
+    if (sitemap) {
+      // Généré depuis la MÊME table que les pages : la divergence entre les
+      // deux listes devient structurellement impossible.
+      const settings = sitemap === true ? {} : sitemap;
+      const xml = buildSitemap(routeTable, { siteUrl, defaultLastmod: settings.defaultLastmod });
+      const mismatch = auditSitemap(xml, routePaths, siteUrl);
+      if (mismatch.length) throw new Error(`Sitemap audit failed:\n${mismatch.join('\n')}`);
+
+      sitemapPath = resolve(output, settings.path || 'sitemap.xml');
+      mkdirSync(resolve(sitemapPath, '..'), { recursive: true });
+      writeFileSync(sitemapPath, xml, 'utf8');
+    } else if (audit) {
+      // Rien n'est généré, mais un sitemap écrit à la main peut déjà traîner
+      // dans dist/. On le relit sans y toucher : c'est ainsi qu'on découvre
+      // qu'il annonce une page retirée du prérendu il y a six mois.
+      //
+      // Avertissement et non erreur : un site parfaitement sain peut lister
+      // des URLs rendues ailleurs — pages serveur, contenu dynamique — dont
+      // ce prérendu n'a aucune connaissance.
+      const existing = resolve(output, 'sitemap.xml');
+      if (existsSync(existing)) {
+        for (const message of auditSitemap(readFileSync(existing, 'utf8'), routePaths, siteUrl)) {
+          warnings.push(message);
+        }
+      }
+    }
+
+    return { pages, warnings, sitemap: sitemapPath };
   } finally {
     await browser.close();
     server.httpServer.close();

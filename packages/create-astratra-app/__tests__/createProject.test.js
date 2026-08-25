@@ -13,7 +13,8 @@ test('parseArgs reads target, template and force flag', () => {
   assert.deepEqual(parseArgs(['my-app', '--template', 'api', '--force']), {
     targetDir: 'my-app',
     template: 'api',
-    force: true
+    force: true,
+    bricks: []
   });
 });
 
@@ -114,4 +115,99 @@ test('createProject refuses a non-empty directory unless forced', () => {
     () => createProject({ targetDir: 'busy' }, cwd),
     /Target directory is not empty/
   );
+});
+
+test('parseArgs reads --with as a comma list, and --with=all', () => {
+  assert.deepEqual(parseArgs(['app', '--with', 'payments,privacy']).bricks, ['payments', 'privacy']);
+  assert.equal(parseArgs(['app', '--with=all']).bricks.length, 11);
+  assert.deepEqual(parseArgs(['app']).bricks, []);
+});
+
+test('a project without --with stays exactly as before', () => {
+  // Les briques n'ont aucune dépendance précisément pour qu'on n'en prenne que
+  // ce dont on a besoin : rien ne s'ajoute sans qu'on l'ait demandé.
+  const cwd = tempRoot();
+  const result = createProject({ targetDir: 'plain-app' }, cwd);
+  const pkg = JSON.parse(fs.readFileSync(path.join(result.targetDir, 'package.json'), 'utf8'));
+
+  assert.deepEqual(result.bricks, []);
+  assert.equal(fs.existsSync(path.join(result.targetDir, 'api/bricks')), false);
+  assert.equal(Object.keys(pkg.dependencies).some((d) => d.includes('payments')), false);
+});
+
+test('a requested brick adds its dependency and its wired example', () => {
+  const cwd = tempRoot();
+  const result = createProject({ targetDir: 'brick-app', bricks: ['payments', 'notify'] }, cwd);
+  const pkg = JSON.parse(fs.readFileSync(path.join(result.targetDir, 'package.json'), 'utf8'));
+
+  assert.equal(pkg.dependencies['@astratra/payments'], '^0.1.0');
+  assert.equal(pkg.dependencies['@astratra/notify'], '^0.2.0');
+  assert.equal(fs.existsSync(path.join(result.targetDir, 'api/bricks/payments.js')), true);
+  assert.equal(fs.existsSync(path.join(result.targetDir, 'api/bricks/notify.js')), true);
+});
+
+test('nothing is wired into server.js — a fresh app starts without configuration', () => {
+  const cwd = tempRoot();
+  const result = createProject({ targetDir: 'unwired', bricks: ['credentials', 'payments'] }, cwd);
+  const server = fs.readFileSync(path.join(result.targetDir, 'api/server.js'), 'utf8');
+
+  assert.equal(server.includes('bricks/'), false);
+  assert.equal(server.includes('@astratra/payments'), false);
+});
+
+test('a browser brick is refused on the api template rather than silently skipped', () => {
+  assert.throws(() => parseArgs(['app', '--template', 'api', '--with', 'client']), /fullstack template/);
+});
+
+test('an unknown brick names the valid ones instead of failing vaguely', () => {
+  assert.throws(() => parseArgs(['app', '--with', 'paiments']), /Unknown brick "paiments"/);
+  assert.throws(() => parseArgs(['app', '--with', 'paiments']), /Available: credentials/);
+});
+
+test('a bad brick fails BEFORE any file is written', () => {
+  const cwd = tempRoot();
+  assert.throws(() => createProject({ targetDir: 'never-born', bricks: ['nope'] }, cwd));
+  assert.equal(fs.existsSync(path.join(cwd, 'never-born', 'package.json')), false);
+});
+
+test('--with all takes what the template accepts, and no more', () => {
+  const api = tempRoot();
+  const apiResult = createProject({ targetDir: 'api-all', template: 'api', bricks: ['all'] }, api);
+  assert.equal(apiResult.bricks.includes('client'), false);
+  assert.equal(apiResult.bricks.includes('prerender'), false);
+  assert.equal(apiResult.bricks.length, 9);
+
+  const full = tempRoot();
+  const fullResult = createProject({ targetDir: 'full-all', template: 'fullstack', bricks: ['all'] }, full);
+  assert.equal(fullResult.bricks.length, 11);
+  assert.equal(fs.existsSync(path.join(fullResult.targetDir, 'web/src/lib/client.js')), true);
+  assert.equal(fs.existsSync(path.join(fullResult.targetDir, 'astratra.prerender.config.cjs')), true);
+});
+
+test('a repeated brick is installed once', () => {
+  assert.deepEqual(parseArgs(['app', '--with', 'pdf', '--with', 'pdf']).bricks, ['pdf']);
+});
+
+test('every scaffolded brick file is valid JavaScript', async () => {
+  // Un exemple qui ne compile pas est pire qu'aucun exemple : on le découvre
+  // en le branchant, pas en le lisant.
+  const { BRICK_NAMES } = await import('../src/bricks.js');
+  const cwd = tempRoot();
+  const result = createProject({ targetDir: 'syntax-app', template: 'fullstack', bricks: ['all'] }, cwd);
+
+  assert.equal(result.bricks.length, BRICK_NAMES.length);
+
+  const { execFileSync } = await import('node:child_process');
+  for (const relative of [
+    'api/bricks/credentials.js', 'api/bricks/entitlements.js', 'api/bricks/notify.js',
+    'api/bricks/payments.js', 'api/bricks/privacy.js', 'api/bricks/resilience.js',
+    'api/bricks/i18n.js', 'api/bricks/pdf.js', 'api/bricks/closure.js',
+    'web/src/lib/client.js', 'astratra.prerender.config.cjs'
+  ]) {
+    const file = path.join(result.targetDir, relative);
+    assert.equal(fs.existsSync(file), true, `${relative} manquant`);
+    // --check parse le fichier sans l'exécuter : les imports vers des packages
+    // non installés dans ce dossier temporaire ne posent donc pas problème.
+    execFileSync(process.execPath, ['--check', file], { stdio: 'pipe' });
+  }
 });

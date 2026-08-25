@@ -1,0 +1,38 @@
+{
+  "name": "@astratra/payments",
+  "version": "0.1.0",
+  "description": "The payment webhook pipeline done once: raw-body signature checks, replay protection, and the answers that stop a provider retrying for days.",
+  "engines": {
+    "node": ">=20"
+  },
+  "main": "src/index.js",
+  "types": "src/index.d.ts",
+  "type": "commonjs",
+  "files": [
+    "src"
+  ],
+  "scripts": {
+    "test": "jest"
+  },
+  "jest": {
+    "testMatch": [
+      "**/__tests__/**/*.test.js"
+    ]
+  },
+  "keywords": [
+    "astratra",
+    "payments",
+    "webhook",
+    "stripe",
+    "idempotency"
+  ],
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
+  "devDependencies": {
+    "express": "^4.18.3",
+    "jest": "30.4.2",
+    "supertest": "^7.0.0"
+  }
+}

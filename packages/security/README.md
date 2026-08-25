@@ -10,6 +10,87 @@ Partout où un vrai projet a besoin de persistance (révocation de session,
 stockage de credentials WebAuthn, alerte de brute-force), c'est un
 callback/adapter injecté, jamais un appel base de données codé en dur.
 
+## Signer les appels entre tes propres services
+
+La porte d'entrée est gardée — sessions, jetons, CORS. Les couloirs entre tes
+services, eux, ne le sont généralement pas : l'un appelle l'autre sur le réseau
+et celui qui reçoit fait confiance à ce qui arrive, parce que « c'est interne ».
+Ça l'est jusqu'au jour où autre chose atteint ce port.
+
+```js
+const { createServiceSigner } = require('@astratra/security');
+
+const signer = createServiceSigner({
+  secret: process.env.INTERNAL_SERVICE_KEY,
+  // Sans durée de validité, une charge utile capturée fonctionne pour
+  // toujours : qui observe UN appel interne signé peut le rejouer quand il
+  // veut. Mets-la.
+  maxAgeMs: 30_000,
+});
+
+// Côté appelant
+await fetch(url, { headers: { ...signer.headers({ id, role, tenant }) } });
+
+// Côté appelé
+const check = signer.verifyHeaders(req.headers);
+if (!check.valid) return res.status(401).json({ message: 'Appel interne non signé.' });
+```
+
+Trois détails qui comptent :
+
+**L'horodatage est À L'INTÉRIEUR de la chaîne signée.** Envoyé à côté, un
+attaquant le réécrirait simplement.
+
+**La signature est vérifiée AVANT que la charge utile soit analysée.** Analyser
+d'abord, c'est faire tourner ton analyseur JSON sur ce qu'un attaquant a envoyé.
+
+**Les clés sont triées avant signature.** Un service construit `{ id, role }`,
+l'autre reconstruit `{ role, id }` depuis une ligne de base : `JSON.stringify`
+produirait deux chaînes différentes pour la même donnée, et la vérification
+échouerait par intermittence d'une façon qui ressemble à un problème réseau.
+
+## Un journal qui montre qu'on l'a modifié
+
+Un journal ordinaire est une liste d'affirmations. Qui a accès à la base peut
+changer une ligne ou en supprimer une, et rien dans le résultat n'a l'air faux
+— précisément au moment où tu as le plus besoin de lui faire confiance.
+
+Le chaînage règle ça : chaque entrée porte l'empreinte de la précédente, donc
+elle dépend de tout l'historique derrière elle.
+
+```js
+const { createAuditChain } = require('@astratra/security');
+
+const chain = createAuditChain({ store });
+
+await chain.record({ type: 'payment.validated', actor: userId, message: '…' });
+
+const { intact, failure } = await chain.verify();
+// failure.reason === 'altered' -> le contenu ne correspond plus à son empreinte
+// failure.reason === 'broken'  -> une entrée a été supprimée ou insérée
+```
+
+Distinguer les deux compte : un contenu réécrit est une falsification, un
+maillon rompu veut dire qu'on a retiré ou glissé quelque chose.
+
+Modifier une entrée **et** recalculer sa propre empreinte ne suffit pas : tout
+ce qui suit pointe encore sur l'ancienne valeur. Cacher un changement oblige à
+réécrire toute la suite — et si le journal est aussi copié hors machine, même
+pas.
+
+Une colonne ajoutée plus tard — un index, un drapeau de réplication — ne
+casse pas la chaîne : seuls les champs signés alimentent l'empreinte.
+
+**L'écriture ne lève jamais.** Perdre la trace est grave ; perdre le paiement
+qu'elle enregistrait l'est davantage. L'échec est signalé, bruyamment.
+
+`createMemoryAuditStore()` fournit une chaîne en mémoire pour les tests. En
+production, le store est le tien — et copier le journal hors machine est ce qui
+transforme « visible » en « irréfutable ».
+
+Ce mécanisme rend la falsification **visible**, pas impossible. C'est la
+promesse honnête, et c'est celle qui vaut la peine d'être faite.
+
 ## Chiffrement de champ (au repos)
 
 Astratra ne s'intercale jamais entre ton app et ta base de données — rien

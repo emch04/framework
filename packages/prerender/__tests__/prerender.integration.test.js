@@ -31,6 +31,67 @@ function read(...segments) {
 describe('prerender() — intégration sur un vrai site Vite + React', () => {
   beforeEach(buildFixture);
 
+  test('sitemap: true écrit un sitemap qui ne parle que des pages écrites', async () => {
+    const result = await prerender({
+      routes: [
+        { path: '/', label: 'Home', changefreq: 'daily', priority: '1.0' },
+        { path: '/about', label: 'About', priority: '0.7' },
+      ],
+      siteUrl: 'https://example.com',
+      distDir: DIST,
+      waitFor: 'meta[name="description"]',
+      sitemap: { defaultLastmod: '2026-08-25' },
+    });
+
+    expect(existsSync(resolve(DIST, 'sitemap.xml'))).toBe(true);
+    const xml = read('sitemap.xml');
+    expect(xml).toContain('<loc>https://example.com/</loc>');
+    expect(xml).toContain('<loc>https://example.com/about</loc>');
+    expect(xml).toContain('<priority>0.7</priority>');
+    expect(xml).toContain('<lastmod>2026-08-25</lastmod>');
+    expect(result.sitemap).toBe(resolve(DIST, 'sitemap.xml'));
+
+    // Chaque URL annoncée a bien un fichier derrière elle.
+    expect(existsSync(resolve(DIST, 'about', 'index.html'))).toBe(true);
+  }, 30000);
+
+  test('une page rendue mais marquée sitemap: false reste hors du plan de site', async () => {
+    await prerender({
+      routes: [{ path: '/' }, { path: '/about', sitemap: false }],
+      siteUrl: 'https://example.com',
+      distDir: DIST,
+      waitFor: 'meta[name="description"]',
+      sitemap: true,
+    });
+
+    const xml = read('sitemap.xml');
+    expect(xml).toContain('<loc>https://example.com/</loc>');
+    expect(xml).not.toContain('/about');
+    // Rendue quand même : un robot qui suit un lien tombe sur une vraie page.
+    expect(existsSync(resolve(DIST, 'about', 'index.html'))).toBe(true);
+  }, 30000);
+
+  test('sans sitemap: true, un sitemap écrit à la main est relu et ses trous signalés', async () => {
+    // Le cas réel : un fichier maintenu à la main qui annonce encore une page
+    // retirée du prérendu il y a des mois. On ne le réécrit pas — on le dit.
+    writeFileSync(
+      resolve(DIST, 'sitemap.xml'),
+      '<?xml version="1.0" encoding="UTF-8"?>\n<urlset><url><loc>https://example.com/ghost</loc></url></urlset>',
+      'utf8',
+    );
+
+    const result = await prerender({
+      routes: ['/'],
+      siteUrl: 'https://example.com',
+      distDir: DIST,
+      waitFor: 'meta[name="description"]',
+    });
+
+    expect(result.warnings.some((w) => w.includes('/ghost'))).toBe(true);
+    // Averti, jamais réécrit : le fichier de l'appelant lui appartient.
+    expect(read('sitemap.xml')).toContain('/ghost');
+  }, 30000);
+
   test('génère un fichier par route et préserve le shell vierge', async () => {
     const result = await prerender({
       routes: ['/', '/about'],

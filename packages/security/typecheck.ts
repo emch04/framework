@@ -1,5 +1,11 @@
 import {
   CHALLENGE_TTL_MS,
+  GENESIS_HASH,
+  createAuditChain,
+  createMemoryAuditStore,
+  createServiceSigner,
+  hashEvent,
+  stableStringify,
   DEFAULT_CSP_DIRECTIVES,
   DEFAULT_SESSION_COOKIE_NAME,
   RECOVERY_CODE_COUNT,
@@ -140,3 +146,31 @@ webauthn.hashRecoveryCode('abcd-1234');
 webauthn.rpConfigForRequest({ headers: { origin: 'http://localhost:3000' } });
 void rp;
 void hash;
+
+const signer = createServiceSigner({ secret: 'shared', maxAgeMs: 30_000, now: () => Date.now() });
+const signed = signer.sign({ id: 'u1', role: 'admin' });
+const checked = signer.verify<{ id: string }>(signed.payload, signed.signature);
+const sentHeaders: Record<string, string> = signer.headers({ id: 'u1' });
+const fromHeaders = signer.verifyHeaders(sentHeaders);
+
+const auditStore = createMemoryAuditStore();
+const chain = createAuditChain({
+  store: auditStore,
+  now: () => new Date(),
+  logger: { error: () => {} },
+  onRecordFailed: (error, event) => void [error, event]
+});
+
+async function exerciseAudit(): Promise<void> {
+  await chain.record({ type: 'login', actor: 'u1', message: 'signed in' });
+  const report = await chain.verify();
+  const direct = await chain.verify(auditStore.entries);
+  void [
+    report.intact, report.failure?.reason, direct.checked,
+    chain.hashEvent({ type: 'x' }), hashEvent({ type: 'x' }), GENESIS_HASH,
+    stableStringify({ b: 1, a: 2 }),
+    checked.valid, fromHeaders.valid, signed.issuedAt
+  ];
+}
+
+void exerciseAudit;

@@ -22,7 +22,7 @@ test('reports duplicate titles as an audit error', () => {
 });
 
 // Régression : une route derrière une redirection d'authentification capturait
-// la page de connexion sur un site consommateur (Scolaris) et la publiait sous
+// la page de connexion sur un site consommateur et la publiait sous
 // sa propre URL, titre ET contenu compris. Un titre différent n'aurait pas
 // suffi à masquer ce bug — la détection doit porter sur le contenu réellement
 // rendu, pas seulement sur les métadonnées.

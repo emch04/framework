@@ -4,20 +4,12 @@ on:
   workflow_dispatch:
     inputs:
       workspace:
-        description: Workspace npm to publish
+        # Saisie libre plutot qu'une liste : GitHub plafonne les listes de choix
+        # a vingt options, et le depot en compte davantage. Un nom fautif fait
+        # echouer `npm publish --workspace` immediatement, sans rien publier.
+        description: 'Nom npm du workspace, ex. @astratra/notify ou create-astratra-app'
         required: true
-        type: choice
-        options:
-          - '@astratra/ai'
-          - '@astratra/prerender'
-          - '@astratra/core'
-          - '@astratra/security'
-          - '@astratra/saas-kit'
-          - '@astratra/saas-kit-ui'
-          - '@astratra/store-mongo'
-          - '@astratra/store-postgres'
-          - '@astratra/tooling'
-          - create-astratra-app
+        type: string
 
 permissions:
   contents: read

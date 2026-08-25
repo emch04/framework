@@ -415,3 +415,95 @@ export function hashRecoveryCode(code: string, secret: string): string;
  * credential store.
  */
 export function createMemoryWebauthnStore(): WebauthnStore;
+
+/**
+ * A serialisation two machines agree on: keys sorted, so a signature or a hash
+ * does not depend on the order an object happened to be built in.
+ */
+export function stableStringify(value: unknown): string;
+
+export type SignatureFailure = 'missing' | 'bad-signature' | 'expired' | 'malformed';
+
+export interface SignedPayload {
+  payload: string;
+  signature: string;
+  issuedAt: number;
+}
+
+export type VerificationResult<T = unknown> =
+  | { valid: true; value: T; issuedAt: number }
+  | { valid: false; reason: SignatureFailure };
+
+export interface ServiceSigner {
+  sign(value: unknown): SignedPayload;
+  /** Checks the signature BEFORE parsing the payload. */
+  verify<T = unknown>(payload: string | null | undefined, signature: string | null | undefined): VerificationResult<T>;
+  headers(value: unknown, names?: { payload?: string; signature?: string }): Record<string, string>;
+  verifyHeaders<T = unknown>(
+    headers: Record<string, unknown>,
+    names?: { payload?: string; signature?: string }
+  ): VerificationResult<T>;
+}
+
+export function createServiceSigner(options: {
+  secret: string;
+  algorithm?: string;
+  /** Without it, a captured payload can be replayed forever. Set it. */
+  maxAgeMs?: number;
+  now?: () => number;
+}): ServiceSigner;
+
+export interface AuditEntry {
+  type?: string;
+  actor?: string;
+  target?: string;
+  level?: string;
+  message?: string;
+  meta?: Record<string, unknown>;
+  context?: Record<string, unknown>;
+  previousHash: string;
+  recordedAt: string;
+  hash: string;
+  [key: string]: unknown;
+}
+
+export interface AuditStore {
+  last(): Promise<AuditEntry | null> | AuditEntry | null;
+  append(entry: AuditEntry): Promise<AuditEntry> | AuditEntry;
+  list?(): Promise<AuditEntry[]> | AuditEntry[];
+}
+
+export interface AuditVerification {
+  intact: boolean;
+  checked: number;
+  failure?: {
+    /** 'altered': content no longer matches its hash. 'broken': an entry was removed or inserted. */
+    reason: 'altered' | 'broken';
+    index: number;
+    entry: AuditEntry;
+    detail: string;
+  };
+}
+
+export interface AuditChain {
+  /** Never throws: an audit write must not take down what it was recording. */
+  record(event?: Record<string, unknown>): Promise<AuditEntry | null>;
+  verify(events?: AuditEntry[]): Promise<AuditVerification>;
+  hashEvent(event: Record<string, unknown>): string;
+  GENESIS_HASH: string;
+}
+
+export function createAuditChain(options: {
+  store: AuditStore;
+  now?: () => Date;
+  logger?: { error?(message: string): void };
+  onRecordFailed?: (error: unknown, event: Record<string, unknown>) => void;
+}): AuditChain;
+
+export function createMemoryAuditStore(): AuditStore & {
+  list(): Promise<AuditEntry[]>;
+  entries: AuditEntry[];
+};
+
+export function hashEvent(event: Record<string, unknown>): string;
+export const GENESIS_HASH: string;

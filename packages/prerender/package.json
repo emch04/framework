@@ -1,7 +1,7 @@
 {
   "name": "@astratra/prerender",
-  "version": "0.1.1",
-  "description": "Prérendu générique Vite et React pour pages SEO statiques.",
+  "version": "0.2.0",
+  "description": "Prérendu SEO générique pour un site Vite + React : un HTML par route, shell SPA préservé, sitemap issu de la même liste que les pages.",
   "engines": {
     "node": ">=20"
   },
@@ -13,7 +13,8 @@
   "files": [
     "bin",
     "src",
-    "README.md"
+    "README.md",
+    "LICENSE"
   ],
   "scripts": {
     "test": "NODE_OPTIONS=--experimental-vm-modules jest"

@@ -1,6 +1,6 @@
 {
   "name": "@astratra/ai",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Generic AI provider routing, tool registry, and agent loop utilities for Astratra.",
   "engines": {
     "node": ">=20"

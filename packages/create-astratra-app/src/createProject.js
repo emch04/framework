@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { BRICK_NAMES, brickDependencies, brickFiles, resolveBricks } from './bricks.js';
 
 const VALID_TEMPLATES = new Set(['api', 'fullstack']);
 
@@ -25,7 +26,7 @@ function assertCanCreate(targetDir, force) {
   }
 }
 
-function packageJson(projectName, template) {
+function packageJson(projectName, template, bricks = []) {
   const dependencies = {
     '@astratra/ai': '^1.0.0',
     '@astratra/core': '^1.0.0',
@@ -51,6 +52,11 @@ function packageJson(projectName, template) {
     devDependencies.vite = '^7.0.0';
   }
 
+  // Les briques demandées s'ajoutent aux dépendances. Rien n'est ajouté sans
+  // qu'on l'ait demandé : la plupart de ces packages n'ont aucune dépendance
+  // précisément pour qu'on n'en prenne que ce dont on a besoin.
+  Object.assign(dependencies, brickDependencies(bricks));
+
   return JSON.stringify({
     name: toPackageName(projectName),
     version: '0.1.0',
@@ -71,6 +77,7 @@ function packageJson(projectName, template) {
 function apiServer() {
   return `import fs from 'node:fs';
 import path from 'node:path';
+import { BRICK_NAMES, brickDependencies, brickFiles, resolveBricks } from './bricks.js';
 import saasKit from '@astratra/saas-kit';
 import { env } from './config/env.js';
 import { createAuthSecurity } from './security/auth.js';
@@ -372,6 +379,7 @@ function notificationsModule() {
 function viteConfig() {
   return `import fs from 'node:fs';
 import path from 'node:path';
+import { BRICK_NAMES, brickDependencies, brickFiles, resolveBricks } from './bricks.js';
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
 
@@ -595,7 +603,8 @@ export function parseArgs(args) {
   const options = {
     targetDir: null,
     template: 'fullstack',
-    force: false
+    force: false,
+    bricks: []
   };
 
   for (let index = 0; index < args.length; index += 1) {
@@ -607,6 +616,11 @@ export function parseArgs(args) {
       index += 1;
     } else if (arg.startsWith('--template=')) {
       options.template = arg.slice('--template='.length);
+    } else if (arg === '--with') {
+      options.bricks.push(...String(args[index + 1] || '').split(','));
+      index += 1;
+    } else if (arg.startsWith('--with=')) {
+      options.bricks.push(...arg.slice('--with='.length).split(','));
     } else if (!options.targetDir) {
       options.targetDir = arg;
     } else {
@@ -615,23 +629,32 @@ export function parseArgs(args) {
   }
 
   if (!options.targetDir) {
-    throw new Error('Usage: create-astratra-app <directory> [--template api|fullstack] [--force]');
+    throw new Error(
+      'Usage: create-astratra-app <directory> [--template api|fullstack] ' +
+      `[--with ${BRICK_NAMES.slice(0, 3).join(',')},...|all] [--force]`
+    );
   }
   if (!VALID_TEMPLATES.has(options.template)) {
     throw new Error(`Unknown template "${options.template}". Use api or fullstack.`);
   }
 
+  // Résolu ici plutôt qu'à l'écriture : un nom de brique fautif doit échouer
+  // AVANT que le moindre fichier soit créé.
+  options.bricks = resolveBricks(options.bricks, options.template);
+
   return options;
 }
 
-export function createProject({ targetDir, template = 'fullstack', force = false }, cwd = process.cwd()) {
+export function createProject({ targetDir, template = 'fullstack', force = false, bricks = [] }, cwd = process.cwd()) {
   const absoluteTarget = path.resolve(cwd, targetDir);
   const projectName = path.basename(absoluteTarget);
 
   assertCanCreate(absoluteTarget, force);
   fs.mkdirSync(absoluteTarget, { recursive: true });
 
-  writeFile(absoluteTarget, 'package.json', `${packageJson(projectName, template)}\n`);
+  const selectedBricks = resolveBricks(bricks, template);
+
+  writeFile(absoluteTarget, 'package.json', `${packageJson(projectName, template, selectedBricks)}\n`);
   writeFile(absoluteTarget, 'api/server.js', apiServer());
   writeFile(absoluteTarget, 'api/config/env.js', envConfig());
   writeFile(absoluteTarget, 'api/security/auth.js', securityAuth());
@@ -657,8 +680,16 @@ export function createProject({ targetDir, template = 'fullstack', force = false
     writeFile(absoluteTarget, 'web/src/main.jsx', webMain());
   }
 
+  // Un fichier d'exemple par brique, câblé pour CE projet — pas un extrait de
+  // README à recopier. Rien n'est branché dans server.js : une application
+  // fraîchement générée doit démarrer sans configuration.
+  for (const brick of brickFiles(selectedBricks)) {
+    writeFile(absoluteTarget, brick.path, brick.contents);
+  }
+
   return {
     targetDir: absoluteTarget,
+    bricks: selectedBricks,
     nextSteps: [
       `cd ${targetDir}`,
       'npm install',

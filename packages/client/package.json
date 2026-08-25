@@ -1,0 +1,16 @@
+{
+  "name": "@astratra/client",
+  "version": "0.1.0",
+  "description": "Framework-agnostic client-side plumbing: refresh-on-401 with single-flight renewal, a public-list route guard, per-condition password rules shared with the server, and an offline mutation queue that keeps order.",
+  "engines": { "node": ">=20" },
+  "main": "src/index.js",
+  "types": "src/index.d.ts",
+  "type": "commonjs",
+  "files": ["src"],
+  "scripts": { "test": "jest" },
+  "jest": { "testMatch": ["**/__tests__/**/*.test.js"] },
+  "keywords": ["astratra", "session", "refresh-token", "offline", "queue", "client"],
+  "license": "MIT",
+  "publishConfig": { "access": "public" },
+  "devDependencies": { "jest": "30.4.2" }
+}

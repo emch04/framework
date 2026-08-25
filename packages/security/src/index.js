@@ -13,5 +13,8 @@ module.exports = {
   ...require('./csp'),
   ...require('./cookies'),
   ...require('./csrf'),
-  ...require('./revocation')
+  ...require('./revocation'),
+  ...require('./stableStringify'),
+  ...require('./serviceSignature'),
+  ...require('./auditChain')
 };

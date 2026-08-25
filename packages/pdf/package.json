@@ -1,0 +1,44 @@
+{
+  "name": "@astratra/pdf",
+  "version": "0.1.0",
+  "description": "Layout primitives for PDFKit: text that never overruns its box, and tables that paginate without splitting a row.",
+  "engines": {
+    "node": ">=20"
+  },
+  "main": "src/index.js",
+  "types": "src/index.d.ts",
+  "type": "commonjs",
+  "files": [
+    "src"
+  ],
+  "scripts": {
+    "test": "jest"
+  },
+  "jest": {
+    "testMatch": [
+      "**/__tests__/**/*.test.js"
+    ]
+  },
+  "keywords": [
+    "astratra",
+    "pdf",
+    "pdfkit",
+    "layout"
+  ],
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
+  "peerDependencies": {
+    "pdfkit": ">=0.15"
+  },
+  "peerDependenciesMeta": {
+    "pdfkit": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "jest": "30.4.2",
+    "pdfkit": "^0.18.0"
+  }
+}

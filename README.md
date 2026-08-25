@@ -31,14 +31,24 @@ commande.
 |---|---|
 | [`@astratra/core`](packages/core/README.md) | réponses API, gestion d'erreurs, logs, request id, config env |
 | [`@astratra/tooling`](packages/tooling/README.md) | CLI : audit secrets/routes/i18n, lanceur de tests, orchestrateur de déploiement |
-| [`@astratra/security`](packages/security/README.md) | primitives JWT/RBAC, rate limiting (mémoire ou Redis optionnel), CSP configurable, WAF heuristique, WebAuthn/passkeys |
-| [`@astratra/ai`](packages/ai/README.md) | routing IA multi-provider avec quotas/fallback/Redis optionnel, registre d'outils, boucle d'agent |
+| [`@astratra/security`](packages/security/README.md) | primitives JWT/RBAC, rate limiting (mémoire ou Redis optionnel), CSP configurable, WAF heuristique, WebAuthn/passkeys, signature HMAC entre services, journal d'audit chaîné |
+| [`@astratra/ai`](packages/ai/README.md) | routing IA multi-provider avec quotas/fallback/Redis optionnel, registre d'outils, boucle d'agent, sas de confirmation humaine, repli déterministe |
+| [`@astratra/credentials`](packages/credentials/README.md) | clés de service chiffrées en base, éditables depuis l'interface, sans redémarrage : catalogue, garde valeur réelle/test, code de déverrouillage, hydratation de `process.env` |
+| [`@astratra/entitlements`](packages/entitlements/README.md) | qui a le droit de quoi : plans et fonctionnalités, gardes de facturation et de statut, matrice écran/rôle, isolation par locataire qui échoue fermée, invitations par lien |
+| [`@astratra/i18n-server`](packages/i18n-server/README.md) | traduction des messages renvoyés par l'API (la clé est la phrase source), résolution de langue, audit de lisibilité des messages d'erreur |
+| [`@astratra/pdf`](packages/pdf/README.md) | primitives de mise en page PDFKit : texte borné qui ne déborde jamais, tableaux qui se paginent sans couper une rangée |
+| [`@astratra/payments`](packages/payments/README.md) | le tuyau des webhooks de paiement : signature sur corps brut, protection contre les rejeux, et les réponses qui empêchent un prestataire de relancer pendant des jours |
+| [`@astratra/privacy`](packages/privacy/README.md) | droit d'accès, droit à l'oubli par approbation humaine, anonymisation qui préserve les dossiers à conserver, nettoyage des journaux |
+| [`@astratra/resilience`](packages/resilience/README.md) | disjoncteur à sonde unique, cache TTL qui se dégrade au lieu d'échouer, relance avec recul et brouillage |
+| [`@astratra/closure`](packages/closure/README.md) | clôture de période volontaire : liste à points bloquants et reconnus, archive nettoyée de tout identifiant, sections en échec nommées |
+| [`@astratra/notify`](packages/notify/README.md) | messages sortants — e-mail, SMS, push : transport injecté, ne lève jamais, en-têtes protégés de l'injection, abonnements morts rendus pour élagage |
+| [`@astratra/client`](packages/client/README.md) | plomberie côté client, agnostique : rafraîchissement 401 à vol unique, garde de route à liste publique, règles de mot de passe, file hors ligne |
 | [`@astratra/saas-kit`](packages/saas-kit/README.md) | starter : `createSaasApp()` assemblant users/auth/settings/notifications/dashboard, validation d'entrée intégrée |
 | [`@astratra/store-mongo`](packages/store-mongo/README.md) | adapter de persistance réel (MongoDB/Mongoose) pour `usersStore`/`settingsStore` |
 | [`@astratra/store-postgres`](packages/store-postgres/README.md) | adapter de persistance réel (PostgreSQL/`pg`) pour `usersStore`/`settingsStore` |
 | [`@astratra/saas-kit-ui`](packages/saas-kit-ui/README.md) | dashboard React complet et prêt à l'emploi pour `@astratra/saas-kit`, session JWT en mémoire (`Authorization: Bearer`) |
-| [`create-astratra-app`](packages/create-astratra-app/README.md) | générateur CLI pour créer une app Astratra rapidement |
-| [`@astratra/prerender`](packages/prerender/README.md) | prérendu SEO générique pour un site Vite + React : un HTML par route, shell SPA préservé |
+| [`create-astratra-app`](packages/create-astratra-app/README.md) | générateur CLI : socle complet, plus les briques optionnelles à la demande via `--with` |
+| [`@astratra/prerender`](packages/prerender/README.md) | prérendu SEO générique pour un site Vite + React : un HTML par route, shell SPA préservé, sitemap issu de la même liste que les pages |
 | [`@astratra/react`](packages/react/README.md) | primitives React nues pour une UI à construire soi-même, session cookie `HttpOnly` sans dashboard imposé — voir son README pour le choix vs `saas-kit-ui` |
 | [`examples/dashboard-ui`](examples/dashboard-ui/README.md) | exemple React + Vite consommant `@astratra/saas-kit-ui` et l'API `saas-kit` |
 
@@ -77,6 +87,14 @@ npm run dev:api
 npm run dev:web
 ```
 
+Ajouter des briques dès la génération — sans `--with`, le projet est exactement
+celui d'avant :
+
+```bash
+npm create astratra-app@latest my-app -- --with payments,privacy,notify
+npm create astratra-app@latest my-app -- --with all
+```
+
 Créer une API seule :
 
 ```bash
@@ -93,6 +111,16 @@ npm install @astratra/core @astratra/security @astratra/ai @astratra/saas-kit
 npm install @astratra/store-mongo mongoose
 npm install @astratra/store-postgres pg
 npm install @astratra/saas-kit-ui react react-dom
+npm install @astratra/credentials
+npm install @astratra/entitlements
+npm install @astratra/i18n-server
+npm install @astratra/pdf
+npm install @astratra/payments
+npm install @astratra/privacy
+npm install @astratra/resilience
+npm install @astratra/closure
+npm install @astratra/notify
+npm install @astratra/client
 ```
 
 ## Développement du monorepo
@@ -166,6 +194,66 @@ Primitives React sans dashboard :
 
 ```bash
 npm install @astratra/react react
+```
+
+Clés de service chiffrées en base :
+
+```bash
+npm install @astratra/credentials
+```
+
+Plans, droits d'accès et commission :
+
+```bash
+npm install @astratra/entitlements
+```
+
+Messages du serveur traduits :
+
+```bash
+npm install @astratra/i18n-server
+```
+
+Mise en page PDF :
+
+```bash
+npm install @astratra/pdf pdfkit
+```
+
+Webhooks de paiement :
+
+```bash
+npm install @astratra/payments
+```
+
+Vie privée et droit à l'oubli :
+
+```bash
+npm install @astratra/privacy
+```
+
+Résilience (disjoncteur, cache, relance) :
+
+```bash
+npm install @astratra/resilience
+```
+
+Clôture de période et archives :
+
+```bash
+npm install @astratra/closure
+```
+
+Messages sortants (e-mail, SMS, notifications poussées) :
+
+```bash
+npm install @astratra/notify
+```
+
+Plomberie côté client (session, hors-ligne) :
+
+```bash
+npm install @astratra/client
 ```
 
 ## Commandes utiles

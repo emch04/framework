@@ -118,3 +118,98 @@ export interface AgentLoopOptions {
 }
 
 export function runAgentLoop(options: AgentLoopOptions): Promise<string>;
+
+export type ActionStatus = 'proposed' | 'approved' | 'rejected' | 'executing' | 'executed' | 'failed';
+
+export interface PendingAction {
+  id: string;
+  action: string;
+  payload: Record<string, unknown>;
+  description: string | null;
+  proposedBy: unknown;
+  tenant: unknown;
+  dedupeKey: string | null;
+  status: ActionStatus;
+  proposedAt: Date;
+  approvedBy?: unknown;
+  approvedAt?: Date;
+  rejectedBy?: unknown;
+  rejectedAt?: Date;
+  executedAt?: Date;
+  failedAt?: Date;
+  lastError?: string;
+  amendedWith?: Record<string, unknown> | null;
+  reviewNote?: string | null;
+  [key: string]: unknown;
+}
+
+export interface ActionStore {
+  create(data: Record<string, unknown>): Awaitable<PendingAction>;
+  find(id: string): Awaitable<PendingAction | null>;
+  /** Atomic status transition: returns null when the record was not in `from`. */
+  claim(id: string, from: ActionStatus[], patch: Record<string, unknown>): Awaitable<PendingAction | null>;
+  update(id: string, patch: Record<string, unknown>): Awaitable<PendingAction | null>;
+  findOpenByKey?(dedupeKey: string, statuses: ActionStatus[]): Awaitable<PendingAction | null>;
+  list?(filter?: Record<string, unknown>): Awaitable<PendingAction[]>;
+}
+
+export type ActionTool = (
+  payload: Record<string, unknown>,
+  context: { action: PendingAction; approvedBy: unknown }
+) => Awaitable<unknown>;
+
+export interface PendingActions {
+  /** The agent proposes a write. Nothing runs yet. */
+  propose(input: {
+    action: string;
+    payload?: Record<string, unknown>;
+    description?: string;
+    proposedBy?: unknown;
+    tenant?: unknown;
+    dedupeKey?: string;
+  }): Promise<{ created: boolean; action: PendingAction }>;
+  /** A human says yes — the tool runs once, atomically claimed. */
+  approve(id: string, review: { approvedBy: unknown; amend?: Record<string, unknown> }): Promise<
+    | { executed: true; action: PendingAction; result: unknown }
+    | { executed: false; reason: 'already-handled' | 'failed'; error?: string }
+  >;
+  reject(id: string, review: { rejectedBy: unknown; note?: string }): Promise<PendingAction>;
+  pending(filter?: Record<string, unknown>): Promise<PendingAction[]>;
+  tools: string[];
+  OPEN_STATUSES: ActionStatus[];
+}
+
+export function createPendingActions(options: {
+  store: ActionStore;
+  tools: Record<string, ActionTool>;
+  onPending?: (action: PendingAction) => Awaitable<void>;
+  now?: () => Date;
+  logger?: { info?(m: string): void; warn?(m: string): void; error?(m: string): void };
+}): PendingActions;
+
+export function createMemoryActionStore(): ActionStore & {
+  findOpenByKey(dedupeKey: string, statuses: ActionStatus[]): Promise<PendingAction | null>;
+  list(filter?: Record<string, unknown>): Promise<PendingAction[]>;
+  size(): number;
+};
+
+export interface FallbackAnswer {
+  handled: boolean;
+  answer?: Record<string, unknown> & { degraded?: boolean };
+}
+
+export interface DeterministicFallback<Input = Record<string, unknown>> {
+  answer(input: Input): Promise<FallbackAnswer>;
+  /** Try the provider; serve the deterministic answer when it throws, carrying the provider error. */
+  withFallback<T>(ask: (input: Input) => Awaitable<T>, input: Input): Promise<
+    | { degraded: false; answer: T }
+    | { degraded: true; answer: Record<string, unknown>; providerError: unknown }
+  >;
+  intents: string[];
+}
+
+export function createDeterministicFallback<Input = Record<string, unknown>>(options: {
+  responders: Record<string, (input: Input) => Awaitable<unknown>>;
+  classify?: (input: Input) => string | null | undefined;
+  markDegraded?: (answer: Record<string, unknown>) => Record<string, unknown>;
+}): DeterministicFallback<Input>;

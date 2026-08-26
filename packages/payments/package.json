@@ -1,6 +1,6 @@
 {
   "name": "@astratra/payments",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "The payment webhook pipeline done once: raw-body signature checks, replay protection, and the answers that stop a provider retrying for days.",
   "engines": {
     "node": ">=20"

@@ -117,3 +117,91 @@ export function createOfflineQueue(options: {
   onRejected?: (action: QueuedAction, error: unknown) => void;
   logger?: { warn?(m: string): void; error?(m: string): void };
 }): OfflineQueue;
+
+/* ────────────────────────── Writing to support ────────────────────────── */
+
+export interface SupportLink {
+  readonly email: string;
+  /** The signature block; absent facts are dropped rather than left hollow. */
+  body(context?: Record<string, unknown>, labels?: Record<string, string>): string;
+  /** The complete mailto:, everything encoded. */
+  mailto(subject: string, text?: string, address?: string): string;
+}
+
+export function createSupportLink(options: {
+  email: string;
+  fields?: Array<{ key: string; label: string }>;
+  separator?: string;
+}): SupportLink;
+
+/* ─────────────────── The dashboard's destinations ─────────────────── */
+
+export interface Tool {
+  id: string;
+  path: string;
+  /** Roles allowed to reach it. Anything not listed is refused. */
+  roles: string[];
+  titleKey?: string;
+  subtitleKey?: string;
+  kind?: string;
+  /** Absent means the tool needs a context chosen first. */
+  endpoint?: string;
+  [key: string]: unknown;
+}
+
+export interface ToolCatalog {
+  /** In declaration order — that order is what the dashboard renders. */
+  readonly all: readonly Readonly<Tool>[];
+  byId(id: string | undefined): Readonly<Tool> | undefined;
+  /** Decides what a screen OFFERS. The server decides what it grants. */
+  canAccess(tool: Readonly<Tool> | undefined, role: string | undefined): boolean;
+  forRole(role: string | undefined): readonly Readonly<Tool>[];
+  hasPath(path: string): boolean;
+  needsContext(tool: Readonly<Tool> | undefined): boolean;
+}
+
+export function createToolCatalog(tools?: Tool[]): ToolCatalog;
+
+/* ────────────────── Reading an unfamiliar payload ────────────────── */
+
+export const TITLE_FIELDS: string[];
+export const SUBTITLE_FIELDS: string[];
+
+/** The rows to render, whatever the envelope. Never throws. */
+export function readResourceItems(data: unknown): Record<string, unknown>[];
+export function readResourceTitle(item: Record<string, unknown> | null | undefined, fields?: string[]): string;
+export function readResourceSubtitle(item: Record<string, unknown> | null | undefined, fields?: string[]): string;
+
+/* ─────────────────── Settings menu and landing ─────────────────── */
+
+export interface SettingsGroupEntry<T> {
+  group: string;
+  sections: T[];
+}
+
+export interface SettingsMenu {
+  readonly groups: string[];
+  readonly fallbackGroup: string;
+  /** An unknown section lands in the fallback group — shown, never dropped. */
+  groupOf(sectionId: string): string;
+  /** Declared group order; empty groups omitted. */
+  group<T extends { id?: string }>(sections: readonly T[] | null | undefined): SettingsGroupEntry<T>[];
+}
+
+export function createSettingsMenu(options: {
+  groups: string[];
+  sectionGroups?: Record<string, string>;
+  fallbackGroup?: string;
+}): SettingsMenu;
+
+export interface HomeRoutes {
+  readonly routes: Record<string, string>;
+  /** Must stay a page an unmapped role may legitimately see. */
+  readonly fallback: string;
+  forRole(role: string | undefined): string;
+}
+
+export function createHomeRoutes(options: {
+  routes: Record<string, string>;
+  fallback: string;
+}): HomeRoutes;

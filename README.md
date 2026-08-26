@@ -42,12 +42,13 @@ commande.
 | [`@astratra/resilience`](packages/resilience/README.md) | disjoncteur à sonde unique, cache TTL qui se dégrade au lieu d'échouer, relance avec recul et brouillage |
 | [`@astratra/closure`](packages/closure/README.md) | clôture de période volontaire : liste à points bloquants et reconnus, archive nettoyée de tout identifiant, sections en échec nommées |
 | [`@astratra/notify`](packages/notify/README.md) | messages sortants — e-mail, SMS, push : transport injecté, ne lève jamais, en-têtes protégés de l'injection, abonnements morts rendus pour élagage |
+| [`@astratra/native`](packages/native/README.md) | plomberie mobile sans le moteur mobile : session dans le trousseau, verrou biométrique, notifications natives et veille au premier plan, retour de paiement — adaptateurs injectés, testable en Node |
 | [`@astratra/client`](packages/client/README.md) | plomberie côté client, agnostique : rafraîchissement 401 à vol unique, garde de route à liste publique, règles de mot de passe, file hors ligne |
 | [`@astratra/saas-kit`](packages/saas-kit/README.md) | starter : `createSaasApp()` assemblant users/auth/settings/notifications/dashboard, validation d'entrée intégrée |
 | [`@astratra/store-mongo`](packages/store-mongo/README.md) | adapter de persistance réel (MongoDB/Mongoose) pour `usersStore`/`settingsStore` |
 | [`@astratra/store-postgres`](packages/store-postgres/README.md) | adapter de persistance réel (PostgreSQL/`pg`) pour `usersStore`/`settingsStore` |
 | [`@astratra/saas-kit-ui`](packages/saas-kit-ui/README.md) | dashboard React complet et prêt à l'emploi pour `@astratra/saas-kit`, session JWT en mémoire (`Authorization: Bearer`) |
-| [`create-astratra-app`](packages/create-astratra-app/README.md) | générateur CLI : socle complet, plus les briques optionnelles à la demande via `--with` |
+| [`create-astratra-app`](packages/create-astratra-app/README.md) | générateur CLI : socle complet, briques optionnelles via `--with`, application Expo via `--template mobile` |
 | [`@astratra/prerender`](packages/prerender/README.md) | prérendu SEO générique pour un site Vite + React : un HTML par route, shell SPA préservé, sitemap issu de la même liste que les pages |
 | [`@astratra/react`](packages/react/README.md) | primitives React nues pour une UI à construire soi-même, session cookie `HttpOnly` sans dashboard imposé — voir son README pour le choix vs `saas-kit-ui` |
 | [`examples/dashboard-ui`](examples/dashboard-ui/README.md) | exemple React + Vite consommant `@astratra/saas-kit-ui` et l'API `saas-kit` |

@@ -41,6 +41,27 @@ Template API seule :
 npm create astratra-app@latest my-api -- --template api
 ```
 
+Template mobile :
+
+```bash
+npm create astratra-app@latest my-app -- --template mobile
+```
+
+Il crée une application **Expo Router** montée sur `@astratra/native` et
+`@astratra/client` :
+
+- session dans le trousseau du téléphone, rafraîchissement à vol unique ;
+- verrou biométrique et interrupteur de notifications dans les réglages ;
+- notifications natives : canaux, veille au premier plan, route vérifiée avant
+  d'ouvrir un écran ;
+- écrans splash, accueil public, connexion, mot de passe oublié, tableau de
+  bord, réglages, notifications ;
+- i18n (en, fr) et thème dans `constants/theme.ts`.
+
+Ce template ne prend pas de briques : elles sont du câblage serveur. Générez
+l'API avec le template `fullstack` et pointez l'application dessus par
+`EXPO_PUBLIC_API_BASE_URL`.
+
 ## Après Génération
 
 ```bash

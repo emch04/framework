@@ -1,0 +1,62 @@
+{
+  "app": {
+    "name": "Astratra App"
+  },
+  "auth": {
+    "sign_in": "Se connecter",
+    "email": "E-mail",
+    "password": "Mot de passe",
+    "forgot": "Mot de passe oublié ?",
+    "failed": "Connexion impossible. Vérifiez vos informations et réessayez.",
+    "send_link": "Envoyer le lien",
+    "reset_sent": "Si cette adresse existe, un lien vient de partir.",
+    "show_password": "Afficher le mot de passe",
+    "hide_password": "Masquer le mot de passe"
+  },
+  "common": {
+    "back": "Retour",
+    "continue": "Continuer",
+    "skip": "Passer",
+    "step_progress": "Étape {{step}} sur {{total}}"
+  },
+  "dashboard": {
+    "title": "Tableau de bord",
+    "signed_in_as": "Connecté en tant que",
+    "greeting": "Bonjour",
+    "header": {
+      "online": "En ligne",
+      "offline": "Hors ligne",
+      "subtitle": "Voici où en sont les choses."
+    },
+    "see_all": "Tout voir"
+  },
+  "home": {
+    "welcome": "Bienvenue",
+    "start": "Commencer"
+  },
+  "notifications": {
+    "title": "Notifications",
+    "empty": "Rien pour l'instant.",
+    "unread_label": "{{count}} notifications non lues"
+  },
+  "onboarding": {
+    "eyebrow": "Mise en route",
+    "account_title": "Votre compte",
+    "account_help": "Une adresse suffit pour commencer.",
+    "done_title": "C'est prêt.",
+    "done_help": "Votre compte est créé. Connectez-vous pour continuer."
+  },
+  "password": {
+    "length": "8 caractères minimum",
+    "lowercase": "Une minuscule",
+    "uppercase": "Une majuscule",
+    "digit": "Un chiffre",
+    "special": "Un caractère spécial"
+  },
+  "settings": {
+    "title": "Réglages",
+    "biometric": "Déverrouiller par biométrie",
+    "notifications": "Notifications",
+    "sign_out": "Se déconnecter"
+  }
+}

@@ -166,6 +166,38 @@ sinon poser les dix clés d'un fournisseur demanderait dix e-mails, et le
 garde-fou finirait contourné plutôt qu'utilisé. Demander un nouveau code
 **referme** la fenêtre en cours.
 
+## L'écran qui les gère
+
+Tout ce qui précède tourne sur le serveur. Ces fonctions-ci tournent dans
+l'application — site ou mobile — et lisent ce que les routes renvoient.
+
+```js
+const spaces = readSpaces(payload);
+
+coverageOf(spaces[0]);        // { done: 3, total: 5 } — la pastille de l'onglet
+missingKeys(spaces);          // ce qu'il reste à régler, tous espaces confondus
+firstSpaceToOpen(spaces);     // celui où il y a le plus à faire
+unlockState(payload);         // { unlocked: true, minutesLeft: 4 }
+cleanUnlockCode(' 12 34 56'); // '123456'
+```
+
+**La réponse du serveur est lue sans confiance en sa forme.** Un champ absent,
+une source renommée, un `null` à la place d'un espace : chacun de ces cas
+donnait un écran blanc avec une erreur de type derrière.
+
+**Le doute profite au secret.** Une clé dont le drapeau `secret` manque est
+**masquée**. Une clé mal étiquetée affichée en clair est une fuite ; masquée à
+tort, c'est un désagrément mineur.
+
+**Une clé volontairement débranchée compte comme manquante.** C'est un choix,
+mais un choix qui laisse un service déconnecté : l'écran doit le montrer, pas
+l'enterrer.
+
+**La fenêtre de modification est jugée au moment de la LECTURE**, jamais à la
+réception. Le serveur envoie une date, pas un compte à rebours : décider
+« ouverte » à l'arrivée et s'y fier ensuite laisse un écran de réglages ouvert
+une heure, persuadé qu'il a encore le droit d'écrire.
+
 ## Les routes
 
 ```js

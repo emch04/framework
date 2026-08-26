@@ -14,6 +14,7 @@ module.exports = {
   ...require('./cookies'),
   ...require('./csrf'),
   ...require('./revocation'),
+  ...require('./refreshTokens'),
   ...require('./stableStringify'),
   ...require('./serviceSignature'),
   ...require('./auditChain')

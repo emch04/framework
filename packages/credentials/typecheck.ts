@@ -8,6 +8,8 @@ import {
   TEST,
   UNKNOWN,
   assertAdapter,
+  cleanUnlockCode,
+  coverageOf,
   createCredentialCatalog,
   createCredentialRotation,
   createCredentialVault,
@@ -20,11 +22,17 @@ import {
   createPermissiveGuard,
   createUnlockChallenge,
   createValueGuard,
+  firstSpaceToOpen,
   maskEmail,
-  maskSecret
+  maskSecret,
+  missingKeys,
+  readSpaces,
+  unlockState
 } from './src';
 import type {
   ChallengeStore,
+  CredentialEntry,
+  CredentialSpaceView,
   CredentialRotation,
   RotationCompletion,
   RotationReport,
@@ -182,3 +190,14 @@ async function exercise(): Promise<void> {
 }
 
 void exercise;
+
+/* ─────────────────── Reading the state, for the screen ─────────────────── */
+
+const spaces: CredentialSpaceView[] = readSpaces({ spaces: [{ id: 'providers', label: 'Fournisseurs', keys: [] }] });
+const coverage: { done: number; total: number } = coverageOf(spaces[0]);
+const missing: Array<CredentialEntry & { space: string }> = missingKeys(spaces);
+const openFirst: string | null = firstSpaceToOpen(spaces);
+const unlock: { unlocked: boolean; minutesLeft: number } = unlockState({ unlockedUntil: '2026-08-26T10:00:00.000Z' });
+const code: string = cleanUnlockCode(' 12 34 56 ', 6);
+
+void [coverage.total, missing.length, openFirst, unlock.minutesLeft, code];

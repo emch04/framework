@@ -1,4 +1,8 @@
 import {
+  createCheckoutFlow,
+  readCheckoutUrl,
+  readEntityId,
+  readRenewalDate,
   DUPLICATE,
   HANDLED,
   IGNORED,
@@ -12,6 +16,9 @@ import {
   unrelated
 } from './src';
 import type {
+  CheckoutFlow,
+  PlanAction,
+  PollDecision,
   EventLog,
   HandlerContext,
   Outcome,
@@ -66,3 +73,21 @@ async function exercise(req: RequestLike, res: ResponseLike): Promise<void> {
 }
 
 void exercise;
+
+/* ─────────────────── The client side of paying ─────────────────── */
+
+const flow: CheckoutFlow = createCheckoutFlow({
+  notPurchasable: ['trial'],
+  defaultPlan: 'trial',
+  maxAttempts: 24,
+  intervalMs: 5000,
+  confirms: { stripe: () => true, cinetpay: (payload) => (payload as { success?: boolean })?.success === true }
+});
+
+const action: PlanAction = flow.planAction('pro', 'starter');
+const decision: PollDecision = flow.nextPoll({ confirmed: false, attempts: 3 });
+const payUrl: string | null = readCheckoutUrl({ checkoutUrl: 'https://pay' });
+const accountId: string = readEntityId({ _id: 'acct-1' });
+const renewal: Date | null = readRenewalDate(1790000000);
+
+void [action, decision, payUrl, accountId, renewal, flow.canPay(accountId), flow.isConfirmed('stripe', {}), flow.intervalMs];

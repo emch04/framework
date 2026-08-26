@@ -11,6 +11,73 @@ Aucune dépendance à l'exécution.
 
 ---
 
+# Le tableau de bord, déclaré en données
+
+Un tableau de bord qui code ses tuiles en dur sert exactement un rôle. Déclaré
+en **données** — id, chemin, rôles —, il en sert autant que le produit en a, et
+ajouter un écran devient ajouter une ligne.
+
+```js
+const catalog = createToolCatalog([
+  { id: 'orders', path: '/orders', roles: ['owner', 'seller'], endpoint: '/orders' },
+  { id: 'billing', path: '/billing', roles: ['owner'] }
+]);
+
+catalog.forRole('seller');            // ce que ce rôle voit, dans l'ordre déclaré
+catalog.needsContext(billing);        // true : pas d'endpoint, il faut choisir d'abord
+```
+
+**L'accès se déclare par outil, et se refuse par défaut.** Un rôle absent de la
+liste — y compris l'absence de rôle, ce à quoi ressemble une session à moitié
+restaurée — est refusé. Lister qui est *interdit* admet en silence chaque rôle
+ajouté plus tard.
+
+**Ce n'est pas une frontière de sécurité.** Cela décide ce qu'un écran
+**propose** ; le serveur décide ce qu'il accorde. Cacher une tuile interdite
+évite à quelqu'un un écran qui ne ferait que lui répondre en erreur ; ça
+n'arrête personne de déterminé.
+
+## Lire une charge utile qu'on n'a pas dessinée
+
+Un écran générique — « montre-moi ce qu'il y a derrière cet outil » — fait face
+à un point d'entrée qui répond comme il veut : un tableau nu, un tableau
+enveloppé, ou un objet seul pour une route de détail.
+
+```js
+readResourceItems({ orders: [...] });   // le tableau, où qu'il soit
+readResourceTitle(row);                 // fullName › name › title › … › id
+```
+
+Les replis sont ordonnés par ce qui identifie le mieux une ligne pour un
+humain : un nom complet vaut mieux qu'un e-mail, un e-mail vaut mieux qu'un
+identifiant. L'identifiant est le dernier recours — « 68f3c1a » ne dit rien à
+personne.
+
+# Réglages groupés, et où l'on atterrit
+
+```js
+const menu = createSettingsMenu({
+  groups: ['account', 'shop', 'support'],
+  sectionGroups: { profile: 'account', billing: 'shop' }
+});
+
+const home = createHomeRoutes({ routes: { owner: '/dashboard' }, fallback: '/home' });
+```
+
+**L'ordre est celui déclaré**, pas celui dans lequel les sections arrivent : un
+écran de réglages qui se réorganise entre deux chargements désoriente.
+
+**Une section inconnue est quand même affichée.** Jeter ce que la table ignore
+fait disparaître de l'application, sans erreur nulle part, toute section
+ajoutée ensuite. Mal rangée est un défaut cosmétique ; invisible est une
+fonctionnalité manquante.
+
+**Le repli d'accueil doit rester une page qu'un rôle inconnu a le droit de
+voir.** Sans cette table, tout le monde retombait sur la page publique de
+pré-connexion — et se faisait renvoyer vers la connexion une seconde après
+s'être authentifié. Pointer le repli vers un tableau de bord du personnel
+transformerait un oubli de correspondance en fuite d'accès.
+
 # Session
 
 Rester connecté sans que l'utilisateur le remarque.

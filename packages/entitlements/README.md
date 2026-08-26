@@ -11,6 +11,32 @@ en est un autre.
 
 # Plans et droits
 
+## La liste des invitations, côté écran
+
+Le côté serveur est plus haut : il fabrique les liens, les range en empreinte
+et ne les accepte qu'une fois. Celui-ci lit ce qui revient — et une règle
+justifie à elle seule le module.
+
+```js
+const board = createInvitationBoard({ invitable: { owner: ['seller'] } });
+
+board.readMany(payload);
+board.effectiveStatus(invitation);   // recalculé, jamais cru sur parole
+board.initialTab(invitations);       // s'ouvre sur ce qui demande une action
+```
+
+**Une invitation en attente dont la date est passée est expirée, quoi qu'en
+dise le serveur.** Celui-ci ne bascule le statut qu'au moment où quelqu'un
+ouvre le lien ; jusque-là la ligne dit « en attente ». L'afficher telle quelle
+promet un lien qui fonctionne alors qu'il est déjà mort : la personne l'envoie,
+le destinataire reçoit une erreur, et l'expéditeur doit deviner pourquoi.
+
+**« Terminées » réunit les expirées, les révoquées et les échouées** : dans les
+trois cas la seule suite possible est d'en refaire une.
+
+**Un statut inconnu se lit « en attente »** — la ligne reste à l'écran et
+actionnable, plutôt que de disparaître dans un onglet que personne n'ouvre.
+
 ## Le catalogue
 
 ```js

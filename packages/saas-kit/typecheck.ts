@@ -1,7 +1,14 @@
 import {
+  createMemoryDevicesStore,
+  createMemoryPasswordResetStore,
   createMemorySettingsStore,
   createMemoryUsersStore,
   createSaasApp
+} from '@astratra/saas-kit';
+import type {
+  DevicesStore,
+  PasswordResetStore,
+  RegisteredDevice
 } from '@astratra/saas-kit';
 
 const usersStore = createMemoryUsersStore({
@@ -55,3 +62,34 @@ const app = createSaasApp({
 });
 
 app.use((_req: unknown, _res: unknown, next: () => void) => next());
+
+/* ───────────────── Devices, resets and refresh ───────────────── */
+
+const devices: DevicesStore = createMemoryDevicesStore();
+const resets: PasswordResetStore = createMemoryPasswordResetStore();
+
+const sessionsApp = createSaasApp({
+  jwtSecret: 'secret',
+  notify: async () => ({ queued: true }),
+  verifyPassword: async () => true,
+  hashPassword: async (password: string) => `hashed:${password}`,
+  devicesStore: devices,
+  refreshTokens: { enabled: true, ttlMs: 30 * 24 * 60 * 60 * 1000 },
+  passwordReset: {
+    store: resets,
+    ttlMs: 60 * 60 * 1000,
+    send: async ({ token }) => void token
+  }
+});
+
+async function exerciseSessions(): Promise<void> {
+  const device: RegisteredDevice = await devices.upsert({
+    installationId: 'inst-1',
+    pushToken: 'token',
+    platform: 'ios',
+    userId: 'u1'
+  });
+  void [device.installationId, await devices.listForUser('u1'), await resets.find('hash'), sessionsApp];
+}
+
+void exerciseSessions;

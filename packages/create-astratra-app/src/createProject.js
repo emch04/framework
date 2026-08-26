@@ -1,8 +1,48 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { BRICK_NAMES, brickDependencies, brickFiles, resolveBricks } from './bricks.js';
 
-const VALID_TEMPLATES = new Set(['api', 'fullstack']);
+const VALID_TEMPLATES = new Set(['api', 'fullstack', 'mobile']);
+
+/* The mobile template is a real Expo file tree, copied as-is.
+   Writing an Expo app as inline JS strings — the method the API and web
+   templates use — would add well over a thousand lines of quoted TSX to this
+   file, unreadable and impossible to lint as what it is. */
+const TEMPLATES_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'templates');
+
+/* npm strips a .gitignore from a published tarball, and a .env.example is easy
+   to lose the same way. They ship under neutral names and are restored here. */
+const TEMPLATE_RENAMES = new Map([
+  ['gitignore', '.gitignore'],
+  ['env.example', '.env.example']
+]);
+
+function copyTemplate(templateName, targetDir, projectName) {
+  const source = path.join(TEMPLATES_DIR, templateName);
+  if (!fs.existsSync(source)) throw new Error(`Template files are missing: ${source}`);
+
+  const walk = (from, to) => {
+    fs.mkdirSync(to, { recursive: true });
+    for (const entry of fs.readdirSync(from, { withFileTypes: true })) {
+      const renamed = TEMPLATE_RENAMES.get(entry.name) || entry.name;
+      const fromPath = path.join(from, entry.name);
+      const toPath = path.join(to, renamed);
+      if (entry.isDirectory()) {
+        walk(fromPath, toPath);
+        continue;
+      }
+      let contents = fs.readFileSync(fromPath, 'utf8');
+      if (entry.name === 'package.json') {
+        contents = contents.replace('"name": "astratra-mobile-app"', `"name": "${toPackageName(projectName)}"`);
+      }
+      contents = contents.replaceAll('__PROJECT_NAME__', projectName);
+      fs.writeFileSync(toPath, contents);
+    }
+  };
+
+  walk(source, targetDir);
+}
 
 function toPackageName(projectName) {
   return projectName
@@ -28,10 +68,10 @@ function assertCanCreate(targetDir, force) {
 
 function packageJson(projectName, template, bricks = []) {
   const dependencies = {
-    '@astratra/ai': '^1.0.0',
-    '@astratra/core': '^1.0.0',
-    '@astratra/saas-kit': '^1.3.0',
-    '@astratra/security': '^1.3.0'
+    '@astratra/ai': '^1.2.0',
+    '@astratra/core': '^1.0.1',
+    '@astratra/saas-kit': '^1.6.0',
+    '@astratra/security': '^1.10.0'
   };
   // Scaffolded (api/stores/mongo.js, api/db/mongo.js) but not wired into
   // api/server.js by default — the project starts on the in-memory store.
@@ -39,13 +79,13 @@ function packageJson(projectName, template, bricks = []) {
   // real driver dependency) before the project has ever chosen to use it.
   // `npm install @astratra/store-mongo mongoose` to switch to MongoDB.
   const optionalDependencies = {
-    '@astratra/store-mongo': '^1.0.1',
+    '@astratra/store-mongo': '^1.1.0',
     mongoose: '^8.17.0'
   };
   const devDependencies = {};
 
   if (template === 'fullstack') {
-    dependencies['@astratra/saas-kit-ui'] = '^1.0.0';
+    dependencies['@astratra/saas-kit-ui'] = '^1.0.1';
     dependencies.react = '^19.0.0';
     dependencies['react-dom'] = '^19.0.0';
     devDependencies['@vitejs/plugin-react'] = '^4.3.4';
@@ -77,7 +117,6 @@ function packageJson(projectName, template, bricks = []) {
 function apiServer() {
   return `import fs from 'node:fs';
 import path from 'node:path';
-import { BRICK_NAMES, brickDependencies, brickFiles, resolveBricks } from './bricks.js';
 import saasKit from '@astratra/saas-kit';
 import { env } from './config/env.js';
 import { createAuthSecurity } from './security/auth.js';
@@ -379,7 +418,6 @@ function notificationsModule() {
 function viteConfig() {
   return `import fs from 'node:fs';
 import path from 'node:path';
-import { BRICK_NAMES, brickDependencies, brickFiles, resolveBricks } from './bricks.js';
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
 
@@ -630,12 +668,18 @@ export function parseArgs(args) {
 
   if (!options.targetDir) {
     throw new Error(
-      'Usage: create-astratra-app <directory> [--template api|fullstack] ' +
+      'Usage: create-astratra-app <directory> [--template api|fullstack|mobile] ' +
       `[--with ${BRICK_NAMES.slice(0, 3).join(',')},...|all] [--force]`
     );
   }
   if (!VALID_TEMPLATES.has(options.template)) {
-    throw new Error(`Unknown template "${options.template}". Use api or fullstack.`);
+    throw new Error(`Unknown template "${options.template}". Use api, fullstack or mobile.`);
+  }
+
+  // Les briques sont du câblage serveur : elles n'ont rien à faire dans une
+  // application mobile, et l'accepter en silence livrerait des fichiers morts.
+  if (options.template === 'mobile' && options.bricks.length > 0) {
+    throw new Error('The mobile template takes no bricks — they are server-side wiring.');
   }
 
   // Résolu ici plutôt qu'à l'écriture : un nom de brique fautif doit échouer
@@ -651,6 +695,17 @@ export function createProject({ targetDir, template = 'fullstack', force = false
 
   assertCanCreate(absoluteTarget, force);
   fs.mkdirSync(absoluteTarget, { recursive: true });
+
+  /* The mobile template shares nothing with the API one: no Express server, no
+     Vite, no bricks — those are server-side wiring. */
+  if (template === 'mobile') {
+    copyTemplate('mobile', absoluteTarget, projectName);
+    return {
+      targetDir: absoluteTarget,
+      bricks: [],
+      nextSteps: [`cd ${targetDir}`, 'npm install', 'cp .env.example .env', 'npm start']
+    };
+  }
 
   const selectedBricks = resolveBricks(bricks, template);
 

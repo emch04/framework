@@ -1,4 +1,7 @@
 import {
+  RefreshTokenError,
+  createMemoryRefreshTokenStore,
+  createRefreshTokenService,
   CHALLENGE_TTL_MS,
   GENESIS_HASH,
   createAuditChain,
@@ -27,6 +30,12 @@ import {
   rpConfigForRequest,
   setSessionCookie,
   skipLocalhost
+} from '@astratra/security';
+import type {
+  IssuedRefreshToken,
+  RefreshTokenErrorCode,
+  RefreshTokenService,
+  RefreshTokenStore
 } from '@astratra/security';
 
 createCspMiddleware();
@@ -174,3 +183,32 @@ async function exerciseAudit(): Promise<void> {
 }
 
 void exerciseAudit;
+
+/* ────────────────────────── Refresh tokens ────────────────────────── */
+
+const refreshStore: RefreshTokenStore = createMemoryRefreshTokenStore();
+
+const refreshTokens: RefreshTokenService = createRefreshTokenService({
+  store: refreshStore,
+  ttlMs: 30 * 24 * 60 * 60 * 1000,
+  now: () => Date.now(),
+  randomToken: () => 'token'
+});
+
+async function exerciseRefreshTokens(): Promise<void> {
+  const issued: IssuedRefreshToken = await refreshTokens.issue({ userId: 'u1' });
+  try {
+    const next: IssuedRefreshToken = await refreshTokens.rotate(issued.token);
+    void next.familyId;
+  } catch (error) {
+    if (error instanceof RefreshTokenError) {
+      const code: RefreshTokenErrorCode = error.code;
+      void code;
+    }
+  }
+  await refreshTokens.revokeFamily(issued.familyId);
+  await refreshTokens.revokeAllForUser('u1');
+  void [await refreshTokens.prune(), refreshTokens.fingerprint('x'), issued.expiresAt];
+}
+
+void exerciseRefreshTokens;

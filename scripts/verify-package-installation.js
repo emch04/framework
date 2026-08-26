@@ -18,6 +18,7 @@ const workspaces = [
   '@astratra/closure',
   '@astratra/notify',
   '@astratra/client',
+  '@astratra/native',
   '@astratra/prerender',
   '@astratra/react',
   '@astratra/tooling',

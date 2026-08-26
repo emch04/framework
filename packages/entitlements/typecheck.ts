@@ -1,4 +1,5 @@
 import {
+  createInvitationBoard,
   InvitationError,
   createAccessMatrix,
   createInvitations,
@@ -11,6 +12,10 @@ import {
   except
 } from './src';
 import type {
+  InvitationBoard,
+  InvitationRow,
+  InvitationTab,
+  InvitationTone,
   AccessMatrix,
   Invitation,
   InvitationStore,
@@ -148,3 +153,20 @@ async function exerciseInvitations(): Promise<void> {
 }
 
 void exerciseInvitations;
+
+/* ─────────────── The invitation list, as a screen sees it ─────────────── */
+
+const board: InvitationBoard = createInvitationBoard({
+  urgentHours: 6,
+  invitable: { owner: ['seller', 'courier'] }
+});
+
+const rows: InvitationRow[] = board.readMany({ invitations: [{ _id: 'inv-1', status: 'pending' }] });
+const tab: InvitationTab = board.initialTab(rows);
+const shade: InvitationTone = board.tone(rows[0]);
+
+void [
+  tab, shade, board.effectiveStatus(rows[0]), board.hoursLeft(rows[0]),
+  board.counts(rows).pending, board.filter(rows, 'closed').length, board.tabCounts(rows).closed,
+  board.invitableRoles('owner'), board.canInvite('owner'), board.looksLikeEmail('a@b.cd'), board.tabs
+];

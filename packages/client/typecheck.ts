@@ -4,7 +4,14 @@ import {
   createOfflineQueue,
   createPasswordRules,
   createRouteGuard,
-  createSessionClient
+  createSessionClient,
+  createSupportLink,
+  createHomeRoutes,
+  createSettingsMenu,
+  createToolCatalog,
+  readResourceItems,
+  readResourceSubtitle,
+  readResourceTitle
 } from './src';
 import type {
   OfflineQueue,
@@ -12,7 +19,12 @@ import type {
   QueueStore,
   ReplayReport,
   RouteGuard,
-  SessionClient
+  SessionClient,
+  SupportLink,
+  HomeRoutes,
+  SettingsMenu,
+  Tool,
+  ToolCatalog
 } from './src';
 
 /* ───────────────── Session, routes and passwords ───────────────── */
@@ -77,3 +89,53 @@ async function exercise(): Promise<void> {
 }
 
 void exercise;
+
+/* ──────────────────────── Writing to support ──────────────────────── */
+
+const support: SupportLink = createSupportLink({
+  email: 'support@acme.cd',
+  fields: [{ key: 'name', label: 'Nom' }],
+  separator: '—'
+});
+
+const signature: string = support.body({ name: 'Jean' }, { name: 'Name' });
+const helpLink: string = support.mailto('Problème', signature, support.email);
+
+void [signature, helpLink];
+
+/* ─────────────────── Catalogue and payloads ─────────────────── */
+
+const tools: Tool[] = [
+  { id: 'orders', path: '/orders', roles: ['owner'], titleKey: 'orders.title', kind: 'collection', endpoint: '/orders' },
+  { id: 'billing', path: '/billing', roles: ['owner'] }
+];
+
+const catalog: ToolCatalog = createToolCatalog(tools);
+const visible: readonly Readonly<Tool>[] = catalog.forRole('owner');
+const one: Readonly<Tool> | undefined = catalog.byId('orders');
+const rows: Record<string, unknown>[] = readResourceItems({ orders: [{ id: 'o1' }] });
+const title: string = readResourceTitle(rows[0]);
+const subtitle: string = readResourceSubtitle(rows[0], ['status']);
+
+void [
+  visible.length, one?.path, catalog.hasPath('/orders'), catalog.canAccess(one, 'owner'),
+  catalog.needsContext(catalog.byId('billing')), catalog.all.length, title, subtitle
+];
+
+/* ─────────────────── Menu and landing ─────────────────── */
+
+const menu: SettingsMenu = createSettingsMenu({
+  groups: ['account', 'shop'],
+  sectionGroups: { profile: 'account' },
+  fallbackGroup: 'account'
+});
+
+const home: HomeRoutes = createHomeRoutes({
+  routes: { owner: '/dashboard' },
+  fallback: '/home'
+});
+
+interface Section { id: string; labelKey: string }
+const grouped = menu.group<Section>([{ id: 'profile', labelKey: 'profile' }]);
+
+void [grouped[0]?.group, grouped[0]?.sections[0]?.labelKey, menu.groupOf('x'), home.forRole('owner'), home.fallback];

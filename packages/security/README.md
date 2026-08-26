@@ -309,6 +309,55 @@ propre store (Redis, etc.) qui implémente la même interface
 (`revoke`, `isRevoked`, et optionnellement `revokeAllForUser`/
 `isRevokedForUser`).
 
+## Rester connecté (jetons de rafraîchissement)
+
+Un jeton d'accès est court par choix : c'est cette brièveté qui limite les
+dégâts d'un vol. Le prix, c'est qu'il faut quelque chose pour le renouveler —
+et ce quelque chose est un identifiant à longue vie. Mal fait, on a remplacé un
+risque d'une heure par un risque d'un mois.
+
+```js
+const refreshTokens = createRefreshTokenService({
+  store: createMemoryRefreshTokenStore(),
+  ttlMs: 30 * 24 * 60 * 60 * 1000
+});
+
+const { token, familyId } = await refreshTokens.issue({ userId: user.id });
+const next = await refreshTokens.rotate(token);   // l'ancien est mort
+await refreshTokens.revokeAllForUser(user.id);    // mot de passe changé
+```
+
+**Ce n'est pas un JWT.** Le jeton ne prouve rien par lui-même et ne porte aucune
+information : c'est une chaîne aléatoire, qui n'a de sens que comme ligne dans
+un magasin. C'est ce qui le rend **révocable** — un jeton signé reste valable
+jusqu'à son expiration, quoi qu'on en pense entre-temps.
+
+**Il est rangé en empreinte, jamais en clair.** Une base volée ne donne alors
+aucune session. Le jeton a toute l'entropie voulue, donc un SHA-256 suffit : il
+n'y a rien à casser par force brute, et un hachage lent à chaque renouvellement
+ne serait qu'une surface de déni de service.
+
+**Il tourne à chaque usage.** Le jeton présenté est consommé, un neuf prend sa
+place. Un jeton vu deux fois est donc une anomalie, pas un cas normal.
+
+**Un rejeu tue la famille.** Quand un jeton déjà consommé revient, quelqu'un en
+a gardé une copie : le client légitime est passé à autre chose depuis. Refuser
+ce seul jeton laisserait le voleur avec celui **en cours** — c'est donc toute la
+chaîne issue de cette connexion qui est révoquée. La vraie personne se
+reconnecte : c'est le prix correct d'une session volée.
+
+### L'alphabet, et le bug qui l'a imposé
+
+Les jetons sont en **hexadécimal**, pas en base64url. Ce dernier contient `-`,
+donc environ un jeton sur cent trente portait un `--` quelque part. Le WAF
+(section plus bas) lit `--` dans un corps de requête comme un commentaire SQL et
+répond 403 : cette session ne pouvait alors **plus jamais** être renouvelée,
+puisque le client rejoue le même jeton et se fait bloquer à chaque fois.
+L'utilisateur était déconnecté pour des raisons que personne ne savait
+reproduire.
+
+Un identifiant ne doit jamais pouvoir être lu comme du contenu.
+
 ## Codes uniques
 
 ```js

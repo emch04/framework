@@ -3,6 +3,325 @@
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Chaque package Astratra est versionné indépendamment.
 
+## 2026-08-26 (27)
+
+### Corrige
+
+- `create-astratra-app` (`1.4.0`) — **huit planchers de version périmés, tous
+  silencieux.** Le générateur écrivait `@astratra/saas-kit: ^1.3.0` : un projet
+  généré installait la 1.5.1 publiée, **qui n'a pas les trois nouvelles
+  routes**. Le développeur activait `refreshTokens: { enabled: true }` et il ne
+  se passait rien — aucune erreur, aucun message.
+
+  Quatre briques portaient en plus un caret sur une version `0.x`, qui **ne
+  franchit pas la mineure** : `^0.2.0` n'installe jamais la `0.3.0`. Les
+  briques `credentials`, `entitlements`, `payments` et `client` livraient donc
+  la version d'avant.
+
+  **Les tests verrouillaient le défaut** : ils affirmaient les numéros en dur,
+  donc ils passaient au vert en décrivant l'état périmé. Ils lisent désormais
+  les versions de l'espace de travail, et trois nouveaux tests comparent chaque
+  plancher écrit — API, briques, gabarit mobile — à ce que le dépôt publie
+  réellement. La dérive ne peut plus repasser inaperçue.
+
+## 2026-08-26 (26) — Android
+
+### Corrige
+
+- `@astratra/native` (`0.1.0`) — **`resolveGlassMode()` décrétait « iOS ou une
+  imitation », et c'était faux.** Android rend un vrai flou d'arrière-plan ; il
+  faut simplement le demander par son nom. Trois réponses désormais au lieu de
+  deux : `native` (matériau de la plateforme), `blur` (vrai flou, iOS **et**
+  Android), `fallback` (aucun flou disponible, couche translucide assumée).
+
+  Avec `blurPropsFor()`, qui ajoute `experimentalBlurMethod` sur Android — sans
+  lui, `expo-blur` s'y affiche en simple voile translucide : il ressemble au
+  repli tout en se prétendant flou, ce qui est le pire des trois états puisque
+  personne ne remarque l'erreur.
+
+- `create-astratra-app` (`1.4.0`) — trois défauts **propres à Android**, trouvés
+  en lançant l'émulateur :
+
+  `elevation` dessinait un **rectangle blanc opaque** à l'intérieur de chaque
+  carte. Android dessine l'ombre d'élévation contre un fond opaque ; avec un
+  fond translucide il peint un bloc plein derrière toute la vue. Les surfaces
+  se séparent maintenant par le flou et la bordure, et l'ombre reste à iOS.
+
+  `expo-notifications` levait une **bannière d'erreur rouge** au démarrage — le
+  push distant a été retiré d'Expo Go au SDK 53, et il suffisait d'importer le
+  module. Les modules natifs se chargent désormais à la demande dans `load()`
+  (c'est précisément à cela que sert le chargeur asynchrone de
+  `createPushService`), et les écoutes ne démarrent pas du tout dans Expo Go.
+
+  `GlassPanel` peignait un repli plat hors iOS ; il rend un vrai `BlurView` des
+  deux côtés. Le flou est une **couche**, pas le conteneur : mettre le contenu
+  dans un `BlurView` le rend lui-même flou sur certaines versions d'Android.
+
+## 2026-08-26 (25) — lot 2
+
+### Ajoute
+
+- `@astratra/client` (`0.2.0`→`0.3.0`) — **le tableau de bord déclaré en
+  données.** `createToolCatalog()` : id, chemin, rôles ; l'accès se déclare par
+  outil et se refuse par défaut, y compris pour une session à moitié restaurée.
+  Un outil sans point d'entrée annonce qu'il a besoin d'un contexte choisi
+  d'abord, ce qui évite d'ouvrir un écran vide.
+
+  Ce n'est pas une frontière de sécurité : cela décide ce qu'un écran propose,
+  le serveur décide ce qu'il accorde.
+
+  Avec, `readResourceItems()`/`readResourceTitle()`/`readResourceSubtitle()` :
+  lire une liste et un nom dans une charge utile qu'on n'a pas dessinée —
+  tableau nu, tableau enveloppé, ou objet seul d'une route de détail.
+
+  Et `createSettingsMenu()` — l'ordre est celui déclaré, les groupes vides sont
+  omis, et une section inconnue reste **affichée** : mal rangée est cosmétique,
+  invisible est une fonctionnalité disparue. Plus `createHomeRoutes()`, dont le
+  repli doit rester une page qu'un rôle inconnu a le droit de voir.
+
+- `@astratra/payments` (`0.1.0`→`0.2.0`) — **le côté écran du paiement.**
+  `createCheckoutFlow()` décide ce qu'un bouton de plan peut faire, où envoyer
+  la personne (`readCheckoutUrl` couvre les noms des différentes passerelles),
+  et comment conclure la confirmation. Trois règles nées de plaintes réelles :
+  un plan peut être accordé plutôt que vendu ; un compte sans rien à facturer
+  doit se l'entendre dire au lieu d'un bouton inerte ; « en attente » n'est pas
+  « échoué », le webhook tranchera. Une passerelle non déclarée n'est jamais
+  confirmée.
+
+  Avec `readEntityId()`, pour un identifiant qui arrive tantôt brut tantôt
+  peuplé — sans quoi une requête part avec « [object Object] » et échoue loin
+  de sa cause.
+
+- `@astratra/entitlements` (`0.3.0`→`0.4.0`) — **la liste des invitations,
+  côté écran.** `createInvitationBoard()` relit le statut plutôt que de le
+  croire : une invitation en attente dont la date est passée est **expirée**,
+  quoi qu'en dise le serveur, qui ne bascule le statut qu'à l'ouverture du
+  lien. Sans ce calcul l'écran promet un lien déjà mort. Onglets, compteurs,
+  urgence, et « terminées » qui réunit expirées, révoquées et échouées.
+
+  `@astratra/native` suit son plancher `@astratra/client` en `^0.3.0`.
+
+### Note
+
+Le lot 2 comptait aussi `documents.ts` (370 lignes) et `messageApi.ts` (168).
+**Ni l'un ni l'autre n'est extrait**, après lecture : le premier est du métier
+scolaire — délibérations, bulletins, certificats — dont le seul bout générique,
+lire un nom, est désormais couvert par `readResourceTitle()` ; le second est
+une suite d'appels HTTP liés à des routes précises, dont les parties générales
+(`resolveAssetUrl`, dépaquetage de liste) existent déjà dans
+`@astratra/native` et `@astratra/client`.
+
+Restent non extraits, faute d'un contrat public qui vaille aujourd'hui :
+l'agrégat d'aperçu, les alertes de fraude, les statistiques d'inscription et
+l'historique de conversations IA.
+
+## 2026-08-26 (24)
+
+### Corrige
+
+- `create-astratra-app` (`1.4.0`) — **une application générée ne démarrait
+  pas.** L'import interne du générateur
+  (`import { BRICK_NAMES, … } from './bricks.js'`) avait été recopié dans deux
+  fichiers ÉMIS — `api/server.js` et `vite.config.js` — alors que ce fichier
+  n'est jamais écrit dans le projet. Tout `npm run dev:api` échouait aussitôt
+  sur `ERR_MODULE_NOT_FOUND`.
+
+  Les tests existants ne pouvaient pas le voir : ils vérifiaient que les
+  fichiers existent, jamais qu'ils démarrent. Trouvé en lançant réellement une
+  API générée pour brancher l'application mobile dessus.
+
+- `create-astratra-app` (`1.4.0`) — **le gabarit mobile portait encore
+  l'identité visuelle du projet d'origine.** Cinquante-six couleurs écrites en
+  dur dans les composants ignoraient le thème : chaque application livrée à un
+  client aurait hérité du même bleu et de la même encre.
+
+  Toutes passent désormais par `constants/theme.ts`, où **deux triplets** —
+  l'encre et l'accent — décident de l'ensemble, avec `inkAlpha()` et
+  `accentAlpha()` pour les variantes. Changer l'identité d'une application,
+  c'est changer deux lignes. Un test du générateur échoue si un littéral
+  revient.
+
+- `create-astratra-app` (`1.4.0`) — la tuile du tableau de bord calculait sa
+  largeur à partir d'une marge de conteneur écrite en dur. Dans un écran à la
+  marge différente, chaque tuile était quelques pixels trop large et deux ne
+  tenaient plus sur une ligne — ce qui se lit comme une mise en page cassée,
+  pas comme une erreur d'arithmétique. La marge est devenue une propriété.
+
+  Le point après le nom, dans l'en-tête, se retrouvait seul sur sa ligne quand
+  l'adresse était longue.
+
+### Ajoute
+
+- `create-astratra-app` (`1.4.0`) — les cinq composants livrés mais non câblés
+  le sont enfin : parcours d'inscription en deux étapes (`StepScreen`,
+  `BrandBackground`), barre d'onglets et bouton « tout voir » sur le tableau
+  de bord, œil d'affichage du mot de passe à la connexion. Un template dont on
+  ne voit pas la moitié des pièces n'a livré que la moitié du travail.
+
+  L'URL d'API par défaut perd son suffixe `/api` : l'API générée par ce même
+  outil monte ses routes à la racine. Les deux moitiés se parlent maintenant
+  sans réglage.
+
+## 2026-08-26 (23)
+
+### Ajoute
+
+- `create-astratra-app` (`1.4.0`) — **le gabarit mobile passe des composants
+  d'esquisse au vrai système visuel** : surface de verre (flou natif iOS,
+  réfraction Skia, repli ailleurs), en-tête de tableau de bord, cloche, bandeau
+  de KPI, tuiles, barre d'onglets, apparition en cascade, écran d'étape
+  d'inscription. ~1 100 lignes déjà éprouvées, débarrassées de tout ce qui
+  appartenait au projet d'origine — un test du générateur échoue désormais si
+  la moindre trace revient.
+
+  Le tableau de bord se déclare **en données** (`constants/dashboard.ts`) :
+  changer ce qu'une application affiche est une édition de liste, jamais une
+  réécriture d'écran. C'est ce qui permet à un même tableau de bord de servir
+  plusieurs rôles.
+
+  La cloche et l'en-tête ne vont plus chercher leurs propres données : l'écran
+  possède les données, le composant affiche. C'est aussi ce qui les rendait
+  impossibles à rendre dans un test ou un aperçu.
+
+- `create-astratra-app` (`1.4.0`) — **`KeyboardScreen`**, et la fin d'un défaut
+  recopié douze fois. Le même montage `KeyboardAvoidingView` + `ScrollView` +
+  `Keyboard.dismiss` était collé sur chaque écran à formulaire — avec des
+  divergences : `behavior="height"` ici, `undefined` là. Expo règle Android en
+  `softwareKeyboardLayoutMode: 'resize'`, donc le système redimensionne déjà :
+  ajouter `behavior` par-dessus corrige deux fois la même chose et fait sauter
+  la mise en page. Une seule des trois versions était juste ; c'est elle qui
+  reste.
+
+### Corrige
+
+- `create-astratra-app` (`1.4.0`) — trois défauts trouvés en faisant tourner
+  l'application dans le simulateur, invisibles à la compilation :
+
+  `react-native-reanimated` et son greffon Babel manquaient. Skia les tire, et
+  l'échec arrive **à l'exécution** en se présentant comme un paquet absent, pas
+  comme un greffon Babel oublié. Un test du générateur le vérifie désormais.
+
+  Le texte des boutons pleins était l'encre foncée sur un bleu saturé —
+  lisible sur une capture, refusé par un contrôle de contraste. Un jeton
+  `onAccent` sépare l'encre posée SUR l'accent de l'encre du corps de texte.
+
+  Le libellé du bouton « mot de passe oublié » affichait « Se connecter » :
+  mauvaise clé de traduction réutilisée.
+
+## 2026-08-26 (22)
+
+### Ajoute
+
+- `@astratra/security` (`1.9.1`→`1.10.0`) — **rester connecté sans laisser
+  traîner un passe-partout.** `createRefreshTokenService()` : jeton opaque (pas
+  un JWT, donc révocable), rangé **en empreinte** — une base volée ne donne
+  aucune session —, **rotation à chaque usage**, et surtout **détection de
+  rejeu** : un jeton déjà consommé qui revient signifie qu'une copie circule,
+  donc toute la chaîne issue de cette connexion est révoquée. Refuser ce seul
+  jeton laisserait le voleur avec celui en cours.
+
+- `@astratra/saas-kit` (`1.5.1`→`1.6.0`) — les trois routes qu'une application
+  mobile réclame, éteintes par défaut ou montées seulement si tu fournis de
+  quoi les servir :
+
+  `/auth/refresh` (avec `refreshTokens: { enabled: true }`) ; se déconnecter
+  révoque désormais aussi la chaîne de rafraîchissement, sans quoi la session
+  revenait au renouvellement suivant.
+
+  `/auth/forgot-password` et `/auth/reset-password` (avec `passwordReset.send`
+  et `hashPassword`). La réponse est **identique** que l'adresse existe ou non :
+  « aucun compte avec cet e-mail » transforme l'écran en annuaire de comptes.
+  La réinitialisation **révoque toutes les sessions** — l'étape qu'on oublie,
+  alors que la personne est peut-être en train de reprendre un compte volé.
+
+  `/notifications/devices` (POST/GET/DELETE), déclarées **avant** le garde
+  d'administration du module : enregistrer son propre téléphone n'est pas un
+  acte d'administration. Chaque route est bornée à `req.user.id`, jamais à
+  l'identifiant de l'URL.
+
+### Corrige
+
+- `@astratra/security` (`1.10.0`) — **les jetons générés passent de base64url à
+  l'hexadécimal, et ce n'est pas cosmétique.** base64url contient `-` : environ
+  un jeton sur cent trente portait un `--`, que le WAF de ce même package lit
+  comme un commentaire SQL et bloque en 403. La session concernée ne pouvait
+  alors **plus jamais** être renouvelée — le client rejoue le même jeton et se
+  fait bloquer à chaque fois. Déconnexion apparemment aléatoire, irreproductible.
+
+  Trouvé en exécutant, pas en relisant : le test de bout en bout échouait deux
+  fois sur six. Une sonde de 400 tirages a isolé la cause en montrant les jetons
+  fautifs, tous porteurs d'un `--`. Deux tests figent désormais l'alphabet.
+
+  Même correction pour les jetons de réinitialisation de `@astratra/saas-kit`,
+  qui avaient exactement le même défaut.
+
+  La règle générale : **un identifiant ne doit jamais pouvoir être lu comme du
+  contenu.**
+
+- `create-astratra-app` (`1.4.0`) — le gabarit mobile lisait `data.accessToken`
+  là où l'API renvoie `data.token`. L'échec était silencieux : la session était
+  « enregistrée » avec `undefined`, et la requête suivante partait sans
+  authentification.
+
+## 2026-08-26 (21)
+
+### Ajoute
+
+- `@astratra/native` (`0.1.0`) — **la plomberie mobile, sans le moteur
+  mobile.** Le package ne charge ni `expo-secure-store`, ni
+  `expo-local-authentication`, ni `expo-notifications`, ni `expo-web-browser` :
+  il les reçoit. Même règle que le transport de `@astratra/notify`, et même
+  bénéfice — 89 tests tournent en Node, sans simulateur ni build natif.
+
+  Session à deux jetons dans le trousseau (jeton d'accès gardé en mémoire : un
+  écran de liste faisait douze lectures du Keychain), verrou biométrique,
+  service de notifications natives, veille au premier plan, interrupteur des
+  réglages, aller-retour de paiement, mode de l'effet de verre.
+
+  Le transport (`createApiClient`) ne réécrit pas le rafraîchissement : il
+  branche `@astratra/client`, vol unique et rejeu unique compris. Les trois
+  formes d'appel — JSON, flux, binaire — partagent **une** promesse de
+  rafraîchissement : un téléchargement et un appel JSON qui butent ensemble sur
+  un jeton mort ne renouvellent pas deux fois.
+
+  Trois défauts de la source d'origine sont corrigés, chacun figé par un test :
+  un drapeau biométrique restait valide après retrait de l'empreinte du
+  téléphone ; un trousseau qui levait faisait échouer le lancement au lieu de
+  répondre « pas de session » ; la table de routes des notifications était en
+  dur — les règles se déclarent maintenant par autorisation, et une route non
+  déclarée est refusée.
+
+- `create-astratra-app` (`1.3.0`→`1.4.0`) — **`--template mobile`** : une
+  application Expo Router complète, montée sur `@astratra/native` et
+  `@astratra/client`. Splash, accueil public, connexion, mot de passe oublié,
+  tableau de bord, réglages, notifications ; i18n en/fr ; thème isolé.
+
+  Le gabarit est un vrai arbre de fichiers copié, pas des chaînes JS écrites
+  dans `createProject.js` comme les gabarits API et web : une application Expo
+  y aurait ajouté plus de mille lignes de TSX entre guillemets, illisibles et
+  impossibles à traiter pour ce qu'elles sont. `gitignore` et `env.example`
+  voyagent sous un nom neutre — npm retire un `.gitignore` d'un tarball publié
+  — et retrouvent leur point à la copie.
+
+  Ce gabarit refuse les briques : elles sont du câblage serveur, et les
+  accepter en silence livrerait des fichiers morts.
+
+- `@astratra/client` (`0.1.0`→`0.2.0`) — `createSupportLink()` : le lien
+  d'écriture au support, avec la signature que le support aurait demandée de
+  toute façon. Les champs vides sont omis plutôt que rendus en lignes creuses,
+  et sujet comme corps sont encodés : un accent ou un saut de ligne non encodé
+  tronque le message chez certains clients de messagerie.
+
+- `@astratra/credentials` (`0.2.0`→`0.3.0`) — la lecture de l'état des clés,
+  côté écran : `readSpaces()`, `coverageOf()`, `missingKeys()`,
+  `firstSpaceToOpen()`, `unlockState()`, `cleanUnlockCode()`. La réponse du
+  serveur est lue sans confiance en sa forme, le doute profite au secret — une
+  clé sans étiquette `secret` est masquée — et la fenêtre de modification est
+  jugée **au moment de la lecture**, jamais à la réception : un écran de
+  réglages reste parfois ouvert une heure.
+
+  `@astratra/native` dépend de `@astratra/client` en `^0.2.0`.
+
 ## 2026-08-25 (20)
 
 ### Corrige

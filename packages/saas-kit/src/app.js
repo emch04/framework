@@ -14,7 +14,9 @@ const {
   createCsrfCookiePrimer,
   createCsrfMiddleware,
   createLoginLimiter,
+  createMemoryRefreshTokenStore,
   createMemoryRevocationStore,
+  createRefreshTokenService,
   createMongoSanitizeMiddleware,
   createSecurityAuditLogger,
   createSecurityHeadersMiddleware,
@@ -28,6 +30,8 @@ const createSettingsRoutes = require('./modules/settings');
 const createUsersRoutes = require('./modules/users');
 const createMemorySettingsStore = require('./stores/memorySettingsStore');
 const createMemoryUsersStore = require('./stores/memoryUsersStore');
+const createMemoryPasswordResetStore = require('./stores/memoryPasswordResetStore');
+const createMemoryDevicesStore = require('./stores/memoryDevicesStore');
 const { DEFAULT_PUBLIC_USER_FIELDS, assertAdapter } = require('./utils');
 
 const DEFAULT_JWT_SECRET = 'saas-kit-dev-secret';
@@ -45,6 +49,27 @@ function normalizeOptions(options = {}) {
   const usersStore = options.usersStore || createMemoryUsersStore();
   const settingsStore = options.settingsStore || createMemorySettingsStore();
   const revocationStore = options.revocationStore || createMemoryRevocationStore();
+  const devicesStore = options.devicesStore || createMemoryDevicesStore();
+
+  /* Off unless asked for. A refresh token is a long-lived credential: it is
+     handed out because a product needs it, never because a default said so. */
+  const refreshConfig = options.refreshTokens || {};
+  const refreshTokenService = refreshConfig.enabled
+    ? (refreshConfig.service || createRefreshTokenService({
+      store: refreshConfig.store || createMemoryRefreshTokenStore(),
+      ttlMs: refreshConfig.ttlMs
+    }))
+    : null;
+
+  /* The reset routes exist only when there is a way to deliver the link.
+     Mounting them without a sender would accept requests that go nowhere and
+     report success — the worst of both. */
+  const passwordReset = options.passwordReset;
+  const hashPassword = options.hashPassword;
+  if (passwordReset && typeof passwordReset.send === 'function' && typeof hashPassword !== 'function') {
+    throw new Error('createSaasApp requires options.hashPassword when options.passwordReset.send is provided.');
+  }
+  const passwordResetStore = (passwordReset && passwordReset.store) || createMemoryPasswordResetStore();
   const notify = options.notify;
   const verifyPassword = options.verifyPassword;
   const roles = { ...DEFAULT_ROLES, ...(options.roles || {}) };
@@ -68,6 +93,11 @@ function normalizeOptions(options = {}) {
     usersStore,
     settingsStore,
     revocationStore,
+    devicesStore,
+    refreshTokenService,
+    passwordReset,
+    passwordResetStore,
+    hashPassword,
     notify,
     verifyPassword,
     roles,
@@ -185,7 +215,8 @@ function createSaasApp(options = {}) {
   }));
   app.use('/notifications', authMiddleware, csrfMiddleware, createNotificationsRoutes({
     notify: normalized.notify,
-    authorizeAdmin
+    authorizeAdmin,
+    devicesStore: normalized.devicesStore
   }));
   app.use('/dashboard', authMiddleware, csrfMiddleware, createDashboardRoutes({
     usersStore: normalized.usersStore

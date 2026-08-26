@@ -103,6 +103,32 @@ une fois toutes les autres voies épuisées. Il ne remplace pas ce guide : il
 transforme un bug silencieux en erreur bruyante, il ne t'évite pas de le
 créer.
 
+## Et depuis une application mobile
+
+Une app mobile ne s'authentifie pas par cookie : elle envoie
+`Authorization: Bearer`. Trois conséquences pour tes routes personnalisées.
+
+**La CSRF ne s'applique pas, et `createSaasApp()` le sait déjà.** Un navigateur
+attache un cookie tout seul à une requête inter-site ; il n'attache jamais un
+en-tête `Authorization`. Le middleware CSRF du kit saute donc les requêtes
+porteuses d'un Bearer. Si tu montes le tien à la main, reprends ce `skip` —
+sinon ton app mobile reçoit des 403 sur chaque écriture.
+
+```js
+const csrfMiddleware = createCsrfMiddleware({
+  skip: (req) => String(req.headers?.authorization || '').startsWith('Bearer ')
+});
+```
+
+**`cookieParserMiddleware()` reste nécessaire quand même**, si le même serveur
+sert aussi un site web. Les deux clients cohabitent sur les mêmes routes.
+
+**`/auth/refresh` n'a délibérément pas de middleware d'auth.** Le jeton d'accès
+est censé être MORT au moment où cette route est appelée — c'est le jeton de
+rafraîchissement qui fait office d'identifiant. Si tu ajoutes des routes de
+session à toi, applique la même règle : exiger une session valide pour
+renouveler une session expirée est une boucle fermée.
+
 ## Résumé
 
 | Approche | Sécurité par défaut | Risque d'oubli |

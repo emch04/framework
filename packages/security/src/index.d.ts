@@ -507,3 +507,67 @@ export function createMemoryAuditStore(): AuditStore & {
 
 export function hashEvent(event: Record<string, unknown>): string;
 export const GENESIS_HASH: string;
+
+/* ────────────────────────── Refresh tokens ────────────────────────── */
+
+export type RefreshTokenErrorCode =
+  | 'REFRESH_TOKEN_INVALID'
+  | 'REFRESH_TOKEN_EXPIRED'
+  | 'REFRESH_TOKEN_REUSED';
+
+export class RefreshTokenError extends Error {
+  name: 'RefreshTokenError';
+  code: RefreshTokenErrorCode;
+  constructor(message: string, code: RefreshTokenErrorCode);
+}
+
+export interface RefreshTokenRecord {
+  id: string;
+  familyId: string;
+  userId: string;
+  /** SHA-256 of the token. The token itself is never stored. */
+  hash: string;
+  createdAt: number;
+  expiresAt: number;
+  consumedAt: number | null;
+  revokedAt: number | null;
+}
+
+export interface RefreshTokenStore {
+  save(record: RefreshTokenRecord): Promise<unknown>;
+  findByHash(hash: string): Promise<RefreshTokenRecord | null>;
+  markConsumed(id: string, at: number): Promise<unknown>;
+  revokeFamily(familyId: string, at: number): Promise<unknown>;
+  revokeAllForUser(userId: string, at: number): Promise<unknown>;
+  deleteExpired?(before: number): Promise<number>;
+}
+
+export function createMemoryRefreshTokenStore(): RefreshTokenStore & {
+  all(): Promise<RefreshTokenRecord[]>;
+};
+
+export interface IssuedRefreshToken {
+  /** Hand this to the client. It is never stored, and never seen again. */
+  token: string;
+  id: string;
+  familyId: string;
+  userId: string;
+  expiresAt: number;
+}
+
+export interface RefreshTokenService {
+  issue(input: { userId: string }): Promise<IssuedRefreshToken>;
+  /** Spends the token and returns the next one. Replay revokes the family. */
+  rotate(token: string | null | undefined): Promise<IssuedRefreshToken>;
+  revokeFamily(familyId: string): Promise<void>;
+  revokeAllForUser(userId: string): Promise<void>;
+  prune(): Promise<number>;
+  fingerprint(token: string): string;
+}
+
+export function createRefreshTokenService(options: {
+  store: RefreshTokenStore;
+  ttlMs?: number;
+  now?: () => number;
+  randomToken?: () => string;
+}): RefreshTokenService;

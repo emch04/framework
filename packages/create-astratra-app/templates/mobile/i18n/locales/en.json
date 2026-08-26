@@ -1,0 +1,62 @@
+{
+  "app": {
+    "name": "Astratra App"
+  },
+  "auth": {
+    "sign_in": "Sign in",
+    "email": "Email",
+    "password": "Password",
+    "forgot": "Forgot your password?",
+    "failed": "Sign-in failed. Check your details and try again.",
+    "send_link": "Send reset link",
+    "reset_sent": "If that address exists, a link is on its way.",
+    "show_password": "Show password",
+    "hide_password": "Hide password"
+  },
+  "common": {
+    "back": "Back",
+    "continue": "Continue",
+    "skip": "Skip",
+    "step_progress": "Step {{step}} of {{total}}"
+  },
+  "dashboard": {
+    "title": "Dashboard",
+    "signed_in_as": "Signed in as",
+    "greeting": "Hello",
+    "header": {
+      "online": "Online",
+      "offline": "Offline",
+      "subtitle": "Here is where things stand."
+    },
+    "see_all": "See everything"
+  },
+  "home": {
+    "welcome": "Welcome",
+    "start": "Get started"
+  },
+  "notifications": {
+    "title": "Notifications",
+    "empty": "Nothing yet.",
+    "unread_label": "{{count}} unread notifications"
+  },
+  "onboarding": {
+    "eyebrow": "Setting up",
+    "account_title": "Your account",
+    "account_help": "We only need an address to start.",
+    "done_title": "All set.",
+    "done_help": "Your account is ready. Sign in to continue."
+  },
+  "password": {
+    "length": "At least 8 characters",
+    "lowercase": "One lowercase letter",
+    "uppercase": "One uppercase letter",
+    "digit": "One digit",
+    "special": "One special character"
+  },
+  "settings": {
+    "title": "Settings",
+    "biometric": "Unlock with biometrics",
+    "notifications": "Push notifications",
+    "sign_out": "Sign out"
+  }
+}

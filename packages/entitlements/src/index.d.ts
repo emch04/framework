@@ -201,3 +201,46 @@ export function createInvitations<Account = unknown, Form = Record<string, unkno
   now?: () => number;
   logger?: { warn?(m: string): void; info?(m: string): void };
 }): Invitations<Account, Form>;
+
+/* ─────────────── The invitation list, as a screen sees it ─────────────── */
+
+export type InvitationTone = 'success' | 'warning' | 'danger' | 'neutral';
+export type InvitationTab = 'pending' | 'accepted' | 'closed';
+
+export const URGENT_HOURS: number;
+
+export interface InvitationRow {
+  id: string;
+  email: string;
+  role: string;
+  /** As the payload stated it. Use effectiveStatus() to know where it stands. */
+  status: InvitationStatus;
+  expiresAt: string | null;
+  usedAt: string | null;
+  createdAt: string | null;
+  failReason: string;
+}
+
+export interface InvitationBoard {
+  readonly tabs: InvitationTab[];
+  readonly urgentHours: number;
+  read(raw: unknown): InvitationRow | null;
+  readMany(payload: unknown): InvitationRow[];
+  /** A pending invitation past its date is expired, whatever the server said. */
+  effectiveStatus(invitation: InvitationRow | null | undefined, now?: Date): InvitationStatus;
+  hoursLeft(invitation: InvitationRow, now?: Date): number | null;
+  tone(invitation: InvitationRow, now?: Date): InvitationTone;
+  counts(invitations: InvitationRow[], now?: Date): { total: number; pending: number; accepted: number };
+  /** 'closed' gathers expired and failed: both need a new invitation. */
+  filter(invitations: InvitationRow[], tab: InvitationTab, now?: Date): InvitationRow[];
+  tabCounts(invitations: InvitationRow[], now?: Date): Record<InvitationTab, number>;
+  initialTab(invitations: InvitationRow[], now?: Date): InvitationTab;
+  invitableRoles(role: string | undefined): string[];
+  canInvite(role: string | undefined): boolean;
+  looksLikeEmail(value: unknown): boolean;
+}
+
+export function createInvitationBoard(options?: {
+  urgentHours?: number;
+  invitable?: Record<string, string[]>;
+}): InvitationBoard;

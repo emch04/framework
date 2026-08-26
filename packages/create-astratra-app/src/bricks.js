@@ -22,7 +22,7 @@ const FULLSTACK_ONLY = new Set(['client', 'prerender']);
 const BRICKS = {
   credentials: {
     package: '@astratra/credentials',
-    version: '^0.2.0',
+    version: '^0.3.0',
     summary: 'clés de service chiffrées en base, modifiables sans redémarrage',
     file: 'api/bricks/credentials.js',
     contents: () => `import { createFieldCipher } from '@astratra/security';
@@ -71,7 +71,7 @@ export const hydrator = createEnvHydrator({ vault });
 
   entitlements: {
     package: '@astratra/entitlements',
-    version: '^0.3.0',
+    version: '^0.4.0',
     summary: 'plans, droits d’accès, isolation par locataire, invitations',
     file: 'api/bricks/entitlements.js',
     contents: () => `import { createFeatureGuard, createPlanCatalog, createTenantScope } from '@astratra/entitlements';
@@ -136,7 +136,7 @@ export async function sendWelcome(to, name) {
 
   payments: {
     package: '@astratra/payments',
-    version: '^0.1.0',
+    version: '^0.2.0',
     summary: 'webhooks de paiement : signature, rejeux, exemptions',
     file: 'api/bricks/payments.js',
     contents: () => `import {
@@ -336,7 +336,7 @@ export const archive = createArchiveBuilder({
 
   client: {
     package: '@astratra/client',
-    version: '^0.1.0',
+    version: '^0.3.0',
     summary: 'session sur 401, garde de route, mots de passe, file hors ligne',
     file: 'web/src/lib/client.js',
     contents: () => `import { createPasswordRules, createRouteGuard, createSessionClient } from '@astratra/client';

@@ -5,5 +5,6 @@ module.exports = {
   ...require('./commission'),
   ...require('./accessMatrix'),
   ...require('./tenantScope'),
-  ...require('./invitations')
+  ...require('./invitations'),
+  ...require('./invitationBoard')
 };

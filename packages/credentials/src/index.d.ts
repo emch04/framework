@@ -302,3 +302,38 @@ export function createCredentialRotation(options: {
 export function assertAdapter(adapter: unknown, methods: string[], name: string): void;
 export function maskSecret(value: string | null | undefined): string | null;
 export function maskEmail(email: string | null | undefined): string;
+
+/* ─────────────────── Reading the state, for the screen ─────────────────── */
+
+export type CredentialSource = 'interface' | 'serveur' | 'retiree' | 'absente';
+
+export interface CredentialEntry {
+  key: string;
+  label: string;
+  /** Doubt favours the secret: an unlabelled key comes back masked. */
+  secret: boolean;
+  placeholder: string | null;
+  configured: boolean;
+  source: CredentialSource;
+  preview: string | null;
+  help: string | null;
+  where: string | null;
+  readOnly: boolean;
+  readOnlyReason: string | null;
+}
+
+export interface CredentialSpaceView {
+  id: string;
+  label: string;
+  hint: string;
+  keys: CredentialEntry[];
+}
+
+/** Reads the server answer without trusting its shape. */
+export function readSpaces(payload: unknown): CredentialSpaceView[];
+export function coverageOf(space: CredentialSpaceView | null | undefined): { done: number; total: number };
+export function missingKeys(spaces: CredentialSpaceView[]): Array<CredentialEntry & { space: string }>;
+export function firstSpaceToOpen(spaces: CredentialSpaceView[]): string | null;
+/** Judged when it is read, never when it arrived. */
+export function unlockState(raw: unknown, now?: number): { unlocked: boolean; minutesLeft: number };
+export function cleanUnlockCode(input: unknown, length?: number): string;

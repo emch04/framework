@@ -7,5 +7,6 @@ module.exports = {
   ...require('./envHydrator'),
   ...require('./unlockChallenge'),
   ...require('./routes'),
-  ...require('./utils')
+  ...require('./utils'),
+  ...require('./screenState')
 };

@@ -13,7 +13,9 @@ import type {
   SessionCookieOptions,
   WafOptions,
   WebauthnOptions,
-  WebauthnStore
+  WebauthnStore,
+  RefreshTokenService,
+  RefreshTokenStore
 } from '@astratra/security';
 
 export type Awaitable<T> = T | Promise<T>;
@@ -100,6 +102,30 @@ export interface CreateSaasAppOptions {
   verifyPassword: (user: SaasUser, password: string) => Awaitable<boolean>;
   verifySession?: AuthMiddlewareOptions['verifySession'];
   revocationStore?: RevocationStore;
+  /** Phones registered for push. Defaults to an in-memory adapter. */
+  devicesStore?: DevicesStore;
+  /**
+   * Long-lived renewal. OFF unless enabled: a refresh token is handed out
+   * because a product needs it, never because a default said so.
+   */
+  refreshTokens?: {
+    enabled?: boolean;
+    ttlMs?: number;
+    store?: RefreshTokenStore;
+    service?: RefreshTokenService;
+  };
+  /**
+   * Password reset. The routes exist only when `send` is provided — mounting
+   * them without a transport would accept requests that go nowhere.
+   * Requires `hashPassword`.
+   */
+  passwordReset?: {
+    send(payload: { user: Record<string, unknown>; token: string }): Promise<unknown>;
+    ttlMs?: number;
+    store?: PasswordResetStore;
+  };
+  /** Required alongside passwordReset.send. */
+  hashPassword?: (password: string) => Promise<string> | string;
   extractToken?: AuthMiddlewareOptions['extractToken'];
   roles?: SaasRoles;
   publicUserFields?: string[];
@@ -157,3 +183,41 @@ export interface CreateSaasAppOptions {
 }
 
 export function createSaasApp(options: CreateSaasAppOptions): SaasApp;
+
+/* ───────────────── Devices and password resets ───────────────── */
+
+export interface RegisteredDevice {
+  installationId: string;
+  pushToken: string;
+  platform?: string;
+  deviceName?: string;
+  userId: string;
+  enabled?: boolean;
+  updatedAt?: number;
+}
+
+export interface DevicesStore {
+  /** Keyed on the installation id: a re-registration updates, never duplicates. */
+  upsert(device: RegisteredDevice): Promise<RegisteredDevice>;
+  find(installationId: string): Promise<RegisteredDevice | null>;
+  listForUser(userId: string): Promise<RegisteredDevice[]>;
+  remove(installationId: string): Promise<unknown>;
+}
+
+export interface PasswordResetRecord {
+  /** SHA-256 of the token. The token itself is never stored. */
+  hash: string;
+  userId: string;
+  expiresAt: number;
+}
+
+export interface PasswordResetStore {
+  save(record: PasswordResetRecord): Promise<unknown>;
+  find(hash: string): Promise<PasswordResetRecord | null>;
+  /** Single use: consuming deletes, so a replay finds nothing. */
+  consume(hash: string): Promise<PasswordResetRecord | null>;
+  deleteForUser(userId: string): Promise<unknown>;
+}
+
+export function createMemoryDevicesStore(): DevicesStore;
+export function createMemoryPasswordResetStore(): PasswordResetStore;

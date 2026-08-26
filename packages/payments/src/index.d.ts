@@ -86,3 +86,41 @@ export function createWebhookExemption(options: {
   suffix?: string;
   pattern?: RegExp;
 }): (input: RequestLike | string | null) => boolean;
+
+/* ─────────────────── The client side of paying ─────────────────── */
+
+export const CHECKOUT_URL_FIELDS: string[];
+export const DEFAULT_MAX_CONFIRMATION_ATTEMPTS: number;
+export const DEFAULT_CONFIRMATION_INTERVAL_MS: number;
+
+/** The hosted payment page, whichever field the gateway used. */
+export function readCheckoutUrl(payload: unknown, fields?: string[]): string | null;
+/** Same id whether the field arrived raw or populated. */
+export function readEntityId(value: unknown): string;
+/** A gateway epoch in seconds, as a date. */
+export function readRenewalDate(seconds: unknown): Date | null;
+
+export type PlanAction = 'current' | 'locked' | 'choose';
+export type PollDecision = 'confirmed' | 'retry' | 'pending';
+
+export interface CheckoutFlow {
+  readonly maxAttempts: number;
+  readonly intervalMs: number;
+  planAction(planKey: string, currentPlanKey?: string | null): PlanAction;
+  isSelectable(planKey: string, currentPlanKey?: string | null): boolean;
+  /** False when there is nothing to bill — say so, never fail silently. */
+  canPay(accountId: string | null | undefined): boolean;
+  /** 'pending' is not 'failed': the webhook may still settle it. */
+  nextPoll(input?: { confirmed?: boolean; attempts?: number }): PollDecision;
+  /** An undeclared gateway is never confirmed. */
+  isConfirmed(gateway: string, payload: unknown): boolean;
+}
+
+export function createCheckoutFlow(options?: {
+  /** Plans granted rather than sold — a trial, typically. */
+  notPurchasable?: string[];
+  defaultPlan?: string;
+  maxAttempts?: number;
+  intervalMs?: number;
+  confirms?: Record<string, (payload: unknown) => boolean>;
+}): CheckoutFlow;

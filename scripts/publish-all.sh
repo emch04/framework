@@ -29,6 +29,7 @@ ORDER=(
   "@astratra/entitlements"
   "@astratra/notify"
   "@astratra/client"
+  "@astratra/native"
   "@astratra/payments"
   "@astratra/privacy"
   "@astratra/resilience"

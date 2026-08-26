@@ -6,6 +6,41 @@ Ce package n'importe **aucun SDK de paiement**. Tu lui passes ta fonction de
 vérification de signature ; il s'occupe de tout ce qui l'entoure, c'est-à-dire de
 tout ce qui casse en silence.
 
+## Le côté écran : quel plan, quelle page, quelle confirmation
+
+Deux passerelles nomment les mêmes choses différemment et répondent
+différemment. L'écran ne doit pas savoir laquelle est derrière.
+
+```js
+const flow = createCheckoutFlow({
+  notPurchasable: ['trial'],
+  confirms: {
+    stripe: () => true,
+    cinetpay: (payload) => payload?.success === true
+  }
+});
+
+flow.planAction('pro', 'starter');     // 'choose' | 'current' | 'locked'
+readCheckoutUrl(payload);              // checkoutUrl ?? paymentUrl ?? url
+```
+
+**Un plan peut être accordé plutôt que vendu.** L'essai est donné à la création
+du compte ; proposer de l'acheter produit une erreur côté serveur et de
+l'incompréhension côté personne.
+
+**Un compte sans rien à facturer doit se l'entendre dire.** Le bouton de
+paiement vérifiait « pas d'identifiant » puis sortait : aucune requête, aucun
+message, rien. Un bouton qui ne fait rien passe pour une panne, alors que c'est
+une situation parfaitement normale.
+
+**« En attente » n'est pas « échoué ».** Quand la boucle de confirmation
+abandonne, le paiement est peut-être passé : le webhook tranchera. Dire à
+quelqu'un que son paiement a échoué pendant que son argent est en route est la
+pire réponse possible.
+
+**Une passerelle non déclarée n'est jamais confirmée** — le silence ne doit
+jamais valoir un accès.
+
 ## Les quatre pièges
 
 Chacun tue des paiements pendant que le code a l'air correct.

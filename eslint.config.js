@@ -134,6 +134,21 @@ module.exports = [
     }
   },
   {
-    ignores: ['**/node_modules/**', '**/coverage/**', '**/dist/**']
+    files: ['packages/native/**/*.js'],
+    languageOptions: {
+      globals: {
+        fetch: 'readonly',
+        Headers: 'readonly',
+        FormData: 'readonly',
+        Response: 'readonly',
+        localStorage: 'readonly'
+      }
+    }
+  },
+  {
+    /* The mobile template is source for ANOTHER project — Expo/React Native,
+       TSX, its own toolchain. Linting it with this repo's Node rules reports
+       nothing true. */
+    ignores: ['**/node_modules/**', '**/coverage/**', '**/dist/**', 'packages/create-astratra-app/templates/**']
   }
 ];

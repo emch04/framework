@@ -184,6 +184,76 @@ Bearer` (mobile/API — non exposés au CSRF) et `POST /auth/login`
 `POST /auth/logout-all` invalide tous les JWT actifs de l'utilisateur, pas
 seulement celui de la requête courante.
 
+## Rester connecté, réinitialiser, notifier un téléphone
+
+Trois choses qu'une application mobile réclame et qu'une application web n'a
+pas toujours. Les trois sont **éteintes par défaut** ou montées seulement quand
+tu fournis ce qu'il faut : une app fraîchement générée démarre sans
+configuration.
+
+### Rafraîchissement de session
+
+```js
+createSaasApp({
+  refreshTokens: { enabled: true, ttlMs: 30 * 24 * 60 * 60 * 1000 }
+});
+```
+
+`/auth/login` renvoie alors un `refreshToken` en plus du `token`, et
+`/auth/refresh` l'échange contre un couple neuf. Le mécanisme est celui de
+`@astratra/security` : rotation à chaque usage, empreinte en base, et un rejeu
+révoque toute la chaîne issue de cette connexion.
+
+Éteint, la route `/auth/refresh` **n'existe pas** — le client web sur cookie
+`HttpOnly` n'en a pas besoin, et lui donner un identifiant à longue vie qu'il
+n'utilise jamais ne ferait qu'élargir la cible.
+
+Se déconnecter révoque aussi la chaîne : révoquer le seul jeton d'accès
+laisserait la session revenir au prochain renouvellement.
+
+### Mot de passe oublié
+
+```js
+createSaasApp({
+  hashPassword: async (password) => bcrypt.hash(password, 12),
+  passwordReset: {
+    send: async ({ user, token }) => mailer.send({
+      to: user.email,
+      subject: 'Réinitialiser votre mot de passe',
+      text: `https://app.exemple.cd/reset?token=${token}`
+    })
+  }
+});
+```
+
+Sans `send`, les routes ne sont **pas montées du tout** : accepter des demandes
+qui ne partent nulle part en répondant « c'est envoyé » est le pire des deux
+mondes.
+
+`/auth/forgot-password` répond **toujours pareil**, adresse connue ou non.
+« Aucun compte avec cet e-mail » transforme l'écran en annuaire : on lui donne
+une liste, il dit gratuitement lesquelles ont un compte ici.
+
+`/auth/reset-password` consomme le lien (usage unique — consommer **supprime**)
+et **révoque toutes les sessions** de la personne. C'est l'étape qu'on oublie :
+quelqu'un qui réinitialise son mot de passe est peut-être en train de reprendre
+un compte volé, et laisser vivre les sessions du voleur rend l'opération vaine.
+
+### Enregistrement des téléphones
+
+```js
+createSaasApp({ devicesStore });   // adaptateur mémoire par défaut
+```
+
+`POST /notifications/devices`, `GET /notifications/devices/:installationId`,
+`DELETE /notifications/devices/:installationId` — le contrat qu'attend
+`@astratra/native` côté application.
+
+Ces routes sont **avant** le garde d'administration du module : enregistrer son
+propre téléphone n'est pas un acte d'administration, c'est ce que fait toute
+application mobile au démarrage. Chacune est bornée à `req.user.id`, jamais à
+l'identifiant de l'URL — un identifiant d'installation se devine.
+
 ## Validation des entrées
 
 `POST /auth/login`, `POST /users`, `PATCH /settings/:key` et

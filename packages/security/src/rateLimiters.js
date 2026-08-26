@@ -121,16 +121,35 @@ const createRedisStore = (redisUrl, prefix) => {
       client.on('error', () => {});
     }
 
-    const redisStore = new RedisStore({
-      ...(prefix ? { prefix } : {}),
-      sendCommand: (...args) => client.sendCommand(args)
-    });
     const memoryStore = createMemoryStore();
     const connectPromise = Promise.resolve(client.connect()).catch(() => {
       if (client && client.isOpen && typeof client.disconnect === 'function') {
         client.disconnect().catch(() => {});
       }
       throw new Error('Redis rate limit store unavailable');
+    });
+
+    /* Une promesse qui se resout toujours : elle dit si la connexion a abouti,
+       elle n'echoue jamais. Sans elle, chaque commande en attente deviendrait
+       un second consommateur de connectPromise, et donc un second rejet. */
+    const connected = connectPromise.then(() => true, () => false);
+
+    /* rate-limit-redis charge son script d'increment DEPUIS son constructeur,
+       avant que la connexion soit ouverte, et n'attend pas la promesse qu'il
+       obtient. Envoyer directement rejetait donc contre un client ferme, et ce
+       rejet n'appartenait a personne : Node tuait le processus au demarrage,
+       meme avec un Redis parfaitement disponible.
+
+       Attendre ici transforme cette premiere commande en commande mise en file.
+       Et quand la connexion a echoue, le failover a deja bascule sur le store
+       memoire : ce store-ci ne sera jamais interroge, sa commande de demarrage
+       n'a plus rien a envoyer et se resout sans rien casser. */
+    const redisStore = new RedisStore({
+      ...(prefix ? { prefix } : {}),
+      sendCommand: async (...args) => {
+        if (!(await connected)) return undefined;
+        return client.sendCommand(args);
+      }
     });
 
     return createFailoverStore(redisStore, memoryStore, connectPromise);

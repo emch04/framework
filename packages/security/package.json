@@ -49,6 +49,6 @@
   "devDependencies": {
     "jest": "30.4.2",
     "rate-limit-redis": "^4.2.0",
-    "redis": "^4.7.0"
+    "redis": "^6.2.1"
   }
 }

@@ -193,6 +193,84 @@ describe('rateLimiters', () => {
       }));
     });
 
+    /*
+     * Le vrai RedisStore emet son script d'increment DEPUIS SON CONSTRUCTEUR,
+     * et le vrai client redis rejette tant qu'il n'est pas connecte. Le mock
+     * ci-dessus ne fait ni l'un ni l'autre : c'est pourquoi ce defaut a vecu
+     * dans le paquet sans qu'aucun test ne le voie.
+     *
+     * Celui-ci reproduit les deux comportements. Sans le correctif, l'appel du
+     * constructeur produit un rejet que personne ne possede — et Node tue le
+     * processus au demarrage, meme quand Redis fonctionne parfaitement.
+     */
+    const loadWithRealisticRedisMocks = ({ connect }) => {
+      jest.resetModules();
+
+      const rateLimitMock = jest.fn((options) => options);
+      rateLimitMock.MemoryStore = jest.fn(function MemoryStore() {
+        this.increment = jest.fn(async () => ({ totalHits: 1, resetTime: new Date('2026-08-08T00:00:00.000Z') }));
+        this.init = jest.fn();
+      });
+
+      let connected = false;
+      const fakeClient = {
+        connect: jest.fn(async () => {
+          await connect();
+          connected = true;
+        }),
+        on: jest.fn(),
+        isOpen: false,
+        disconnect: jest.fn(async () => {}),
+        sendCommand: jest.fn(async () => {
+          if (!connected) {
+            const error = new Error('The client is closed');
+            error.name = 'ClientClosedError';
+            throw error;
+          }
+          return 'sha1-of-increment-script';
+        })
+      };
+
+      // Ce que fait rate-limit-redis : charger son script dans le constructeur,
+      // sans attendre la promesse retournee.
+      const scriptLoads = [];
+      const RedisStore = jest.fn(function RedisStore(options) {
+        scriptLoads.push(options.sendCommand('SCRIPT', 'LOAD', 'return 1'));
+        this.increment = jest.fn();
+        this.init = jest.fn();
+      });
+
+      jest.doMock('express-rate-limit', () => rateLimitMock);
+      jest.doMock('redis', () => ({ createClient: jest.fn(() => fakeClient) }), { virtual: true });
+      jest.doMock('rate-limit-redis', () => ({ RedisStore }), { virtual: true });
+
+      const { createRedisRateLimitStore: createStore } = require('../src');
+      return { createStore, fakeClient, scriptLoads };
+    };
+
+    test('la commande emise par le constructeur du store attend la connexion au lieu de rejeter', async () => {
+      const { createStore, scriptLoads } = loadWithRealisticRedisMocks({
+        connect: jest.fn().mockResolvedValue()
+      });
+
+      createStore({ redisUrl: 'redis://localhost:6379', prefix: 'application:rate:api:' });
+
+      expect(scriptLoads).toHaveLength(1);
+      await expect(scriptLoads[0]).resolves.toBe('sha1-of-increment-script');
+    });
+
+    test('un Redis injoignable ne laisse pas non plus de rejet sans proprietaire', async () => {
+      const { createStore, scriptLoads } = loadWithRealisticRedisMocks({
+        connect: jest.fn().mockRejectedValue(new Error('redis unavailable'))
+      });
+
+      createStore({ redisUrl: 'redis://localhost:6379' });
+
+      // Le store Redis ne sera jamais choisi par le failover : sa commande de
+      // demarrage n'a plus rien a envoyer, et se resout sans rien casser.
+      await expect(scriptLoads[0]).resolves.toBeUndefined();
+    });
+
     test('createApiLimiter falls back to memory store when Redis connect rejects', async () => {
       const { createApiLimiter: createLimiter, memoryStoreIncrement, redisStore } = loadWithRedisMocks({
         connect: jest.fn().mockRejectedValue(new Error('redis unavailable'))

@@ -13,7 +13,8 @@
 #   bash scripts/publish-all.sh            # npm demandera le code à chaque fois
 #   bash scripts/publish-all.sh --dry-run  # montre ce qui partirait
 #
-# Avec un jeton d'automatisation dans ~/.npmrc, aucun code n'est demandé.
+# Avec un jeton d'AUTOMATISATION dans ~/.npmrc, aucun code n'est demandé — un
+# jeton classique ne suffit pas, npm applique quand même la 2FA.
 set -uo pipefail
 cd "$(dirname "$0")/.."
 
@@ -62,11 +63,35 @@ for name in "${ORDER[@]}"; do
   printf "  →      %-28s %s → %s\n" "$name" "${pub_v:-absent}" "$local_v"
   [ "$DRY" = "1" ] && continue
 
-  if npm publish --workspace "$name" --access public >/dev/null 2>&1; then
+  # La sortie de npm est capturee, pas jetee : le journal reste lisible quand
+  # tout va bien, mais un echec doit dire POURQUOI. Cette sortie a deja ete
+  # perdue une fois sur un simple `EOTP` (code 2FA reclame), et le script
+  # repondait "relance-moi" a quelqu'un qui n'avait aucune raison de reussir
+  # la seconde fois.
+  # `if output=$(...)` plutot que `$?` teste ensuite : une ligne inseree entre
+  # les deux suffirait a ecraser le code de retour.
+  if output=$(npm publish --workspace "$name" --access public 2>&1); then
     printf "         publié\n"
     published+=("$name")
   else
-    printf "         ÉCHEC — relance le script, il reprendra ici\n"
+    printf "         ÉCHEC\n"
+    # `npm notice` decrit le contenu du tarball : inutile ici, et il noie
+    # l'erreur sous quarante lignes.
+    printf '%s\n' "$output" | grep -v '^npm notice' | sed 's/^/         /'
+
+    case "$output" in
+      *EOTP*|*"one-time password"*)
+        printf "         → npm réclame ton code 2FA : publie ce paquet depuis ton terminal,\n"
+        printf "           ou remplace le jeton de ~/.npmrc par un jeton d'automatisation.\n"
+        ;;
+      *E403*|*"cannot publish over"*)
+        printf "         → cette version existe déjà en ligne : bump le package.json.\n"
+        ;;
+      *ENEEDAUTH*|*E401*)
+        printf "         → aucune authentification npm : \`npm login\`, puis relance.\n"
+        ;;
+    esac
+
     failed+=("$name")
   fi
 done

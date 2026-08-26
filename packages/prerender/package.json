@@ -44,7 +44,7 @@
     "jest": "30.4.2",
     "playwright": "^1.62.1",
     "vite": "^7.0.0",
-    "@vitejs/plugin-react": "^4.3.0",
+    "@vitejs/plugin-react": "^6.1.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   }

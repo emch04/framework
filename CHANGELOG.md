@@ -3,6 +3,36 @@
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Chaque package Astratra est versionné indépendamment.
 
+## 2026-08-25 (20)
+
+### Corrige
+
+- `@astratra/security` (`1.9.0`→`1.9.1`) — **`createRedisRateLimitStore()`
+  tuait le processus au démarrage, Redis disponible ou non.** `rate-limit-redis`
+  charge son script d'incrément depuis son propre constructeur, avant que la
+  connexion soit ouverte, et n'attend pas la promesse qu'il obtient. La commande
+  partait donc contre un client fermé, et le rejet n'appartenait à personne :
+  `ClientClosedError`, code de sortie 1, sur une application parfaitement
+  configurée. Trois lignes suffisaient à le déclencher :
+
+  ```js
+  createRedisRateLimitStore({ redisUrl: 'redis://127.0.0.1:6379' });
+  ```
+
+  `sendCommand` attend désormais l'issue de la connexion avant d'envoyer. Quand
+  celle-ci échoue, le failover a déjà basculé sur les compteurs mémoire : le
+  store Redis ne sera jamais interrogé, sa commande de démarrage n'a plus rien à
+  envoyer et se résout sans rien casser. Le comportement de repli est inchangé.
+
+  Les tests existants ne pouvaient pas voir ce défaut : leur `RedisStore` mocké
+  était un constructeur qui n'envoyait rien, et leur client mocké acceptait les
+  commandes hors connexion. Deux tests de régression reproduisent maintenant les
+  deux comportements réels.
+
+  Aucun dépendant à republier : `@astratra/saas-kit` (`^1.7.0`) et
+  `@astratra/credentials` (`^1.8.0`) couvrent déjà `1.9.1`, et le plancher
+  `^1.3.0` du générateur reste valable.
+
 ## 2026-08-25 (19)
 
 ### Ajoute

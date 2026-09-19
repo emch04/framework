@@ -3,5 +3,7 @@ module.exports = {
   ...require('./mailer'),
   ...require('./template'),
   ...require('./sms'),
-  ...require('./push')
+  ...require('./push'),
+  ...require('./inbox'),
+  ...require('./catalog')
 };

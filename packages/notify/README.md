@@ -196,6 +196,8 @@ const push = createPushSender({
     webpush.sendNotification(subscription, JSON.stringify(payload)),
   // LE point du module : l'abonnement mort t'est rendu pour suppression.
   onGone: (subscription) => Subscriptions.deleteOne({ endpoint: subscription.endpoint }),
+  concurrency: 10, // défaut : 10 envois simultanés au maximum
+  timeoutMs: 30_000, // défaut : un fournisseur a 30 secondes pour répondre
 });
 
 const { delivered, gone, failed } = await push.broadcast(subscriptions, payload);
@@ -206,9 +208,162 @@ Trois issues distinctes, jamais confondues : `delivered`, `gone` (mort, élagué
 n'arrête jamais les autres, et un élagage qui échoue ne transforme pas un `gone`
 en `failed`.
 
+`broadcast` utilise un nombre borné de workers : un fournisseur lent ne retient
+plus tous les abonnements placés derrière lui, sans pour autant déclencher une
+rafale non bornée. Un dépassement de `timeoutMs` compte comme `failed` et les
+autres envois continuent. La forme du rapport reste exactement
+`{ delivered, gone, failed, errors }` ; même si les envois finissent dans le
+désordre, `errors` suit toujours l'ordre des abonnements d'entrée (et conserve
+sa limite historique de dix raisons).
+
 Le statut du fournisseur est cherché où qu'il l'ait mis — `statusCode`,
 `status`, `response.status` — parce que web-push et les clients HTTP ne sont pas
 d'accord entre eux.
+
+---
+
+# La boîte de notifications, côté serveur
+
+## Lire par pages, ranger, et ne jamais toucher au compte d'un autre
+
+Trois défauts, tous du même produit :
+
+- La liste rendait « les cinquante dernières », point. Au-delà, une
+  notification existait en base sans que personne ne puisse jamais la revoir.
+- La suppression prenait un identifiant. Un identifiant se devine, ou fuit —
+  dans une URL, un journal, une capture. La **seule** barrière entre
+  « supprimer la mienne » et « supprimer celle de n'importe qui » est le
+  propriétaire **dans la requête elle-même**, pas une vérification faite après
+  et oubliée sur la route suivante.
+- « Absente » et « à quelqu'un d'autre » doivent recevoir **la même réponse**.
+  Les distinguer dit à un inconnu quels identifiants existent.
+
+```js
+const {
+  createNotificationInbox, createInboxHandlers, mountInbox,
+} = require('@astratra/notify');
+
+const inbox = createNotificationInbox({
+  store: myInboxStore,                              // injecté, voir plus bas
+  isValidId: (id) => mongoose.isValidObjectId(id),  // 404 au lieu d'une erreur de conversion (500)
+  // pageSize: 50, maxPageSize: 100
+});
+
+const router = express.Router();
+router.use(auth);
+mountInbox(router, createInboxHandlers(inbox, {
+  owner: (req) => req.user.id,   // la SESSION, jamais le corps ni la requête
+}));
+app.use('/api/notifications', router);
+```
+
+| Route | Réponse |
+|---|---|
+| `GET /?page=2&limit=20` | `{ notifications, unreadCount, pagination: { total, page, limit, totalPages } }` |
+| `GET /:id` | `{ notification }` ou 404 |
+| `DELETE /:id` | `{ unreadCount }` ou 404 — absente et étrangère : même 404 |
+| `DELETE /read` | `{ deleted, unreadCount }` — les **lues** seulement |
+| `PATCH /:id/read`, `PATCH /read-all` | `{ unreadCount }` |
+
+- **Sans paramètre, rien ne change** : première page de cinquante, comme les
+  appelants qui n'ont jamais paginé l'attendent. Une valeur absurde (`-4`,
+  `abc`) retombe sur le défaut, une trop grande est plafonnée.
+- **Le nombre de non-lues revient avec chaque suppression** : la pastille se
+  recale sans attendre le prochain relevé.
+- **Ranger n'efface pas ce qu'on n'a pas vu** : `DELETE /read` garde les
+  non-lues.
+- **`mountInbox` enregistre les chemins fixes AVANT `/:id`.** Sinon
+  `DELETE /read` est lu comme « supprimer la notification d'identifiant
+  "read" », répond 404, et le bouton de rangement ne fait rien sans rien dire.
+- Tes enveloppes de réponse passent par `respond: (res, status, body) => …`.
+
+### Le stockage est injecté
+
+Chaque méthode reçoit `ownerId` et **doit l'appliquer dans la requête** :
+
+```js
+const myInboxStore = {
+  list:  ({ ownerId, offset, limit }) => Notification.find({ userId: ownerId })
+           .sort({ createdAt: -1, _id: -1 })   // _id départage deux avis du même instant
+           .skip(offset).limit(limit).lean(),
+  count: ({ ownerId, read }) => Notification.countDocuments({ userId: ownerId, ...(read === undefined ? {} : { read }) }),
+  get:   ({ ownerId, id }) => Notification.findOne({ _id: id, userId: ownerId }).lean(),
+  remove: async ({ ownerId, id }) => (await Notification.deleteOne({ _id: id, userId: ownerId })).deletedCount,
+  removeRead: async ({ ownerId }) => (await Notification.deleteMany({ userId: ownerId, read: true })).deletedCount,
+  markRead: async ({ ownerId, id }) => (await Notification.updateOne({ _id: id, userId: ownerId }, { read: true })).matchedCount,
+  markAllRead: async ({ ownerId }) => (await Notification.updateMany({ userId: ownerId, read: false }, { read: true })).modifiedCount,
+};
+```
+
+Sans départage par identifiant, une base rend les égalités dans l'ordre qui
+lui plaît, et peut changer d'avis d'une requête à l'autre : une notification
+apparaît alors sur deux pages, ou sur aucune.
+
+`createMemoryInboxStore()` est l'adaptateur de référence, pour les tests : il
+**applique** le filtre propriétaire comme une base le ferait, et refuse une
+requête sans propriétaire. Une boîte qui oublierait de le passer atteindrait
+ici l'autre compte exactement comme en production — c'est ce qui rend les
+tests honnêtes.
+
+## Des notifications traduites, et un texte neutre pour l'écran verrouillé
+
+Une notification produite par le serveur (une note, une facture, un résultat)
+est une clé et des paramètres ; le titre et le message sont rendus pour chaque
+destinataire, dans sa langue. **Les textes sont à toi** : ce package n'en
+contient aucun.
+
+La leçon qui justifie un module plutôt qu'un dictionnaire : un push s'affiche
+sur un **écran verrouillé**, sous les yeux de quiconque tient ou regarde le
+téléphone. Une décision de fin d'année sur un enfant y est apparue en toutes
+lettres — sous un titre pourtant rendu neutre, puisque le corps était le
+message lui-même. Une entrée peut donc déclarer `pushBody` : une ligne neutre
+qui remplace le message **dans le push seulement**. La boîte, l'écran et
+l'e-mail — lu dans une boîte personnelle, une fois déverrouillé — gardent le
+message complet.
+
+```js
+const { createNotificationCatalog } = require('@astratra/notify');
+
+const catalog = createNotificationCatalog({
+  languages: ['fr', 'en'],
+  entries: [grades, billing],   // un objet par domaine ; une clé en double lève au démarrage
+});
+
+// grades.js
+module.exports = {
+  year_result: {
+    fr: (p) => ({ title: 'Résultat de fin d\'année disponible', message: `${p.student} …`, pushBody: 'Ouvrez l\'application pour le consulter.' }),
+    en: (p) => ({ title: 'End-of-year result available',       message: `${p.student} …`, pushBody: 'Open the app to view it.' }),
+  },
+};
+
+const n = catalog.render('year_result', recipientLanguage, { student: 'Ada' });
+await inboxStore.create({ ownerId, title: n.title, message: n.message }); // complet
+await push.broadcast(devices, n.push);                                    // { title, body } neutre
+```
+
+Une langue non écrite pour une clé retombe sur la langue par défaut
+(`n.language` dit laquelle a été rendue) ; chaque entrée doit donc exister
+dans la langue par défaut. Une clé inconnue lève : c'est une faute de frappe
+dans le code.
+
+### L'audit
+
+```js
+test('le catalogue des notifications', () => {
+  const report = catalog.audit({ params: SAMPLE_PARAMS });
+  expect(report.pushBodyGaps).toEqual([]);
+  expect(report.placeholders).toEqual([]);
+  expect(report.errors).toEqual([]);
+});
+```
+
+- `pushBodyGaps` : un corps neutre déclaré dans certaines langues et oublié
+  dans d'autres. La fuite n'existe que dans la langue oubliée — personne ne la
+  voit en relisant le catalogue dans la sienne.
+- `placeholders` : `undefined`, `null`, `NaN` ou `[object Object]` dans un
+  texte rendu — un paramètre attendu et jamais reçu.
+- `missing` : les langues non écrites, servies dans la langue par défaut.
 
 ---
 
@@ -217,6 +372,10 @@ d'accord entre eux.
 - Il n'envoie **rien** lui-même : les transports sont injectés. Aucun SDK — ni
   nodemailer, ni Twilio, ni web-push — n'est importé.
 - Il ne stocke pas les abonnements : il te rend les morts, tu les supprimes.
+  Il ne tient pas non plus de registre d'appareils par compte : tu choisis la
+  liste, `broadcast` l'envoie.
+- La boîte de notifications ne crée pas les notifications et ne les pousse
+  pas : elle lit, range et supprime ce que ton stockage contient.
 - Il ne fait ni file d'attente ni relance — voir `@astratra/resilience`.
 - Il ne gère pas le temps réel (websockets).
 - Il n'a pas d'avis sur ton identité visuelle, seulement sur ce qui survit aux

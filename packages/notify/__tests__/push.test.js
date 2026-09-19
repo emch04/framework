@@ -76,6 +76,140 @@ describe('one subscription', () => {
 });
 
 describe('broadcast', () => {
+  test('a slow provider call does not delay subscriptions behind it', async () => {
+    let releaseSlow;
+    const slow = new Promise((resolve) => { releaseSlow = resolve; });
+    const started = [];
+    const completed = [];
+    const push = createPushSender({
+      concurrency: 2,
+      transport: async ({ id }) => {
+        started.push(id);
+        if (id === 'slow') await slow;
+        completed.push(id);
+      }
+    });
+
+    const batch = push.broadcast([{ id: 'slow' }, { id: 'fast' }], {});
+    await Promise.resolve();
+    await Promise.resolve();
+    const startedBeforeRelease = [...started];
+    const completedBeforeRelease = [...completed];
+    releaseSlow();
+    await batch;
+
+    expect(startedBeforeRelease).toEqual(['slow', 'fast']);
+    expect(completedBeforeRelease).toEqual(['fast']);
+  });
+
+  test('never exceeds the configured concurrency', async () => {
+    let release;
+    const gate = new Promise((resolve) => { release = resolve; });
+    const started = [];
+    let inFlight = 0;
+    let maxInFlight = 0;
+    const push = createPushSender({
+      concurrency: 2,
+      transport: async ({ id }) => {
+        started.push(id);
+        inFlight += 1;
+        maxInFlight = Math.max(maxInFlight, inFlight);
+        await gate;
+        inFlight -= 1;
+      }
+    });
+
+    const batch = push.broadcast([{ id: 's1' }, { id: 's2' }, { id: 's3' }, { id: 's4' }], {});
+    await Promise.resolve();
+    await Promise.resolve();
+    const startedBeforeRelease = [...started];
+    release();
+    await batch;
+
+    expect(startedBeforeRelease).toEqual(['s1', 's2']);
+    expect(maxInFlight).toBe(2);
+  });
+
+  test('defaults to ten concurrent sends', async () => {
+    let release;
+    const gate = new Promise((resolve) => { release = resolve; });
+    let inFlight = 0;
+    let maxInFlight = 0;
+    const push = createPushSender({
+      transport: async () => {
+        inFlight += 1;
+        maxInFlight = Math.max(maxInFlight, inFlight);
+        await gate;
+        inFlight -= 1;
+      }
+    });
+
+    const subscriptions = Array.from({ length: 11 }, (_, index) => ({ id: `s${index}` }));
+    const batch = push.broadcast(subscriptions, {});
+    await Promise.resolve();
+    await Promise.resolve();
+    release();
+    await batch;
+
+    expect(maxInFlight).toBe(10);
+  });
+
+  test('reports a provider timeout as a failure', async () => {
+    jest.useFakeTimers();
+    try {
+      let release;
+      const gate = new Promise((resolve) => { release = resolve; });
+      let settled = false;
+      const push = createPushSender({
+        timeoutMs: 100,
+        transport: async () => gate
+      });
+
+      const batch = push.broadcast([{ id: 'slow' }], {}).then((report) => {
+        settled = true;
+        return report;
+      });
+      await Promise.resolve();
+      await jest.advanceTimersByTimeAsync(100);
+      const settledAtDeadline = settled;
+      release();
+      const report = await batch;
+
+      expect(settledAtDeadline).toBe(true);
+      expect(report).toEqual({
+        delivered: 0,
+        gone: 0,
+        failed: 1,
+        errors: ['Push delivery timed out after 100ms.']
+      });
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  test('keeps errors in input order when sends finish out of order', async () => {
+    const controls = new Map();
+    const push = createPushSender({
+      concurrency: 3,
+      transport: ({ id }) => new Promise((resolve, reject) => {
+        controls.set(id, { resolve, reject });
+      })
+    });
+
+    const batch = push.broadcast([{ id: 'first' }, { id: 'second' }, { id: 'third' }], {});
+    await Promise.resolve();
+    controls.get('third').reject(new Error('third failed'));
+    controls.get('first').reject(new Error('first failed'));
+    controls.get('second').reject(new Error('second failed'));
+
+    expect(await batch).toEqual({
+      delivered: 0,
+      gone: 0,
+      failed: 3,
+      errors: ['first failed', 'second failed', 'third failed']
+    });
+  });
+
   test('one dead or failing subscription does not stop the others', async () => {
     const { push, delivered, pruned } = build({ deadIds: ['s2'], failIds: ['s3'] });
 

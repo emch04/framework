@@ -14,6 +14,20 @@
  */
 
 const NOOP_LOGGER = { info() {}, warn() {}, error() {} };
+const DEFAULT_CONCURRENCY = 10;
+const DEFAULT_TIMEOUT_MS = 30_000;
+
+function withTimeout(value, timeoutMs) {
+  let timer;
+  const deadline = new Promise((resolve, reject) => {
+    timer = setTimeout(
+      () => reject(new Error(`Push delivery timed out after ${timeoutMs}ms.`)),
+      timeoutMs
+    );
+    timer.unref?.();
+  });
+  return Promise.race([Promise.resolve(value), deadline]).finally(() => clearTimeout(timer));
+}
 
 /**
  * @param {object} options
@@ -23,6 +37,8 @@ const NOOP_LOGGER = { info() {}, warn() {}, error() {} };
  * @param {Function} [options.isGone]  (error) => boolean. Default: 404 or 410.
  * @param {Function} [options.onGone] async (subscription) => void — delete it
  *   from your store. THIS is the point of the module.
+ * @param {number} [options.concurrency=10] Maximum simultaneous sends.
+ * @param {number} [options.timeoutMs=30000] Provider deadline for one send.
  * @param {object} [options.logger]
  */
 function createPushSender(options = {}) {
@@ -37,6 +53,14 @@ function createPushSender(options = {}) {
   });
   const onGone = options.onGone || null;
   const logger = options.logger || NOOP_LOGGER;
+  const concurrency = options.concurrency ?? DEFAULT_CONCURRENCY;
+  if (!Number.isInteger(concurrency) || concurrency < 1) {
+    throw new Error('createPushSender options.concurrency must be a positive integer.');
+  }
+  const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  if (!Number.isInteger(timeoutMs) || timeoutMs < 1) {
+    throw new Error('createPushSender options.timeoutMs must be a positive integer.');
+  }
 
   /**
    * Send to ONE subscription.
@@ -44,7 +68,7 @@ function createPushSender(options = {}) {
    */
   async function send(subscription, payload) {
     try {
-      await transport(subscription, payload);
+      await withTimeout(transport(subscription, payload), timeoutMs);
       return { status: 'delivered' };
     } catch (error) {
       if (isGone(error)) {
@@ -65,13 +89,32 @@ function createPushSender(options = {}) {
   }
 
   /**
-   * Send to MANY. One dead or failing subscription must not stop the others —
-   * the report says how many of each, and failures carry their reasons.
+   * Send to MANY. Awaiting each send in sequence let one slow provider hold
+   * every later subscription for hours. Bounded workers isolate that defect
+   * without replacing it with an unbounded provider spike.
    */
   async function broadcast(subscriptions, payload) {
     const report = { delivered: 0, gone: 0, failed: 0, errors: [] };
-    for (const subscription of subscriptions || []) {
-      const outcome = await send(subscription, payload);
+    const items = subscriptions || [];
+    const outcomes = new Array(items.length);
+    let nextIndex = 0;
+
+    async function worker() {
+      while (nextIndex < items.length) {
+        const index = nextIndex;
+        nextIndex += 1;
+        outcomes[index] = await send(items[index], payload);
+      }
+    }
+
+    await Promise.all(Array.from(
+      { length: Math.min(concurrency, items.length) },
+      () => worker()
+    ));
+
+    /* Completion order is nondeterministic. Aggregate by input index so an
+       operator can still match each reported failure to the original batch. */
+    for (const outcome of outcomes) {
       report[outcome.status] += 1;
       if (outcome.status === 'failed' && report.errors.length < 10) report.errors.push(outcome.error);
     }

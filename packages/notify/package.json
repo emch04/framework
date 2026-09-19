@@ -1,7 +1,7 @@
 {
   "name": "@astratra/notify",
-  "version": "0.2.0",
-  "description": "Outbound messages done once \u2014 email, SMS and push. Transport injected, never throws, header-injection safe, loud simulation when unconfigured, dead push subscriptions handed back for pruning.",
+  "version": "0.3.0",
+  "description": "Outbound messages done once — email, SMS and push. Transport injected, never throws, header-injection safe, loud simulation when unconfigured, dead push subscriptions handed back for pruning.",
   "engines": {
     "node": ">=20"
   },

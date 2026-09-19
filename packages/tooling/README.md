@@ -56,6 +56,91 @@ simplement les commandes shell que vous listez, dans l'ordre, et s'arrête au
 premier échec. Il ne connaît ni pm2, ni Docker, ni aucun VPS précis — cette
 logique reste dans votre propre projet.
 
+## Gardes de test
+
+Trois fonctions à appeler depuis les tests de ton application. Elles lisent
+tes sources et tes textes ; aucun rôle, aucun mot, aucun chemin n'est imposé.
+
+### Ce rôle voit, il n'écrit pas
+
+```js
+const { assertRoleReadOnly } = require('@astratra/tooling');
+
+test('le support lit, il n’écrit pas', () => {
+  assertRoleReadOnly({
+    rootDir: path.join(__dirname, '..'),
+    dirs: ['src/modules'],
+    role: ['ROLES.SUPPORT', "'support'"],          // chaque graphie du rôle
+    exceptions: [
+      { match: '"/:id/activate"', reason: 'activer un compte relève de la plateforme' },
+    ],
+  });
+});
+```
+
+Relève chaque `router.post|put|patch|delete(...)` (et `app.*`, `xxxRouter.*`,
+`.route('/x').put(...)`) dont les arguments contiennent le rôle, directement ou
+via une liste déclarée **dans le même fichier** (`authorizeRoles(...WRITERS)`).
+Relève aussi les listes nommées comme des listes d'auteurs (`writers`,
+`EDITORS`, `APPROVERS`...) qui le contiennent — l'autorisation vit parfois dans
+le contrôleur.
+
+- `x !== ROLE`, `liste.filter((r) => r !== ROLE)` et `except(liste, ROLE)`
+  retirent le rôle : la route qui le **refuse** n'est pas signalée.
+- Une exception **sans raison écrite est refusée**, et une exception qui ne
+  correspond plus à rien fait échouer le test : elle attendait d'excuser en
+  silence la prochaine route qui prendrait ce nom.
+- Un commentaire ou une chaîne qui nomme le rôle ne compte pas.
+
+`auditRoleWrites` rend `{ findings, exempted, unusedExceptions }` sans lever,
+`auditRoleWriteSource(source, options)` travaille sur une chaîne. Options :
+`writeCalls` (groupe 1 = verbe), `authorListNames` (RegExp ou `false`),
+`exclusions`, `include`, `skippedDirs`.
+
+C'est une heuristique sur le texte : une liste importée d'un autre fichier
+n'est pas suivie, un garde posé par `router.use(...)` n'est pas vu.
+
+### Ce que dit le texte = ce que fait le code
+
+```js
+const { assertFactsAligned, extractMatches, pickPaths } = require('@astratra/tooling');
+
+const facts = {
+  ...extractMatches(read('config/plans.js'), { pro: /key: "pro"[^}]*?price: "\$(\d+)"/ }),
+  rate: require('../config/billing').COMMISSION_RATE,
+};
+const claims = pickPaths(require('../knowledge/rules.json'), { pro: 'plans.pro.price', rate: 'commission.rate' });
+
+assertFactsAligned({ facts, claims });
+```
+
+- `mismatches` : le texte contredit le code (listes comparées sans ordre par
+  défaut, nombres à 1e-9 près).
+- `unextracted` : une valeur est `undefined`/`NaN`. **Deux extractions ratées ne
+  sont jamais un accord** — une regex qui ne matche plus rend `undefined` des
+  deux côtés, et une comparaison naïve appelle ça égal.
+- `unbacked` : une affirmation qu'aucun fait ne vérifie.
+- `unstated` : un fait que le texte tait (échec seulement avec `requireEveryFact`).
+
+### Mots interdits dans les textes produits
+
+```js
+const { assertNoForbiddenTerms, findForbiddenTermsInFiles } = require('@astratra/tooling');
+
+assertNoForbiddenTerms({ invite: buildPrompt('admin') }, [
+  { pattern: /north(ern)?/i, reason: 'le produit est vendu partout' },
+  'ACME',
+], { required: ['worldwide'], allow: ['Acme Pay'] });
+```
+
+Un terme chaîne est un **mot entier**, sans casse, compatible Unicode : en
+sous-chaîne, un sigle de trois lettres se trouve dans des mots ordinaires. Pour
+une racine, passe une RegExp. **Une mention niée reste une mention** : « pas
+seulement pour X » nomme X, et un modèle de langage lit les mots, pas
+l'intention de la phrase. Seul `allow` (appliqué à la ligne) fait une exception.
+`findForbiddenTermsInFiles({ dirs, terms })` fait la même chose sur disque, en
+sautant les tests.
+
 ## Tests
 
 ```bash

@@ -1,5 +1,19 @@
 import {
   COMMANDS,
+  DEFAULT_WRITE_CALLS,
+  assertFactsAligned,
+  assertNoForbiddenTerms,
+  assertRoleReadOnly,
+  auditRoleWriteSource,
+  auditRoleWrites,
+  compareFacts,
+  extractMatches,
+  findForbiddenTerms,
+  findForbiddenTermsInFiles,
+  formatFactReport,
+  formatRoleWriteFindings,
+  formatTermReport,
+  pickPaths,
   DEFAULT_CONFIG,
   auditI18n,
   auditRouteFile,
@@ -66,3 +80,35 @@ runDeploy(rootDir, config, {
 runCli(['test'], { rootDir, config });
 const command = COMMANDS.test;
 command(rootDir, config, {});
+
+const roleResult = auditRoleWrites({
+  rootDir,
+  dirs: ['src'],
+  role: ['ROLES.SUPPORT', /'support'/],
+  exceptions: [{ match: "'/:id/activate'", reason: 'platform administration', file: 'accounts.routes.js' }],
+  writeCalls: DEFAULT_WRITE_CALLS,
+  authorListNames: false
+});
+const firstVia: string[] | undefined = roleResult.findings[0]?.via;
+void firstVia;
+formatRoleWriteFindings(roleResult);
+assertRoleReadOnly({ dirs: ['src'], role: 'ROLES.SUPPORT' });
+auditRoleWriteSource("router.post('/x', h);", { role: 'ROLES.SUPPORT' });
+
+const facts = extractMatches('price: "$49"', { pro: /price: "\$(\d+)"/ }, { parse: (raw) => Number(raw) });
+const claims = pickPaths({ plans: { pro: { price: 49 } } }, { pro: 'plans.pro.price' });
+const factReport = compareFacts({ facts, claims }, { tolerance: 0, arrayOrder: 'strict', requireEveryFact: true });
+const aligned: boolean = factReport.ok;
+void aligned;
+formatFactReport(factReport);
+assertFactsAligned({ facts, claims });
+
+const termReport = findForbiddenTerms({ prompt: 'text' }, ['acme', /north/i, { pattern: 'x', reason: 'why' }], {
+  allow: ['Acme Pay'],
+  required: ['worldwide']
+});
+formatTermReport(termReport);
+assertNoForbiddenTerms('text', ['acme']);
+const fileReport = findForbiddenTermsInFiles({ dirs: ['content'], terms: ['acme'] });
+const scanned: number = fileReport.fileCount;
+void scanned;

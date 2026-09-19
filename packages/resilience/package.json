@@ -1,16 +1,39 @@
 {
   "name": "@astratra/resilience",
-  "version": "0.1.0",
-  "description": "Circuit breaker with a single half-open probe, a TTL cache that degrades instead of failing, and retry with jitter.",
-  "engines": { "node": ">=20" },
+  "version": "0.2.0",
+  "description": "Circuit breaker with a single half-open probe, a TTL cache that degrades instead of failing, retry with jitter, a cluster-wide job lock and a background timer registry.",
+  "engines": {
+    "node": ">=20"
+  },
   "main": "src/index.js",
   "types": "src/index.d.ts",
   "type": "commonjs",
-  "files": ["src"],
-  "scripts": { "test": "jest" },
-  "jest": { "testMatch": ["**/__tests__/**/*.test.js"] },
-  "keywords": ["astratra", "circuit-breaker", "cache", "retry", "resilience"],
+  "files": [
+    "src"
+  ],
+  "scripts": {
+    "test": "jest"
+  },
+  "jest": {
+    "testMatch": [
+      "**/__tests__/**/*.test.js"
+    ]
+  },
+  "keywords": [
+    "astratra",
+    "circuit-breaker",
+    "cache",
+    "retry",
+    "resilience",
+    "job-lock",
+    "cluster",
+    "timers"
+  ],
   "license": "MIT",
-  "publishConfig": { "access": "public" },
-  "devDependencies": { "jest": "30.4.2" }
+  "publishConfig": {
+    "access": "public"
+  },
+  "devDependencies": {
+    "jest": "30.4.2"
+  }
 }

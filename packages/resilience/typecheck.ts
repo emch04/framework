@@ -2,11 +2,16 @@ import {
   CircuitOpenError,
   createCache,
   createCircuitBreaker,
+  createJobLock,
   createMemoryCacheStore,
+  createMemoryLockStore,
+  createMongoLockStore,
+  createRedisLockStore,
+  createTimerRegistry,
   defaultShouldRetry,
   retry
 } from './src';
-import type { Cache, CacheStore, CircuitBreaker, CircuitState } from './src';
+import type { Cache, CacheStore, CircuitBreaker, CircuitState, JobLock, LockStore, TimerRegistry } from './src';
 
 const breaker: CircuitBreaker = createCircuitBreaker({
   name: 'ia',
@@ -40,7 +45,27 @@ async function exercise(): Promise<void> {
     onRetry: (error, attempt, delayMs) => void [error, attempt, delayMs]
   });
 
+  const lockStore: LockStore = createMemoryLockStore();
+  const lock: JobLock = createJobLock({ store: lockStore, owner: 'worker-1', prefix: 'jobs:' });
+  const claimed: boolean = await lock.claim('reminders', 55 * 60_000);
+  const sent: number | null = await lock.run('reminders', 55 * 60_000, async () => 3);
+  const released: boolean = await lock.release('reminders');
+  const mongoStore: LockStore = createMongoLockStore({
+    updateOne: async () => ({}),
+    deleteOne: async () => ({ deletedCount: 1 })
+  });
+  const redisStore: LockStore = createRedisLockStore({ command: async (args: string[]) => args.length });
+
+  const registry: TimerRegistry = createTimerRegistry();
+  const tracked: ReturnType<typeof setInterval> = registry.track(setInterval(() => {}, 1000), { key: 'cleanup' });
+  registry.every(60_000, () => {}, { key: 'sweep' });
+  registry.after(5_000, () => {});
+  const cancelled: boolean = registry.cancel(tracked);
+  registry.stopAll();
+  const stopped: boolean = registry.isStopped();
+
   void [viaBreaker, sum, user, stats, fetched, state, breaker.isOpen()];
+  void [claimed, sent, released, mongoStore, redisStore, lock.owner, cancelled, stopped, registry.size()];
 }
 
 void exercise;

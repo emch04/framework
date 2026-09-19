@@ -73,3 +73,68 @@ export function retry<T>(fn: (attempt: number) => Awaitable<T>, options?: {
 }): Promise<T>;
 
 export function defaultShouldRetry(error: unknown): boolean;
+
+export interface LockStore {
+  /** Atomic: true for ONE caller while the lock is missing or expired. */
+  acquire(input: { key: string; owner: string; holdMs: number; now: number }): Awaitable<boolean>;
+  /** Deletes only when `owner` still holds the lock. */
+  release(input: { key: string; owner: string }): Awaitable<boolean>;
+}
+
+export function createMemoryLockStore(): LockStore & { size(): number };
+
+export function createMongoLockStore(collection: {
+  updateOne(filter: object, update: object, options: { upsert: boolean }): Awaitable<unknown>;
+  deleteOne(filter: object): Awaitable<{ deletedCount?: number } | null | undefined>;
+}): LockStore;
+
+export function createRedisLockStore(options: {
+  /** Sends one raw command, e.g. `(args) => client.sendCommand(args)`. */
+  command(args: string[]): Awaitable<unknown>;
+}): LockStore;
+
+export interface JobLock {
+  readonly owner: string;
+  /** Throws on store failure: a duplicate beats a job that silently never runs. */
+  claim(name: string, holdMs: number): Promise<boolean>;
+  /** Releases only a lock this instance still holds. */
+  release(name: string): Promise<boolean>;
+  /** Resolves `null` when another instance holds the lock. Holds until expiry unless `release: true`. */
+  run<T>(name: string, holdMs: number, fn: () => Awaitable<T>, options?: { release?: boolean }): Promise<T | null>;
+}
+
+export function createJobLock(options: {
+  store: LockStore;
+  owner?: string;
+  prefix?: string;
+  now?: () => number;
+}): JobLock;
+
+export type TimerHandle = unknown;
+
+export interface TrackOptions {
+  /** Tracking under an existing key clears the previous timer — no duplicate interval. */
+  key?: string;
+}
+
+export interface TimerRegistry {
+  track<T>(timer: T, options?: TrackOptions & { kind?: 'interval' | 'timeout' }): T;
+  every(ms: number, fn: () => void, options?: TrackOptions): TimerHandle;
+  after(ms: number, fn: () => void, options?: TrackOptions): TimerHandle;
+  cancel(timer: TimerHandle): boolean;
+  forget(timer: TimerHandle): boolean;
+  /** Clears every tracked timer. Safe to call repeatedly. */
+  stopAll(): void;
+  /** Periodic work checks this before any side effect. */
+  isStopped(): boolean;
+  size(): number;
+}
+
+export function createTimerRegistry(options?: {
+  timers?: {
+    setInterval?(fn: () => void, ms: number): TimerHandle;
+    setTimeout?(fn: () => void, ms: number): TimerHandle;
+    clearInterval?(timer: TimerHandle): void;
+    clearTimeout?(timer: TimerHandle): void;
+  };
+}): TimerRegistry;

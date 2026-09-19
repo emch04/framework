@@ -3,5 +3,7 @@ module.exports = {
   ...require('./toolRegistry'),
   ...require('./agentLoop'),
   ...require('./pendingActions'),
-  ...require('./fallback')
+  ...require('./fallback'),
+  ...require('./responseCleaner'),
+  ...require('./formatInstructions')
 };

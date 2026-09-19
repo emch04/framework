@@ -571,3 +571,326 @@ export function createRefreshTokenService(options: {
   now?: () => number;
   randomToken?: () => string;
 }): RefreshTokenService;
+
+/* ─────────────────────── Private file links ─────────────────────── */
+
+export type PrivateFileLinkFailure =
+  | 'missing'
+  | 'malformed'
+  | 'bad-signature'
+  | 'expired'
+  | 'wrong-file'
+  | 'unknown-account'
+  | 'revoked';
+
+export interface PrivateFileReader {
+  id?: unknown;
+  _id?: unknown;
+  /** Session version; a pass signed under an older one is refused. */
+  version?: number;
+  tokenVersion?: number;
+  [key: string]: unknown;
+}
+
+export interface SignedFileLink {
+  /** Hex only: a WAF never reads it as an SQL comment. */
+  ticket: string;
+  url: string;
+  issuedAt: number;
+  expiresAt: number;
+}
+
+export type PrivateFileLinkCheck =
+  | { valid: true; accountId: string; version: number; expiresAt: number }
+  | { valid: false; reason: PrivateFileLinkFailure };
+
+export interface PrivateFileLinks {
+  readonly stepSeconds: number;
+  readonly ticketParam: string;
+  /** A pass for ONE reader and ONE file, identical within a time step. */
+  sign(input: { kind: string; fileId: unknown; accountId: unknown; version?: number }): SignedFileLink;
+  /** The reader's own link, or null without a reader. */
+  linkFor(kind: string, fileId: unknown, reader: PrivateFileReader | null | undefined): string | null;
+  /** The address with no pass — the only form a broadcast may carry. */
+  pathFor(kind: string, fileId: unknown): string;
+  verify(ticket: string | null | undefined, target: { kind: string; fileId: unknown }): Promise<PrivateFileLinkCheck>;
+}
+
+export function createPrivateFileLinks(options: {
+  /** Dedicated to file links, at least 32 characters. */
+  secret: string;
+  stepSeconds?: number;
+  basePath?: string;
+  ticketParam?: string;
+  /** Current session version of an account, null once it no longer exists. */
+  accountVersion?: (accountId: string) => Awaitable<number | null | undefined>;
+  now?: () => number;
+}): PrivateFileLinks;
+
+export interface FileFieldOptions {
+  /** Kind of the file, or a function of the record. */
+  kind: string | ((record: Record<string, unknown>) => string);
+  field?: string;
+  idField?: string;
+  deletedField?: string;
+  /** Fields nulled on a deleted record — a thumbnail, a quoted text. */
+  clearWhenDeleted?: string[];
+}
+
+/** For a response to ONE reader: every file address becomes that reader's link. */
+export function serializeForReader<T>(value: T, options: FileFieldOptions & { links: PrivateFileLinks; reader: PrivateFileReader | null | undefined }): T;
+/** For anything sent to several people: the path only. */
+export function serializeForBroadcast<T>(value: T, options: FileFieldOptions & { links: PrivateFileLinks }): T;
+/** A bare stored name resolved strictly inside root, or null. */
+export function resolveStoredFile(root: string, name: string): string | null;
+export function privateFileHeaders(file: { mime?: string; fileName?: string }): Record<string, string>;
+
+export interface PrivateFileRequest extends RequestLike {
+  params?: { kind?: string; id?: string; [key: string]: string | undefined };
+}
+
+export function createPrivateFileHandler<TFile = unknown, TReader extends PrivateFileReader = PrivateFileReader>(options: {
+  links: PrivateFileLinks;
+  /** Your session middleware; must set req.user. */
+  authenticate: RequestHandler;
+  loadFile: (kind: string, id: string) => Awaitable<TFile | null | undefined>;
+  canRead: (reader: TReader, kind: string, file: TFile) => Awaitable<boolean>;
+  /** The reader behind a valid pass. */
+  loadReader: (accountId: string) => Awaitable<TReader | null | undefined>;
+  send: (file: TFile, req: PrivateFileRequest, res: ResponseLike) => Awaitable<unknown>;
+}): (req: PrivateFileRequest, res: ResponseLike, next: NextFunction) => Promise<unknown>;
+
+export const PRIVATE_FILE_STEP_SECONDS: number;
+
+/* ─────────────────────── Sign-in devices and change alerts ─────────────────────── */
+
+/** /16 in IPv4, /48 in IPv6 (expanded first), 'unknown' otherwise. */
+export function ipFamily(ip: string | null | undefined): string;
+
+export interface LoginDeviceStore {
+  /** Must be atomic: exactly one `inserted: true` per new (account, fingerprint). */
+  upsert(accountId: string, fingerprint: string, at: number): Awaitable<{ inserted: boolean }>;
+  count(accountId: string): Awaitable<number>;
+  keepMostRecent?(accountId: string, keep: number): Awaitable<unknown>;
+}
+
+export interface LoginDeviceRow {
+  accountId: string;
+  fingerprint: string;
+  firstSeenAt: number;
+  lastSeenAt: number;
+}
+
+export function createMemoryLoginDeviceStore(): LoginDeviceStore & { all(): Promise<LoginDeviceRow[]> };
+
+export interface LoginDeviceAccount {
+  id?: unknown;
+  _id?: unknown;
+  [key: string]: unknown;
+}
+
+export interface LoginDeviceResult {
+  isNew: boolean;
+  firstDevice: boolean;
+  notified: boolean;
+  error?: true;
+}
+
+export interface LoginDeviceTracker {
+  /** Never throws: call it after the session is granted. */
+  record(account: LoginDeviceAccount, context?: { ip?: string; userAgent?: string }): Promise<LoginDeviceResult>;
+  fingerprint(context?: { ip?: string; userAgent?: string }): string;
+}
+
+export function createLoginDeviceTracker<TAccount extends LoginDeviceAccount = LoginDeviceAccount>(options: {
+  store: LoginDeviceStore;
+  secret: string;
+  notify: (account: TAccount, event: { type: 'new-login-device'; at: number }) => Awaitable<unknown>;
+  maxDevices?: number;
+  onError?: (error: unknown) => void;
+  now?: () => number;
+}): LoginDeviceTracker;
+
+export const DEFAULT_MAX_LOGIN_DEVICES: number;
+
+export type ChangeType =
+  | 'password'
+  | 'email'
+  | 'factor-added'
+  | 'factor-removed'
+  | 'recovery-codes'
+  | 'trusted-device';
+
+export const CHANGE_TYPES: readonly ChangeType[];
+
+export interface ChangeAlertMessage<TAccount = unknown> {
+  to: string;
+  /** `${keyPrefix}.${change}` — render it from your own catalogue. */
+  key: string;
+  locale?: string;
+  change: ChangeType;
+  detail?: string;
+  account: TAccount;
+}
+
+export interface ChangeAlerts<TAccount = unknown> {
+  /** Never throws on a failed send; resolves whether the alert was handed over. */
+  alert(account: TAccount, change: ChangeType, input?: {
+    to?: string;
+    previousEmail?: string;
+    newEmail?: string;
+    detail?: string;
+  }): Promise<boolean>;
+  readonly CHANGE_TYPES: readonly ChangeType[];
+}
+
+export function createChangeAlerts<TAccount = unknown>(options: {
+  send: (message: ChangeAlertMessage<TAccount>) => Awaitable<unknown>;
+  keyPrefix?: string;
+  localeOf?: (account: TAccount) => string | undefined;
+  onError?: (error: unknown, change: ChangeType) => void;
+}): ChangeAlerts<TAccount>;
+
+export type AlertLevel = 'INFO' | 'WARN' | 'ERROR' | 'FATAL';
+export const ALERT_LEVELS: readonly AlertLevel[];
+
+export interface OperatorAlert {
+  level: AlertLevel;
+  type: string;
+  subject: string;
+  message?: string;
+  meta: Record<string, unknown>;
+  timestamp: string;
+}
+
+export function createSecurityAlerter(options?: {
+  channels?: Array<(alert: OperatorAlert) => Awaitable<unknown>>;
+  log?: (line: string, alert: OperatorAlert) => void;
+  now?: () => number;
+}): {
+  /** True when at least one channel delivered. Never throws. */
+  send(alert?: { level?: string; type?: string; subject?: string; message?: string; meta?: Record<string, unknown> }): Promise<boolean>;
+};
+
+/* ─────────────────────── Trusted devices ─────────────────────── */
+
+export type TrustedDeviceErrorCode =
+  | 'TRUSTED_DEVICE_REJECTED'
+  | 'TRUSTED_DEVICE_THROTTLED'
+  | 'SECOND_FACTOR_REQUIRED';
+
+export class TrustedDeviceError extends Error {
+  name: 'TrustedDeviceError';
+  code: TrustedDeviceErrorCode;
+  statusCode: 401 | 403 | 429;
+  retryAfterMs?: number;
+  constructor(code: TrustedDeviceErrorCode, extra?: Record<string, unknown>);
+}
+
+export interface TrustedDeviceRecord {
+  id: string;
+  accountId: string;
+  deviceId: string;
+  secretHash: string;
+  previousHashes: string[];
+  secondFactorVerified: boolean;
+  credentialBinding: string;
+  deviceName: string;
+  platform: 'ios' | 'android' | 'web' | 'other';
+  createdAt: number;
+  lastUsedAt: number;
+  expiresAt: number;
+  revokedAt: number | null;
+  revokedReason: string | null;
+}
+
+export interface TrustedDeviceFilter {
+  id?: string | string[];
+  accountId?: string;
+  deviceId?: string;
+  secretHash?: string;
+}
+
+export interface TrustedDeviceStore {
+  create(record: Omit<TrustedDeviceRecord, 'previousHashes'>): Awaitable<unknown>;
+  findByDeviceId(deviceId: string): Awaitable<TrustedDeviceRecord | null>;
+  /** Atomic compare-and-swap on secretHash. */
+  consume(id: string, expectedHash: string, next: { secretHash: string; lastUsedAt: number; expiresAt: number; keep: number }): Awaitable<boolean>;
+  /** Revokes the non-revoked rows matching filter; returns how many. */
+  revoke(filter: TrustedDeviceFilter, reason: string, at: number, keepUntil: number): Awaitable<number>;
+  listActive(accountId: string): Awaitable<TrustedDeviceRecord[]>;
+}
+
+export function createMemoryTrustedDeviceStore(): TrustedDeviceStore & { all(): Promise<TrustedDeviceRecord[]> };
+
+export interface AttemptCounter {
+  hit(key: string, windowMs: number, at: number): Awaitable<{ count: number; resetAt: number }>;
+}
+
+export function createMemoryAttemptCounter(): AttemptCounter;
+
+export interface TrustedDeviceProof {
+  deviceId: string;
+  secret: string;
+}
+
+export interface EnrolledTrustedDevice extends TrustedDeviceProof {
+  id: string;
+  expiresAt: number;
+}
+
+export interface TrustedDeviceExchange extends TrustedDeviceProof {
+  id: string;
+  accountId: string;
+  secondFactorVerified: boolean;
+  expiresAt: number;
+}
+
+export interface TrustedDeviceSummary {
+  id: string;
+  deviceName: string;
+  platform: string;
+  createdAt: number;
+  lastUsedAt: number;
+  expiresAt: number;
+}
+
+export interface TrustedDeviceService {
+  enroll(input: {
+    accountId: string;
+    /** Changes whenever the password changes — the stored password hash. */
+    credentialStamp: string;
+    requireSecondFactor?: boolean;
+    secondFactorVerified?: boolean;
+    deviceName?: string;
+    platform?: string;
+  }): Promise<EnrolledTrustedDevice>;
+  exchange(
+    proof: Partial<TrustedDeviceProof> | null | undefined,
+    context: { loadAccount: (accountId: string) => Awaitable<{ credentialStamp: unknown; disabled?: boolean } | null | undefined> }
+  ): Promise<TrustedDeviceExchange>;
+  forget(proof: Partial<TrustedDeviceProof> | null | undefined): Promise<void>;
+  list(accountId: string): Promise<TrustedDeviceSummary[]>;
+  remove(accountId: string, id: string): Promise<boolean>;
+  revokeAll(accountId: string, reason?: string): Promise<number>;
+  revoke(id: string, reason?: string): Promise<number>;
+  fingerprint(secret: string): string;
+}
+
+export function createTrustedDeviceService(options: {
+  store: TrustedDeviceStore;
+  pepper: string;
+  attempts?: AttemptCounter;
+  maxAttempts?: number;
+  attemptWindowMs?: number;
+  idleTtlMs?: number;
+  maxDevices?: number;
+  keptFingerprints?: number;
+  retentionAfterRevokeMs?: number;
+  onReplay?: (event: { accountId: string; id: string; at: number }) => Awaitable<unknown>;
+  onError?: (error: unknown) => void;
+  now?: () => number;
+}): TrustedDeviceService;
+
+export const TRUSTED_DEVICE_ID_PATTERN: RegExp;
+export const TRUSTED_DEVICE_SECRET_PATTERN: RegExp;

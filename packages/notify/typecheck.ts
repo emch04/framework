@@ -1,12 +1,17 @@
 import {
   DEFAULT_THEME,
   createCaptureChannel,
+  createInboxHandlers,
   createMailer,
+  createMemoryInboxStore,
+  createNotificationCatalog,
+  createNotificationInbox,
   createPushSender,
   createSmsSender,
   escapeHtml,
   formatSender,
   hasHeaderInjection,
+  mountInbox,
   normalizePhone,
   renderEmail,
   renderText,
@@ -17,6 +22,14 @@ import type {
   CaptureChannel,
   EmailBlock,
   EmailTheme,
+  InboxHandlers,
+  InboxPage,
+  InboxItem,
+  MemoryInboxStore,
+  NotificationCatalog,
+  NotificationCatalogAudit,
+  NotificationInbox,
+  RenderedNotification,
   MailChannel,
   Mailer,
   OutgoingMessage,
@@ -79,10 +92,39 @@ interface Payload { title: string; body: string }
 const push: PushSender<Subscription, Payload> = createPushSender<Subscription, Payload>({
   transport: async (subscription, payload) => void [subscription.endpoint, payload.title],
   isGone: (error) => (error as { statusCode?: number }).statusCode === 410,
-  onGone: async (subscription) => void subscription.id
+  onGone: async (subscription) => void subscription.id,
+  concurrency: 10,
+  timeoutMs: 30_000
 });
 
+/* ───────────────────── Inbox and translated catalogue ───────────────────── */
+
+const inboxStore: MemoryInboxStore = createMemoryInboxStore();
+inboxStore.add({ id: 'n1', ownerId: 'u1', title: 'Hello' });
+const inbox: NotificationInbox = createNotificationInbox({ store: inboxStore, pageSize: 20, maxPageSize: 50, isValidId: (id) => typeof id === 'string' });
+const handlers: InboxHandlers = createInboxHandlers(inbox, {
+  owner: (req) => req.user?.id,
+  respond: (res, status, body) => res.status(status).json(body),
+  notFoundMessage: 'Not found.'
+});
+const router = mountInbox({ get: () => undefined, patch: () => undefined, delete: () => undefined }, handlers);
+
+const catalog: NotificationCatalog = createNotificationCatalog({
+  languages: ['en', 'fr'],
+  entries: [
+    { result: { en: (p: { name: string }) => ({ title: 'Result', message: `${p.name} passed.`, pushBody: 'Open the app.' }) } },
+    { invoice: { en: { title: 'Invoice due', message: 'An invoice is waiting.' } } }
+  ]
+});
+const rendered: RenderedNotification = catalog.render('result', 'fr', { name: 'Ada' });
+const catalogAudit: NotificationCatalogAudit = catalog.audit({ params: { result: { name: 'Ada' } } });
+
 async function exercise(): Promise<void> {
+  const page: InboxPage<InboxItem> = await inbox.list('u1', { page: 1, limit: 10 });
+  const removed = await inbox.remove('u1', 'n1');
+  const tidied = await inbox.removeRead('u1');
+  void [page.pagination.totalPages, removed.removed, tidied.deleted, router, rendered.push.body, catalogAudit.pushBodyGaps, catalog.keys()];
+
   const mailResult: SendResult = await mailer.send({
     to: ['jean@ecole.cd'], subject: safeSubject, text, html, channel: 'alerts', replyTo: 'contact@acme.cd'
   });

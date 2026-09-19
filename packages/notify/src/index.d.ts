@@ -157,5 +157,157 @@ export function createPushSender<Subscription = unknown, Payload = unknown>(opti
   isGone?: (error: unknown) => boolean;
   /** Delete the dead subscription from your store — the point of the module. */
   onGone?: (subscription: Subscription) => Awaitable<void>;
+  /** Maximum simultaneous sends. Default 10. */
+  concurrency?: number;
+  /** Provider deadline for one send, in milliseconds. Default 30000. */
+  timeoutMs?: number;
   logger?: { info?(m: string): void; warn?(m: string): void; error?(m: string): void };
 }): PushSender<Subscription, Payload>;
+
+/* ───────────────────────── The notification inbox ───────────────────────── */
+
+export interface InboxPagination {
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
+
+export interface InboxPage<Item> {
+  notifications: Item[];
+  unreadCount: number;
+  pagination: InboxPagination;
+}
+
+/**
+ * The storage contract. Every call carries `ownerId`, and the store MUST apply
+ * it inside the query — the owner in the match is the only barrier.
+ * `list` returns newest first, ties broken by id (descending).
+ * `remove`, `removeRead`, `markRead`, `markAllRead` return how many documents changed.
+ */
+export interface InboxStore<Item = InboxItem> {
+  list(query: { ownerId: unknown; offset: number; limit: number }): Awaitable<Item[]>;
+  count(query: { ownerId: unknown; read?: boolean }): Awaitable<number>;
+  get(query: { ownerId: unknown; id: unknown }): Awaitable<Item | null | undefined>;
+  remove(query: { ownerId: unknown; id: unknown }): Awaitable<number>;
+  removeRead(query: { ownerId: unknown }): Awaitable<number>;
+  markRead(query: { ownerId: unknown; id: unknown }): Awaitable<number>;
+  markAllRead(query: { ownerId: unknown }): Awaitable<number>;
+}
+
+export interface InboxItem {
+  id: string | number;
+  ownerId: string | number;
+  read?: boolean;
+  createdAt?: Date | string | number;
+  [field: string]: unknown;
+}
+
+export interface NotificationInbox<Item = InboxItem> {
+  /** Throws when ownerId is missing — a programming error, never a user one. */
+  list(ownerId: unknown, query?: { page?: unknown; limit?: unknown }): Promise<InboxPage<Item>>;
+  /** Absent and "belongs to someone else" both return null. */
+  get(ownerId: unknown, id: unknown): Promise<Item | null>;
+  remove(ownerId: unknown, id: unknown): Promise<{ removed: boolean; unreadCount?: number }>;
+  /** Read notifications only — unread ones are never tidied away. */
+  removeRead(ownerId: unknown): Promise<{ deleted: number; unreadCount: number }>;
+  markRead(ownerId: unknown, id: unknown): Promise<{ updated: boolean; unreadCount?: number }>;
+  markAllRead(ownerId: unknown): Promise<{ updated: number; unreadCount: number }>;
+  pageSize: number;
+  maxPageSize: number;
+}
+
+export function createNotificationInbox<Item = InboxItem>(options: {
+  store: InboxStore<Item>;
+  /** Default 50. */
+  pageSize?: number;
+  /** Default 100. */
+  maxPageSize?: number;
+  /** An id failing this is "not found" without reaching the store. */
+  isValidId?: (id: unknown) => boolean;
+}): NotificationInbox<Item>;
+
+export interface MemoryInboxStore extends InboxStore<InboxItem> {
+  add(item: Partial<InboxItem> & { id: string | number; ownerId: string | number }): InboxItem;
+  all(): InboxItem[];
+}
+
+/** The reference adapter: applies the owner filter like a database would, refuses ownerless queries. */
+export function createMemoryInboxStore(options?: { items?: InboxItem[] }): MemoryInboxStore;
+
+export type InboxHandler = (req: any, res: any, next?: (error?: unknown) => unknown) => Promise<unknown>;
+
+export interface InboxHandlers {
+  list: InboxHandler;
+  get: InboxHandler;
+  remove: InboxHandler;
+  removeRead: InboxHandler;
+  markRead: InboxHandler;
+  markAllRead: InboxHandler;
+}
+
+export function createInboxHandlers(inbox: NotificationInbox<any>, options?: {
+  /** From the session, never from the body or the query. Default req.user.id. */
+  owner?: (req: any) => unknown;
+  /** Your response envelope. Default res.status(status).json(body). */
+  respond?: (res: any, status: number, body: unknown) => unknown;
+  notFoundMessage?: string;
+}): InboxHandlers;
+
+export interface RouterLike {
+  get(path: string, handler: InboxHandler): unknown;
+  patch(path: string, handler: InboxHandler): unknown;
+  delete(path: string, handler: InboxHandler): unknown;
+}
+
+/** Registers fixed paths (`/read-all`, `/read`) BEFORE `/:id`. */
+export function mountInbox<Router extends RouterLike>(router: Router, handlers: InboxHandlers): Router;
+
+/* ─────────────────────── Translated notifications ─────────────────────── */
+
+export interface NotificationContent {
+  title?: string;
+  message?: string;
+  /** A neutral line that replaces the message on the lock screen only. */
+  pushBody?: string;
+}
+
+export type NotificationTemplate<Params = any> = NotificationContent | ((params: Params) => NotificationContent);
+
+export type NotificationEntries = Record<string, Record<string, NotificationTemplate>>;
+
+export interface RenderedNotification {
+  key: string;
+  /** The language actually rendered — the default when the requested one is missing. */
+  language: string;
+  title: string;
+  message: string;
+  /** What a push may show: the neutral body when the entry has one, the message otherwise. */
+  push: { title: string; body: string };
+  neutralPush: boolean;
+}
+
+export interface NotificationCatalogAudit {
+  missing: Array<{ key: string; language: string }>;
+  /** A neutral push declared in some languages and forgotten in these. */
+  pushBodyGaps: Array<{ key: string; languages: string[] }>;
+  placeholders: Array<{ key: string; language: string; text: string }>;
+  errors: Array<{ key: string; language: string; error: string }>;
+}
+
+export interface NotificationCatalog {
+  languages: string[];
+  defaultLanguage: string;
+  /** Throws on an unknown key. */
+  render(key: string, language?: string | null, params?: Record<string, unknown>): RenderedNotification;
+  audit(options?: { params?: Record<string, Record<string, unknown>> }): NotificationCatalogAudit;
+  has(key: string): boolean;
+  keys(): string[];
+}
+
+export function createNotificationCatalog(options: {
+  languages: string[];
+  defaultLanguage?: string;
+  /** One object, or several (one per domain) — a key declared twice throws. */
+  entries: NotificationEntries | NotificationEntries[];
+}): NotificationCatalog;

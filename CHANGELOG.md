@@ -3,6 +3,79 @@
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Chaque package Astratra est versionné indépendamment.
 
+## 2026-09-19 (28) — extraction Scolaris, lot de septembre
+
+Mineures seulement : chaque paquet ajoute des fonctions sans en retirer.
+`native` 0.2.0, `i18n-server` 0.2.0, `notify` 0.3.0, `ai` 1.3.0,
+`resilience` 0.2.0, `tooling` 1.2.0, `security` 1.11.0, `privacy` 0.2.0,
+`core` 1.1.0, `entitlements` 0.5.0 ; nouveaux paquets en 0.1.0.
+`create-astratra-app` 1.5.0 écrit ces nouveaux planchers (un caret sur une
+`0.x` ne franchit pas la mineure : `^0.2.0` n'installerait jamais `notify`
+0.3.0), et `native-ui` demande `native` `^0.2.0`.
+
+### Ajoute
+
+- `@astratra/native-ui` (nouveau) — le kit d'interface mobile : verre liquide
+  d'Apple sur iOS, surface visible calibrée sur Android (le flou Android rendait
+  un gris dense), boutons en verre, cartes, barres repliables, barre d'onglets à
+  pastille, en-tête repliable, Markdown des réponses d'IA. Règles pures dans
+  `@astratra/native-ui/logic`.
+- `@astratra/app-version` (nouveau) — prévenir d'une nouvelle version en
+  magasin. L'annonce est réservée AVANT l'envoi (jamais deux fois), part en
+  journée, aux seuls téléphones en retard, et reste éteinte par défaut : un
+  poste de développement branché sur la base de production ne notifie personne.
+- `@astratra/app-guide` (nouveau) — le guide d'un assistant d'IA généré depuis
+  la configuration des écrans. Détection des questions d'usage insensible au
+  piège de `\b` devant une lettre accentuée (« À quoi sert »).
+- `@astratra/voice` (nouveau) — arguments Piper et ffmpeg, et une version de
+  voix dans la clé de cache, partagée entre serveur et téléphone : une nouvelle
+  voix invalide l'ancien audio des deux côtés.
+- `@astratra/native` — connectivité (un « sans Internet » du système n'est pas
+  une panne : nos propres requêtes tranchent), règle des mises à jour à
+  distance, cache de médias sur disque borné.
+- `@astratra/i18n-server` — langue du courrier distincte de celle de
+  l'interface (`emailLang` d'abord, destinataire relu avec ses champs de
+  langue), recherche de clés en double et d'objets d'e-mail en dur, garde de
+  fuite d'une langue dans une autre.
+- `@astratra/notify` — boîte de notifications (pagination, suppression limitée
+  au propriétaire avec la même réponse pour « absente » et « à un autre »,
+  recalage des non-lues) et catalogue traduit avec corps de push neutre.
+- `@astratra/ai` — nettoyage des réponses (aucune clé JSON à l'écran) et
+  consignes de mise en forme par surface.
+- `@astratra/resilience` — verrou de tâches planifiées en grappe (Redis, Mongo
+  ou mémoire) et registre des minuteurs de fond.
+- `@astratra/security` — liens signés pour les fichiers privés (demandés par
+  chaque lecteur, jamais diffusés, sans « -- » qu'un pare-feu prendrait pour
+  du SQL), appareils de connexion et alertes de changement, appareil de
+  confiance côté serveur (secret roté, consommé de façon atomique).
+- `@astratra/privacy` — suppression de compte en libre-service réversible
+  pendant le délai de grâce, et un redactor devenu filtre de données
+  sensibles (Luhn, IBAN, jetons, noms de champs normalisés).
+- `@astratra/core` — clé idempotente sur les requêtes : réponse rejouée,
+  conflit sur un autre corps, une seule exécution concurrente, réponse
+  enregistrée avant l'envoi.
+- `@astratra/entitlements` — un rôle, un seul titulaire : création,
+  promotion et renommage gardés, sentinelle qui compare à l'identité ancrée.
+- `@astratra/tooling` — gardes de test : un rôle qui voit sans écrire,
+  alignement des faits entre la base de connaissances et le code, mots
+  interdits.
+
+### Corrige
+
+- `@astratra/privacy` — le redactor laissait passer `access_token=…`,
+  prenait une date, un UUID, une carte ou un IBAN pour un téléphone, et
+  recoupait `[API KEY]`.
+
+- `@astratra/notify` — `broadcast` envoyait un abonnement après l'autre : un
+  fournisseur lent retenait tous les suivants. C'est ce schéma qui a retardé de
+  six heures les poussées Android de Scolaris le 16/09/2026. Envoi désormais en
+  parallèle borné (`concurrency`, 10 par défaut) avec une limite de temps par
+  envoi (`timeoutMs`), forme de retour inchangée.
+- Racine — `npm test` lance désormais tous les espaces de travail, chacun avec
+  sa propre configuration. Pour un seul paquet : `npm test -w @astratra/<nom>`.
+  `npx jest packages/<nom>` lancé depuis la racine ignore la configuration du
+  paquet et prend `__tests__/helpers.js` pour une suite vide : ne pas s'y fier.
+
 ## 2026-08-26 (27)
 
 ### Corrige

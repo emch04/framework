@@ -43,6 +43,10 @@ commande.
 | [`@astratra/closure`](packages/closure/README.md) | clôture de période volontaire : liste à points bloquants et reconnus, archive nettoyée de tout identifiant, sections en échec nommées |
 | [`@astratra/notify`](packages/notify/README.md) | messages sortants — e-mail, SMS, push : transport injecté, ne lève jamais, en-têtes protégés de l'injection, abonnements morts rendus pour élagage |
 | [`@astratra/native`](packages/native/README.md) | plomberie mobile sans le moteur mobile : session dans le trousseau, verrou biométrique, notifications natives et veille au premier plan, retour de paiement — adaptateurs injectés, testable en Node |
+| [`@astratra/native-ui`](packages/native-ui/README.md) | kit d'interface mobile React Native / Expo : verre liquide d'Apple sur iOS et surface visible calibrée sur Android, boutons en verre, cartes pâles, barres qui se replient au défilement, barre d'onglets à pastille, en-tête repliable, rendu Markdown des réponses d'IA — règles pures testables en Node (`/logic`) |
+| [`@astratra/app-version`](packages/app-version/README.md) | prévenir d'une nouvelle version dans les magasins : route publique des versions, une annonce par version (réservée avant l'envoi, en journée, aux seuls téléphones en retard, dans la langue de chacun, éteinte par défaut), veilleur côté téléphone |
+| [`@astratra/app-guide`](packages/app-guide/README.md) | guide d'usage pour un assistant d'IA, généré depuis la configuration des écrans de l'appli : filtré par rôle, détection des questions « comment faire », recherche bornée, contrôles de couverture routes et clés de traduction |
+| [`@astratra/voice`](packages/voice/README.md) | finition et cache de la synthèse vocale côté serveur : arguments Piper et ffmpeg, clé de cache versionnée partagée serveur/téléphone, exécution et stockage injectés |
 | [`@astratra/client`](packages/client/README.md) | plomberie côté client, agnostique : rafraîchissement 401 à vol unique, garde de route à liste publique, règles de mot de passe, file hors ligne |
 | [`@astratra/saas-kit`](packages/saas-kit/README.md) | starter : `createSaasApp()` assemblant users/auth/settings/notifications/dashboard, validation d'entrée intégrée |
 | [`@astratra/store-mongo`](packages/store-mongo/README.md) | adapter de persistance réel (MongoDB/Mongoose) pour `usersStore`/`settingsStore` |
@@ -121,6 +125,8 @@ npm install @astratra/privacy
 npm install @astratra/resilience
 npm install @astratra/closure
 npm install @astratra/notify
+npm install @astratra/app-version @astratra/app-guide @astratra/voice
+npm install @astratra/native-ui react react-native react-native-reanimated expo-glass-effect expo-blur expo-linear-gradient
 npm install @astratra/client
 ```
 

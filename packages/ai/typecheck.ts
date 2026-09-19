@@ -104,3 +104,24 @@ async function exercisePending(): Promise<void> {
 }
 
 void exercisePending;
+
+import { createFormatInstructions, createResponseCleaner, DEFAULT_SURFACES } from './src';
+import type { CleanerVocabulary, FormatInstructions, ResponseCleaner } from './src';
+
+const vocabulary: CleanerVocabulary = {
+  payloadKeys: ['response'],
+  titleKeys: ['title'],
+  lineLabels: ['introduction', /key[ _]features/],
+  closingPhrases: [/Anything else\?/]
+};
+const cleaner: ResponseCleaner = createResponseCleaner({ shared: vocabulary, languages: { en: {} }, fallbackLanguage: 'en' });
+const cleaned: string = cleaner.clean('{"response": "ok"}', { language: 'en' });
+const prose: string = cleaner.jsonToProse({ title: 'x' });
+
+const format: FormatInstructions = createFormatInstructions({
+  languages: { en: { paragraphs: 'Write in paragraphs.', table: 'At most {columns} columns.' } },
+  surfaces: DEFAULT_SURFACES,
+  defaultSurface: 'phone'
+});
+const rules: string = format.build('mobile', 'en');
+void [cleaned, prose, rules, format.normalizeSurface(null)];

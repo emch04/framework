@@ -213,3 +213,75 @@ export function createDeterministicFallback<Input = Record<string, unknown>>(opt
   classify?: (input: Input) => string | null | undefined;
   markDegraded?: (answer: Record<string, unknown>) => Record<string, unknown>;
 }): DeterministicFallback<Input>;
+
+/** A literal word (escaped) or a RegExp whose source is used as-is. */
+export type VocabularyEntry = string | RegExp;
+
+export interface CleanerVocabulary {
+  /** Wrapper keys whose string value IS the answer ({"response": "..."}). */
+  payloadKeys?: VocabularyEntry[];
+  /** Object keys rendered as a bold heading when JSON becomes prose. */
+  titleKeys?: string[];
+  /** Labels removed at the start of a line only ("**introduction** : ..."). */
+  lineLabels?: VocabularyEntry[];
+  /** Form-like labels removed anywhere they are followed by ":", "-" or "—". */
+  inlineLabels?: VocabularyEntry[];
+  /** Labels removed when alone on a line or leading one, bold or not, colon or not. */
+  headingLabels?: VocabularyEntry[];
+  reasoningLabels?: VocabularyEntry[];
+  reasoningStarters?: VocabularyEntry[];
+  finalMarkers?: VocabularyEntry[];
+  planningStarters?: VocabularyEntry[];
+  leadingFillers?: VocabularyEntry[];
+  annotationMarkers?: VocabularyEntry[];
+  /** Robotic closings, removed only at the very end of the reply. */
+  closingPhrases?: VocabularyEntry[];
+  openers?: VocabularyEntry[];
+}
+
+export interface ResponseCleaner {
+  clean(text: string | null | undefined, options?: { language?: string }): string;
+  jsonToProse(value: unknown, language?: string): string;
+  languages: string[];
+}
+
+export function createResponseCleaner(options?: {
+  shared?: CleanerVocabulary;
+  languages?: Record<string, CleanerVocabulary>;
+  fallbackLanguage?: string;
+  maxClosingPasses?: number;
+}): ResponseCleaner;
+
+export interface FormatSurface {
+  columns: number;
+  narrow?: boolean;
+  aliases?: string[];
+}
+
+export interface FormatLanguagePack {
+  /** Mandatory: the paragraph rule reaches every surface. */
+  paragraphs: string;
+  heading?: string;
+  intro?: string;
+  table?: string;
+  narrow?: string;
+  wide?: string;
+  rules?: string[];
+  surfaceNames?: Record<string, string>;
+}
+
+export interface FormatInstructions {
+  build(surface: unknown, language?: string): string;
+  normalizeSurface(surface: unknown): string;
+  surfaces: string[];
+  languages: string[];
+}
+
+export const DEFAULT_SURFACES: Record<'phone' | 'tablet' | 'desktop', FormatSurface>;
+
+export function createFormatInstructions(options: {
+  languages: Record<string, FormatLanguagePack>;
+  surfaces?: Record<string, FormatSurface>;
+  defaultSurface?: string;
+  fallbackLanguage?: string;
+}): FormatInstructions;

@@ -185,3 +185,78 @@ rien n'était apprend aux utilisateurs à se méfier des bonnes.
 Et l'erreur du fournisseur est **transportée**, pas avalée : la gober en
 silence cacherait la panne à ta propre supervision. Une question sans réponse
 déterministe est déclinée, pas inventée.
+
+## Nettoyer une réponse avant qu'un humain la lise
+
+Une règle écrite dans l'invite n'est qu'un vœu : le modèle la suit quand ça
+l'arrange. Trois fuites arrivaient quand même à l'écran — du JSON brut, les
+étiquettes d'une structure que le modèle s'est inventée (`**introduction** :`),
+et des brouillons de raisonnement ou des relances robotiques en fin de réponse.
+`createResponseCleaner` les retire de façon déterministe.
+
+```js
+const { createResponseCleaner } = require('@astratra/ai');
+
+const nettoyeur = createResponseCleaner({
+  shared: {                        // appliqué quelle que soit la langue
+    payloadKeys: ['response', 'message', 'answer'],
+    titleKeys: ['title', 'name'],
+    lineLabels: ['title', 'introduction', 'features', /key[ _]features/],
+    reasoningStarters: ['Wait', 'Actually'],
+    finalMarkers: [/Final\s*answer/],
+  },
+  languages: {
+    fr: {
+      payloadKeys: ['réponse'],
+      closingPhrases: [/Besoin d'autre chose[^.?!]*[.?!]?/],
+    },
+  },
+  fallbackLanguage: 'fr',
+});
+
+nettoyeur.clean(texteDuModele, { language: 'fr' });
+```
+
+**Aucune clé JSON à l'écran, jamais.** Un ancien convertisseur écrivait
+« title : … », « features : … » : les clés restaient visibles. Ici un titre
+devient une ligne en gras, un texte un paragraphe, une liste des puces, un
+élément nommé « **Nom** — description ». Quand le modèle enveloppe sa réponse
+(`{"role": "...", "response": "..."}`), le champ utile EST la réponse.
+
+Les étiquettes de ligne ne sont retirées **qu'en début de ligne** : le même mot
+au milieu d'une phrase n'est jamais touché. Pour un brouillon, seul ce qui suit
+la **dernière** ligne de raisonnement est gardé. Les relances empilées en fin de
+réponse sont retirées en plusieurs passes, bornées (`maxClosingPasses`, 3 par
+défaut).
+
+Le paquet ne contient **aucun mot** : chaque entrée est un mot littéral
+(échappé) ou une `RegExp`, fournie par l'appelant, par langue. Sans vocabulaire,
+seul le nettoyage structurel tourne (blocs `<think>`, JSON, espaces).
+
+## Dire au modèle où part sa réponse
+
+```js
+const { createFormatInstructions } = require('@astratra/ai');
+
+const forme = createFormatInstructions({
+  languages: {
+    fr: {
+      heading: '## Où part ta réponse',
+      intro: "Ta réponse s'affiche sur {surface}.",
+      surfaceNames: { phone: 'un téléphone', tablet: 'une tablette', desktop: 'un navigateur' },
+      table: 'Un tableau tient au maximum {columns} colonnes courtes.',
+      narrow: "Sur un téléphone, préfère la liste au moindre doute.",
+      wide: 'Le tableau reste réservé aux données réellement tabulaires.',
+      paragraphs: 'Écris en paragraphes : une idée chacun, des phrases complètes, jamais de trait (---).',
+    },
+  },
+});
+
+forme.build(req.headers['x-surface'], 'fr');
+```
+
+Surfaces par défaut : téléphone 3 colonnes, tablette 4, bureau 6. Une surface
+absente ou inconnue vaut **téléphone** : se tromper vers le petit coûte une liste
+là où un tableau tenait, se tromper vers le grand coûte un tableau illisible.
+La règle `paragraphs` est **obligatoire** : un pack de langue qui ne l'a pas est
+refusé à la création, pas découvert sur un écran.

@@ -1,6 +1,6 @@
 {
   "name": "@astratra/i18n-server",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Server-side message translation and a readability audit for the sentences your API returns.",
   "engines": {
     "node": ">=20"

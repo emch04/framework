@@ -244,3 +244,105 @@ export function createInvitationBoard(options?: {
   urgentHours?: number;
   invitable?: Record<string, string[]>;
 }): InvitationBoard;
+
+/* ─────────────── A role only one account may hold ─────────────── */
+
+export type UniqueRoleReason = 'role_taken' | 'bootstrap_closed' | 'identity_taken' | 'holder_protected' | 'last_holder';
+
+export class UniqueRoleError extends Error {
+  reason: UniqueRoleReason;
+  statusCode: number;
+  constructor(reason: UniqueRoleReason, statusCode: number, message?: string);
+}
+
+export type UniqueRoleAlertKind =
+  | 'create_refused'
+  | 'promotion_refused'
+  | 'demotion_refused'
+  | 'rename_refused'
+  | 'modify_refused'
+  | 'intruders_removed'
+  | 'anchor_missing'
+  | 'anchor_not_found'
+  | 'anchor_mismatch';
+
+export interface UniqueRoleAlert<Account = Record<string, unknown>> {
+  kind: UniqueRoleAlertKind;
+  role: string;
+  actor?: Account;
+  account?: Account;
+  holder?: Account | null;
+  intruders?: Account[];
+  failed?: Account[];
+  accounts?: Account[];
+  nextIdentifier?: string;
+}
+
+export interface UniqueRoleStore<Account = Record<string, unknown>> {
+  /** Every account holding the role — match it case-insensitively. */
+  findHolders(role: string): Awaitable<Account[]>;
+  /** Remove ONLY IF the account still holds `role`; false when it did not. */
+  remove?(account: Account, role: string): Awaitable<boolean | void>;
+}
+
+export type SweepReason = 'none' | 'single' | 'intruders' | 'anchor_missing' | 'anchor_not_found' | 'anchor_mismatch';
+
+export interface SweepResult<Account = Record<string, unknown>> {
+  removed: Account[];
+  failed: Account[];
+  holder: Account | null;
+  reason: SweepReason;
+  dryRun: boolean;
+}
+
+export interface UniqueRole<Account = Record<string, unknown>> {
+  role: string;
+  isRole(role: unknown): boolean;
+  isHolder(account: Account | null | undefined): boolean;
+  verdict(input: { role: unknown; otherHolderExists: boolean }):
+    { refused: false } | { refused: true; reason: UniqueRoleReason; statusCode: number };
+  /** Throws UniqueRoleError (and alerts) when a second holder would be created. */
+  assertCanCreate(input: { role: unknown; actor?: Account; account?: Partial<Account> }): Promise<void>;
+  /** `account` as currently stored. Refuses promotion into a taken role and demotion of the holder. */
+  assertCanChangeRole(input: { account: Account; nextRole: unknown; actor?: Account }): Promise<void>;
+  /** Refuses anyone but the holder taking the anchored identifier. */
+  assertCanRename(input: { account: Account; nextIdentifier: unknown; actor?: Account }): Promise<void>;
+  /** Refuses anyone but the holder modifying or deleting the holder's account. */
+  assertCanModify(input: { target: Account; actor?: Account }): Promise<void>;
+  /** The sentinel: removes every holder but the anchored one, then alerts. */
+  sweep(options?: { dryRun?: boolean }): Promise<SweepResult<Account>>;
+}
+
+export function createUniqueRole<Account = Record<string, unknown>>(options: {
+  role: string;
+  /** The legitimate holder's identifier, or a function read at each call. */
+  anchor?: string | null | (() => string | null | undefined);
+  store?: UniqueRoleStore<Account>;
+  /** Sending and wording are yours; a failure never changes the outcome. */
+  alert?: (event: UniqueRoleAlert<Account>) => Awaitable<void>;
+  /** Refusal texts by reason; without one, the message is the reason code. */
+  messages?: Partial<Record<UniqueRoleReason, string>>;
+  /** Default true: the first holder may be created while none exists. */
+  allowBootstrap?: boolean;
+  idOf?: (account: Account) => unknown;
+  identifierOf?: (account: Account) => unknown;
+  roleOf?: (account: Account) => unknown;
+  logger?: { error(message: string): void };
+}): UniqueRole<Account>;
+
+export function pickIntruders<Account = Record<string, unknown>>(input: {
+  accounts?: Account[];
+  anchor?: string | null;
+  identifierOf?: (account: Account) => unknown;
+  idOf?: (account: Account) => unknown;
+}): { intruders: Account[]; holder: Account | null; reason: SweepReason };
+
+export function createMemoryUniqueRoleStore<Account extends Record<string, unknown> = Record<string, unknown>>(
+  initial?: Account[]
+): UniqueRoleStore<Account> & {
+  remove(account: Account, role: string): Promise<boolean>;
+  add(account: Account): Account;
+  update(id: string, patch: Partial<Account>): Account | undefined;
+  list(): Account[];
+  size(): number;
+};

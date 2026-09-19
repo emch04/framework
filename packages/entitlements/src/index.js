@@ -6,5 +6,6 @@ module.exports = {
   ...require('./accessMatrix'),
   ...require('./tenantScope'),
   ...require('./invitations'),
-  ...require('./invitationBoard')
+  ...require('./invitationBoard'),
+  ...require('./uniqueRole')
 };

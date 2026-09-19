@@ -1,7 +1,8 @@
 # @astratra/privacy
 
-Droit d'accès, droit à l'oubli, et anonymisation des journaux. Sans détruire les
-dossiers que tu as l'obligation de garder.
+Droit d'accès, droit à l'oubli, suppression de compte en libre-service, et
+filtre de données sensibles. Sans détruire les dossiers que tu as l'obligation
+de garder.
 
 Aucune dépendance à l'exécution. Rien n'est stocké ni sauvegardé à ta place.
 
@@ -86,6 +87,82 @@ tranchée renvoie 409.
 Consigner une réussite qui n'a pas eu lieu, c'est dire à un régulateur qu'on a
 effacé des données qu'on détient toujours.
 
+## La suppression de compte en libre-service
+
+Les magasins d'applications exigent qu'une personne puisse supprimer son compte
+elle-même, sans écrire au support. Le faire en un clic irréversible est deux
+fois faux : ça punit le geste impulsif, et ça donne à qui emprunte une session
+le pouvoir de détruire le compte pour de bon.
+
+Donc la demande **suspend** le compte tout de suite, et l'effacement n'a lieu
+qu'à l'échéance (30 jours par défaut, `graceMs`). Se reconnecter ou annuler
+pendant le délai rétablit tout.
+
+```js
+const { createAccountDeletion, createAnonymizer } = require('@astratra/privacy');
+const { createJobLock, createMongoLockStore } = require('@astratra/resilience');
+
+const suppression = createAccountDeletion({
+  store,                               // voir createMemoryDeletionStore()
+  // L'effacement n'est PAS réimplémenté : il délègue à l'anonymiseur.
+  erase: async (id) => {
+    const compte = await Comptes.findById(id);
+    await anonymizer.anonymise(compte);
+    await compte.save();
+  },
+  // Les règles produit, en codes que le client traduit.
+  canRequest: async (id, { dernierAdministrateur }) => (dernierAdministrateur ? 'last_manager' : null),
+  suspend: async (id) => Comptes.updateOne({ _id: id }, { $inc: { tokenVersion: 1 } }),
+  notify: {
+    send: (id, message) => mailer.send(id, message),
+    // Les textes viennent de toi, jamais du paquet.
+    messages: {
+      scheduled: ({ daysLeft }) => t('suppression.programmee', { daysLeft }),
+      cancelled: ({ by }) => t('suppression.annulee', { by }),
+      reminder:  ({ daysLeft }) => t('suppression.imminente', { daysLeft }),
+    },
+  },
+  lock: createJobLock({ store: createMongoLockStore(db.collection('locks')) }),
+});
+
+await suppression.request(userId, contexte);   // { ok, record } | { ok: false, reason }
+await suppression.cancel(userId);              // depuis les réglages
+await suppression.onSignIn(userId);            // après le second facteur, jamais avant
+await suppression.status(userId);
+await suppression.sweep();                     // tâche quotidienne
+```
+
+Ce que les tests fixent :
+
+**Rien n'est effacé avant l'échéance**, même si l'adaptateur de stockage renvoie
+trop de lignes : l'échéance est revérifiée. Une fiche sans date n'est jamais
+considérée comme due.
+
+**Chaque transition est conditionnelle** (`update`/`remove` avec les champs
+attendus). Une reconnexion qui arrive pendant la passe ne peut pas être
+effacée sur la foi d'une lecture périmée ; deux instances n'effacent pas deux
+fois ; deux appuis simultanés ne programment qu'une fois.
+
+**`onSignIn` ne lève jamais** : le mécanisme censé faire revenir la personne ne
+doit pas l'enfermer dehors. Appelle-le quand la session est vraiment accordée,
+second facteur compris — sinon le seul mot de passe ressuscite le compte.
+
+**Chaque annulation prévient le titulaire.** Une reconnexion faite par quelqu'un
+d'autre ne ramène pas le compte en silence.
+
+**Si la suspension échoue, la demande est défaite.** Un compte « fermé » dont
+les sessions restent ouvertes est pire qu'une demande qui échoue visiblement.
+
+**Un courrier en échec ne défait rien**, et un rappel raté est retenté au
+passage suivant. Un effacement en échec reste programmé et repasse.
+
+**La passe est idempotente** et accepte un verrou injecté (`run(name, holdMs,
+fn)` qui rend `null` quand une autre instance le tient) : `createJobLock` de
+`@astratra/resilience` convient tel quel, sans dépendance.
+
+Ce circuit ne remplace pas `createErasureWorkflow` : la demande d'effacement
+revue par un humain reste l'outil quand quelqu'un d'autre a son mot à dire.
+
 ## Le droit d'accès
 
 Ce que tout le monde rate n'est pas l'export — c'est le **silence** autour.
@@ -131,10 +208,34 @@ const redactor = createRedactor({
 logger.error(redactor.redact({ message, user, payload }));
 ```
 
-Par défaut : adresses e-mail, numéros de téléphone, numéros de carte, jetons
-`Bearer`, et les secrets écrits en clair dans une ligne de texte. Plus les
-champs dont le **nom** suffit — `password`, `token`, `authorization` — quelle
-que soit la tête de la valeur.
+Le même outil sert de filtre de données sensibles avant que quoi que ce soit
+sorte : journaux, messages envoyés à une IA, exports, tickets de support.
+
+Par défaut, un jeu générique — les mêmes formes dans tous les pays :
+
+- adresses e-mail, téléphones internationaux (et longues suites de chiffres) ;
+- cartes bancaires **avec contrôle de Luhn**, IBAN **avec contrôle mod 97** —
+  un numéro qui ne passe pas le contrôle n'est pas appelé carte ;
+- jetons `Bearer`, JWT, clés de fournisseurs reconnues à leur préfixe
+  (`sk_live_`, `AKIA`, `ghp_`, `xoxb-`…), blocs de clé privée, identifiants
+  dans une URL (`https://user:pass@…`) ;
+- les secrets écrits en clair dans une ligne (`access_token=…`, `secret_key: …`)
+  et les champs dont le **nom** suffit, quelle que soit leur graphie
+  (`access_token`, `Access-Token`, `accessToken`).
+
+Les identifiants propres à un pays ou une langue (numéro national, format de
+téléphone local, matricule) sont **les tiens**, via `extra`, avec au besoin
+leur propre `validate(match)`.
+
+```js
+const { value, found, clean } = redactor.inspect(messagePourLIA);
+// found = { email: 1, card: 1 } — les compteurs, jamais les valeurs
+if (found.card) return refuser();
+```
+
+Les faux positifs corrigés et fixés par les tests : une date `2026-09-19 10:00`
+reste lisible, le dernier groupe d'un UUID aussi, `tokens: 1500` n'est pas un
+secret.
 
 Trois choix qui comptent :
 
@@ -155,7 +256,7 @@ exactement l'endroit où l'on rencontre les deux.
 
 ## Ce que ce package ne fait pas
 
-- Il ne **supprime** rien : c'est le sujet.
+- Il ne **supprime** rien : il anonymise, via ce que tu branches.
 - Il ne sauvegarde pas — la persistance et les transactions restent à toi.
 - Il ne décide pas **qui** a le droit d'approuver un effacement.
 - Il ne connaît aucune juridiction et ne prétend pas te rendre conforme : il

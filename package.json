@@ -11,6 +11,7 @@
     "examples/dashboard-ui"
   ],
   "scripts": {
+    "test": "npm test --workspaces --if-present",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "verify:packages": "node scripts/verify-package-installation.js"

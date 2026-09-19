@@ -71,7 +71,7 @@ export const hydrator = createEnvHydrator({ vault });
 
   entitlements: {
     package: '@astratra/entitlements',
-    version: '^0.4.0',
+    version: '^0.5.0',
     summary: 'plans, droits d’accès, isolation par locataire, invitations',
     file: 'api/bricks/entitlements.js',
     contents: () => `import { createFeatureGuard, createPlanCatalog, createTenantScope } from '@astratra/entitlements';
@@ -104,7 +104,7 @@ export const tenants = createTenantScope({
 
   notify: {
     package: '@astratra/notify',
-    version: '^0.2.0',
+    version: '^0.3.0',
     summary: 'e-mail, SMS et notifications poussées, transport injecté',
     file: 'api/bricks/notify.js',
     contents: () => `import { createCaptureChannel, createMailer, renderEmail, renderText } from '@astratra/notify';
@@ -176,7 +176,7 @@ export const webhook = createWebhookHandler({
 
   privacy: {
     package: '@astratra/privacy',
-    version: '^0.1.0',
+    version: '^0.2.0',
     summary: 'droit d’accès, droit à l’oubli, nettoyage des journaux',
     file: 'api/bricks/privacy.js',
     contents: () => `import {
@@ -220,7 +220,7 @@ export const erasure = createErasureWorkflow({
 
   resilience: {
     package: '@astratra/resilience',
-    version: '^0.1.0',
+    version: '^0.2.0',
     summary: 'disjoncteur, cache TTL, relance avec brouillage',
     file: 'api/bricks/resilience.js',
     contents: () => `import { createCache, createCircuitBreaker, retry } from '@astratra/resilience';
@@ -247,7 +247,7 @@ export async function fetchWithGuards(key, call) {
 
   'i18n-server': {
     package: '@astratra/i18n-server',
-    version: '^0.1.0',
+    version: '^0.2.0',
     summary: 'messages du serveur traduits, audit de lisibilité',
     file: 'api/bricks/i18n.js',
     contents: () => `import {

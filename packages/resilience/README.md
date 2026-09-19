@@ -1,7 +1,9 @@
 # @astratra/resilience
 
 Trois protections contre les dépendances qui tombent : le disjoncteur, le cache
-qui se dégrade au lieu d'échouer, et la relance avec brouillage.
+qui se dégrade au lieu d'échouer, et la relance avec brouillage. Et deux
+protections pour ce qui tourne en arrière-plan : le verrou de tâches en grappe
+et le registre des minuteurs de fond.
 
 Aucune dépendance à l'exécution.
 
@@ -110,6 +112,78 @@ const donnee = await cache.remember(cle, () =>
 ```
 
 Le cache absorbe, le disjoncteur coupe, la relance lisse.
+
+## Le verrou de tâches en grappe
+
+En grappe (PM2 en mode cluster, plusieurs conteneurs), chaque instance démarre
+les **mêmes** tâches planifiées. La grappe répartit les requêtes ; une tâche
+répétée dans quatre processus n'est pas partagée, elle est dupliquée : quatre
+e-mails de relance identiques à la même seconde, quatre sauvegardes lancées en
+même temps. Un garde en mémoire (« déjà envoyé », `isProcessing`) n'y peut
+rien : les quatre le lisent avant qu'aucune ne l'écrive.
+
+Le verrou vit dans un stockage que toutes les instances partagent, et le
+prendre est une écriture atomique.
+
+```js
+const { createJobLock, createRedisLockStore } = require('@astratra/resilience');
+
+const jobLock = createJobLock({
+  store: createRedisLockStore({ command: (args) => redis.sendCommand(args) }),
+});
+
+setInterval(() => jobLock.run('relances', 55 * 60_000, envoyerLesRelances), 60 * 60_000);
+```
+
+Trois adaptateurs : `createRedisLockStore` (`SET NX PX`, expiration par Redis
+lui-même), `createMongoLockStore(collection)` (ajoute un index TTL sur
+`expiresAt`), `createMemoryLockStore()` pour les tests et un processus unique.
+
+Ce qui est garanti et testé :
+
+- **une seule** instance obtient le verrou, et la même ne l'obtient pas deux fois ;
+- il **expire** : une instance morte ne bloque pas la tâche pour toujours ;
+- seul le **propriétaire** peut le libérer : une instance en retard ne supprime
+  pas le verrou qu'une autre vient de prendre après expiration ;
+- une panne du stockage **lève** : un doublon se voit, une tâche qui ne tourne
+  plus en silence non.
+
+Par défaut, `run` ne libère **pas** le verrou à la fin : il expire. Choisis une
+durée un peu inférieure à l'intervalle. Libérer à la fin laisserait une instance
+dont le minuteur part quelques secondes plus tard refaire le même tour. Passe
+`{ release: true }` seulement si rejouer tout de suite est sans conséquence.
+
+L'identité par défaut combine hôte, pid et un aléa : un pid seul ne suffit pas,
+chaque conteneur tourne en pid 1.
+
+## Le registre des minuteurs de fond
+
+```js
+const { createTimerRegistry } = require('@astratra/resilience');
+
+const minuteurs = createTimerRegistry();
+
+minuteurs.every(60_000, nettoyer, { key: 'nettoyage' });
+minuteurs.after(5_000, prechauffer);
+
+process.on('SIGTERM', () => minuteurs.stopAll());
+```
+
+Trois défauts qu'il corrige :
+
+- un minuteur posé au chargement d'un module, sans référence gardée, ne peut
+  plus jamais être arrêté — et empêche Node de sortir ;
+- `unref()` n'est pas un arrêt. Il empêche le minuteur de **retenir** le
+  processus, pas de se **déclencher** : un minuteur `unref` qui part après le
+  démontage de Jest exécute son code dans un monde détruit. Le registre fait
+  les deux, `unref` à l'inscription et `clear` à l'arrêt ;
+- `clear` n'arrête pas un travail **déjà parti**. `isStopped()` permet à ce
+  travail de renoncer avant son prochain effet de bord.
+
+Une même `key` remplace le minuteur précédent : un `start()` appelé deux fois
+(rechargement à chaud) ne double pas la tâche. Un `after` déjà parti est
+oublié tout seul. Inscrire un minuteur rouvre le registre, pour qu'un service
+qui redémarre n'hérite pas de l'extinction précédente.
 
 ## Tests
 

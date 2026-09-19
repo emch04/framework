@@ -1,0 +1,37 @@
+{
+  "name": "@astratra/voice",
+  "version": "0.1.0",
+  "description": "Server-side text-to-speech finishing and caching: deterministic voice-version keys, Piper and ffmpeg argument builders, injected process and file adapters, and a memory cache for tests.",
+  "engines": {
+    "node": ">=20"
+  },
+  "main": "src/index.js",
+  "types": "src/index.d.ts",
+  "type": "commonjs",
+  "files": [
+    "src"
+  ],
+  "scripts": {
+    "test": "jest"
+  },
+  "jest": {
+    "testMatch": [
+      "**/__tests__/**/*.test.js"
+    ]
+  },
+  "keywords": [
+    "astratra",
+    "voice",
+    "text-to-speech",
+    "piper",
+    "ffmpeg",
+    "cache"
+  ],
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
+  "devDependencies": {
+    "jest": "30.4.2"
+  }
+}

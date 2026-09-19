@@ -6,5 +6,8 @@ module.exports = {
   ...require('./commands/auditDeps'),
   ...require('./commands/test'),
   ...require('./commands/deploy'),
-  ...require('./cli')
+  ...require('./cli'),
+  ...require('./guards/roleWrites'),
+  ...require('./guards/factAlignment'),
+  ...require('./guards/forbiddenTerms')
 };

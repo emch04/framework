@@ -182,3 +182,122 @@ export interface RunCliOptions {
 }
 
 export function runCli(argv?: string[], options?: RunCliOptions): Promise<CommandResult>;
+
+/* ---- Test guards -------------------------------------------------------- */
+
+export type RoleSpelling = string | RegExp;
+
+export interface RoleWriteException {
+  /** Substring (or RegExp) of the write declaration, e.g. the quoted route path. */
+  match: string | RegExp;
+  /** Why this write is allowed. Required: an unexplained exception is refused. */
+  reason: string;
+  /** Limit the exception to files whose relative path contains this string. */
+  file?: string;
+}
+
+export interface RoleWriteSourceOptions {
+  role: RoleSpelling | RoleSpelling[];
+  writeCalls?: RegExp[];
+  authorListNames?: RegExp | false;
+  exclusions?: RegExp[];
+}
+
+export interface RoleWriteOptions extends RoleWriteSourceOptions {
+  dirs: string[];
+  rootDir?: string;
+  exceptions?: RoleWriteException[];
+  include?: (name: string, fullPath: string) => boolean;
+  skippedDirs?: string[];
+}
+
+export interface RoleWriteSourceFinding {
+  kind: 'route' | 'list';
+  line: number;
+  /** Identifiers the role came through, e.g. ['WRITERS', 'STAFF']. */
+  via: string[];
+  code: string;
+  method?: string;
+  route?: string | null;
+  name?: string;
+}
+
+export interface RoleWriteFinding extends RoleWriteSourceFinding {
+  file: string;
+}
+
+export interface RoleWriteResult {
+  fileCount: number;
+  findings: RoleWriteFinding[];
+  exempted: Array<RoleWriteFinding & { reason: string }>;
+  unusedExceptions: RoleWriteException[];
+}
+
+export const DEFAULT_WRITE_CALLS: RegExp[];
+export function auditRoleWriteSource(source: string, options: RoleWriteSourceOptions): RoleWriteSourceFinding[];
+export function auditRoleWrites(options: RoleWriteOptions): RoleWriteResult;
+export function assertRoleReadOnly(options: RoleWriteOptions): RoleWriteResult;
+export function formatRoleWriteFindings(result: RoleWriteResult): string;
+
+export interface FactComparisonOptions {
+  tolerance?: number;
+  arrayOrder?: 'ignore' | 'strict';
+  requireEveryFact?: boolean;
+}
+
+export interface FactReport {
+  ok: boolean;
+  mismatches: Array<{ key: string; fact: unknown; claim: unknown }>;
+  unextracted: Array<{ key: string; side: 'fact' | 'claim' | 'both'; fact: unknown; claim: unknown }>;
+  unbacked: Array<{ key: string; claim: unknown }>;
+  unstated: Array<{ key: string; fact: unknown }>;
+}
+
+export interface FactInput {
+  facts: Record<string, unknown>;
+  claims: Record<string, unknown>;
+}
+
+export function compareFacts(input: FactInput, options?: FactComparisonOptions): FactReport;
+export function assertFactsAligned(input: FactInput, options?: FactComparisonOptions): FactReport;
+export function formatFactReport(report: FactReport): string;
+export function pickPaths(document: unknown, paths: Record<string, string>): Record<string, unknown>;
+export function extractMatches(
+  text: string,
+  patterns: Record<string, RegExp>,
+  options?: { parse?: (raw: string, key: string) => unknown }
+): Record<string, unknown>;
+
+export type TermInput = string | RegExp | { pattern: string | RegExp; reason?: string };
+export type TextsInput = string | string[] | Record<string, string> | Array<{ name: string; text: string }>;
+
+export interface TermOptions {
+  allow?: TermInput[];
+  required?: TermInput[];
+}
+
+export interface TermFinding {
+  source: string;
+  term: string;
+  reason?: string;
+  match: string;
+  line: number;
+  excerpt: string;
+}
+
+export interface TermReport {
+  ok: boolean;
+  findings: TermFinding[];
+  missing: Array<{ source: string; term: string; reason?: string }>;
+}
+
+export function findForbiddenTerms(texts: TextsInput, terms: TermInput[], options?: TermOptions): TermReport;
+export function assertNoForbiddenTerms(texts: TextsInput, terms: TermInput[], options?: TermOptions): TermReport;
+export function formatTermReport(report: TermReport): string;
+export function findForbiddenTermsInFiles(options: TermOptions & {
+  dirs: string[];
+  terms: TermInput[];
+  rootDir?: string;
+  include?: (name: string, fullPath: string) => boolean;
+  skippedDirs?: string[];
+}): TermReport & { fileCount: number };

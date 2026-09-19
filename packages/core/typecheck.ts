@@ -60,3 +60,47 @@ void statusCode;
 void operational;
 void port;
 void text;
+
+/* ────────────────────────── Idempotency ────────────────────────── */
+
+import {
+  createIdempotency,
+  createMemoryIdempotencyStore,
+  decideIdempotency,
+  hashIdempotencyPayload,
+  idempotencyMiddleware,
+  IdempotencyError,
+  isValidIdempotencyKey,
+  IDEMPOTENCY_TTL_MS
+} from '@astratra/core';
+import type { IdempotencyStore, StoredIdempotentResponse, RequestHandler } from '@astratra/core';
+
+const idempotencyStore: IdempotencyStore<StoredIdempotentResponse> = createMemoryIdempotencyStore<StoredIdempotentResponse>();
+
+const guardWrites: RequestHandler = idempotencyMiddleware({
+  store: idempotencyStore,
+  ttlMs: IDEMPOTENCY_TTL_MS,
+  identify: (req) => (req.user as { id?: string } | undefined)?.id ?? null,
+  onStoreError: 'deny',
+  messages: { conflict: 'Key already used for another request.' },
+  respond: (res, { status, reason, message }) => res.status(status).json({ reason, message })
+});
+
+const jobs = createIdempotency<{ chargeId: string }>({ store: createMemoryIdempotencyStore(), ttlMs: 60_000 });
+
+async function exerciseIdempotency(): Promise<void> {
+  const outcome = await jobs.run({ scope: ['account-1'], key: 'intent-0001', payload: { amount: 10 } }, async () => ({ chargeId: 'c1' }));
+  const chargeId: string = outcome.result.chargeId;
+  const replayed: boolean = outcome.replayed;
+  const claim = await jobs.begin({ scope: ['account-1'], key: 'intent-0002' });
+  if (claim.action === 'execute') await claim.finish({ chargeId: 'c2' });
+  try {
+    await jobs.begin({ scope: ['account-1'], key: 'bad' });
+  } catch (error) {
+    if (error instanceof IdempotencyError) void [error.reason, error.statusCode];
+  }
+  void [chargeId, replayed, guardWrites, isValidIdempotencyKey('abcdefgh'), hashIdempotencyPayload({ a: 1 }),
+    decideIdempotency({ record: null, payloadHash: 'h' }).action];
+}
+
+void exerciseIdempotency;

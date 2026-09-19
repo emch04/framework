@@ -17,5 +17,8 @@ module.exports = {
   ...require('./refreshTokens'),
   ...require('./stableStringify'),
   ...require('./serviceSignature'),
-  ...require('./auditChain')
+  ...require('./auditChain'),
+  ...require('./privateFileLinks'),
+  ...require('./loginDevices'),
+  ...require('./trustedDevices')
 };

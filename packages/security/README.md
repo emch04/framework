@@ -602,6 +602,224 @@ const webauthn = createWebauthnService(createMemoryWebauthnStore(), {
 });
 ```
 
+## Fichiers privés : un lien signé par lecteur
+
+Une balise `<img>` ou un lecteur audio n'envoient aucun en-tête
+`Authorization` : un fichier privé ne peut donc pas être protégé par la seule
+session, l'adresse elle-même doit porter un laissez-passer. C'est là qu'était le
+vrai défaut.
+
+**Le défaut.** Un message avec pièce jointe était diffusé en direct avec son
+lien déjà signé — signé pour l'**expéditeur**, puisque c'est sa requête qui
+produisait le message. Le destinataire ouvrait le fichier en empruntant
+l'identité de l'autre, et le laissez-passer expirait un quart d'heure plus tard
+dans une conversation restée ouverte. D'où la règle : **une diffusion ne porte
+que le chemin** ; chaque lecteur demande **son** lien au moment d'afficher, et
+le serveur revérifie le droit de lire à cette demande.
+
+```js
+const {
+  createPrivateFileLinks, createPrivateFileHandler,
+  serializeForReader, serializeForBroadcast,
+  resolveStoredFile, privateFileHeaders
+} = require('@astratra/security');
+
+const links = createPrivateFileLinks({
+  secret: process.env.FILE_LINK_SECRET,      // dédié, 32 caractères au moins
+  basePath: '/api/files',
+  // relu à chaque vérification : « déconnecter partout » tue aussi les liens déjà remis
+  accountVersion: async (accountId) => (await users.findById(accountId))?.tokenVersion ?? null
+});
+
+app.get('/api/files/:kind/:id', createPrivateFileHandler({
+  links,
+  authenticate: authMiddleware,
+  loadFile: (kind, id) => files[kind].findById(id),
+  canRead: (reader, kind, file) => policy.canRead(reader, kind, file),   // ta règle d'accès
+  loadReader: (accountId) => users.findById(accountId),
+  send: (file, req, res) => {
+    const local = resolveStoredFile(PRIVATE_ROOT, file.storedName);
+    if (!local) return res.status(404).json({ success: false, code: 'FILE_UNAVAILABLE' });
+    res.set(privateFileHeaders({ mime: file.mime, fileName: file.name }));
+    return res.sendFile(local, { dotfiles: 'deny' });
+  }
+}));
+
+// Réponse à UNE personne : ses propres liens.
+res.json(serializeForReader(messages, { links, reader: req.user, kind: 'messages', clearWhenDeleted: ['fileThumb'] }));
+// Socket, push, webhook : le chemin seul.
+io.to(room).emit('message', serializeForBroadcast(message, { links, kind: 'messages', clearWhenDeleted: ['fileThumb', 'content'] }));
+```
+
+Les trois portes de la route, dans cet ordre :
+
+| Requête | Qui lit | Rend |
+|---|---|---|
+| `?ticket=…` | le compte nommé dans le laissez-passer | le fichier |
+| `?link=1` | la **session** (jamais un laissez-passer) | le lien de l'appelant |
+| rien | la session | le fichier |
+
+**Un laissez-passer n'en fabrique jamais un autre.** `?link=1` accompagné d'un
+`ticket` passe par la session : sinon un lien fuité se renouvellerait sans fin.
+
+**Le lien est stable pendant un pas.** Signé « maintenant », il changeait à
+chaque réponse pour le même fichier : un fil relu toutes les cinq secondes
+rendait une adresse neuve à chaque fois, aucun cache ne reconnaissait l'image,
+et le lecteur audio repartait de zéro — un vocal ne se terminait jamais (202
+requêtes en une minute, 79 Mo servis pour 600 Ko de fichiers). Le laissez-passer
+est calé sur un pas de quinze minutes et vit deux pas.
+
+**Hexadécimal de bout en bout.** Un JWT est en base64url, donc contient `-` :
+environ un laissez-passer sur cent portait un `--`, que le WAF lit comme un
+commentaire SQL dans la chaîne de requête. Ce fichier répondait alors 403 à
+cette personne pendant tout le pas, sans que personne sache le reproduire.
+
+**Ce qui est vérifié :** la signature (avant toute lecture du contenu),
+l'expiration (un laissez-passer daté du futur est refusé), le fichier exact
+(`kind` et `id`), le compte et sa version de session. Un refus d'accès répond le
+même 404 qu'un fichier absent ; les corps ne portent qu'un `code`, jamais de
+texte — les mots appartiennent à ton catalogue.
+
+**Parcours de dossier.** `resolveStoredFile` n'accepte qu'un nom nu (ni
+séparateur, ni NUL) et exige que le chemin résolu soit strictement **dans** la
+racine : `.`, `..` et toute forme non prévue sont refusés.
+
+**Un élément supprimé perd son adresse ET son aperçu, à toutes les
+profondeurs.** Une citation (`replyTo`) d'un message supprimé porte le même
+risque que le message lui-même.
+
+## Appareils de connexion et alertes de changement
+
+```js
+const {
+  createLoginDeviceTracker, createMemoryLoginDeviceStore,
+  createChangeAlerts, createSecurityAlerter
+} = require('@astratra/security');
+
+const devices = createLoginDeviceTracker({
+  store: createMemoryLoginDeviceStore(),     // upsert ATOMIQUE en prod (index unique)
+  secret: process.env.DEVICE_FINGERPRINT_SECRET,
+  notify: (account, event) => notifications.create(account.id, { key: 'security.new_login_device' })
+});
+// APRÈS avoir accordé la session ; ne lève jamais.
+devices.record(user, { ip: req.ip, userAgent: req.headers['user-agent'] });
+
+const changes = createChangeAlerts({
+  send: ({ to, key, locale, detail }) => mailer.send(to, t(locale, `${key}.subject`), t(locale, `${key}.body`, { detail }))
+});
+await changes.alert(user, 'password', { to: user.email });
+await changes.alert(user, 'email', { previousEmail: before, newEmail: user.email });
+await changes.alert(user, 'trusted-device', { to: user.email, detail: 'iPhone (iOS)' });
+```
+
+**« Appareil » = agent utilisateur + famille d'adresse** (/16 en IPv4, /48 en
+IPv6). Un /24 changeait à chaque bascule d'antenne d'un opérateur mobile : une
+alerte par jour pour son propre téléphone, et une alerte quotidienne n'est plus
+lue. L'IPv6 est **développée** avant d'être coupée : `2001:db8::5` et
+`2001:db8:0:1::5` sont le même /48. Seule une empreinte HMAC est gardée, bornée
+par compte. Aucune alerte à la toute première connexion.
+
+**Un changement d'adresse prévient l'ANCIENNE.** La nouvelle est déjà entre les
+mains de qui a fait la manœuvre. Une **première** adresse ne prévient personne.
+
+**Un envoi raté ne fait jamais échouer le changement** : le mot de passe est
+déjà modifié ; une erreur ferait croire le contraire.
+
+**Aucun texte ici.** Le module décide QUAND prévenir et QUI ; tu reçois une clé
+de catalogue (`security.change.password`, `…email`, `…factor-added`,
+`…factor-removed`, `…recovery-codes`, `…trusted-device`) et la langue du compte.
+Pas de bouton d'action dans une alerte : elle ne doit pas apprendre à cliquer
+sur un lien reçu par courriel.
+
+`createSecurityAlerter({ channels })` diffuse une alerte **d'exploitation**
+(webhook, boîte dédiée) : un canal en panne ne fait pas taire les autres, et
+rien ne remonte à la requête qui l'a levée.
+
+## Appareil de confiance (Face ID, empreinte)
+
+Se reconnecter par le verrou du téléphone plutôt que par le mot de passe, sur
+un appareil qui s'est déjà connecté.
+
+**Un secret roté, pas une paire de clés.** Une paire n'apporte quelque chose que
+si la clé privée reste dans la puce sécurisée et ne signe qu'après la biométrie
+— ce qui demande un module natif. En JavaScript, elle serait rangée dans le même
+trousseau que le secret, et volée de la même façon. Le secret roté donne en plus
+ce que la paire ne donne pas : **un secret copié puis rejoué se voit**.
+
+```js
+const { createTrustedDeviceService, createMemoryTrustedDeviceStore, TrustedDeviceError } = require('@astratra/security');
+
+const trusted = createTrustedDeviceService({
+  store: createMemoryTrustedDeviceStore(),   // consume() = compare-and-swap ATOMIQUE en prod
+  pepper: process.env.TRUSTED_DEVICE_PEPPER,
+  onReplay: async ({ accountId }) => {       // on ne sait pas qui est le vrai : tout tombe
+    await refreshTokens.revokeAllForUser(accountId);
+    await alerter.send({ level: 'FATAL', type: 'trusted_device.replay', meta: { accountId } });
+  }
+});
+
+// POST /trusted-devices — session COMPLÈTE exigée
+const device = await trusted.enroll({
+  accountId: user.id,
+  credentialStamp: user.passwordHash,        // mot de passe changé = appareil éteint
+  requireSecondFactor: policy.needsMfa(user),
+  secondFactorVerified: req.user.mfaVerified,
+  deviceName: req.body.deviceName,
+  platform: req.body.platform
+});
+await changes.alert(user, 'trusted-device', { to: user.email, detail: device.deviceName });
+
+// POST /trusted-device/session — sans session
+try {
+  const next = await trusted.exchange(req.body, { loadAccount: async (id) => {
+    const u = await users.findById(id);
+    return u && { credentialStamp: u.passwordHash, disabled: u.suspended || u.deletionPending };
+  } });
+  const session = await issueSession(next.accountId, { mfaVerified: next.secondFactorVerified });
+  res.json({ ...session, trustedDevice: { deviceId: next.deviceId, secret: next.secret } });
+} catch (error) {
+  if (error instanceof TrustedDeviceError) return res.status(error.statusCode).json({ success: false, code: error.code });
+  throw error;
+}
+```
+
+Si ton émission de session refuse (compte suspendu, rôle coupé), appelle
+`trusted.revoke(next.id, 'session-refused')`. Branche `trusted.revokeAll(id)` sur
+« déconnecter partout », le changement de mot de passe et la suppression de
+compte ; la **déconnexion simple garde l'appareil** — c'est tout son intérêt.
+
+Garanties : empreinte HMAC seule en base ; enrôlement depuis une session
+complète ; secret consommé une fois, de façon atomique ; rejeu → appareil
+révoqué + `onReplay` ; lien au mot de passe en vigueur ; 30 jours sans usage ;
+10 essais par appareil et par quart d'heure (monte **aussi**
+`createLoginLimiter` par adresse) ; cinq appareils au plus ; même erreur pour
+tout échec. Un appareil révoqué est simplement refusé : le traiter en rejeu
+déconnecterait son propriétaire partout pour un vieux téléphone.
+
+### Le protocole, côté téléphone (`@astratra/native`)
+
+Les deux paquets parlent le même contrat :
+
+| Étape | Téléphone | Serveur |
+|---|---|---|
+| Activer | `gate.enable()` (invite biométrique), puis `POST /trusted-devices` avec `{ deviceName, platform }` | `enroll()` → `{ deviceId, secret }` (hex 32 / 64) |
+| Ranger | `keystore.setItemAsync('<ns>.trustedDevice', JSON.stringify({ deviceId, secret }))` — le même `Keystore` que `createSecureSession` | rien en clair |
+| Se reconnecter | `gate.confirm()` **puis** `POST /trusted-device/session` avec `{ deviceId, secret }` | `exchange()` → session + **nouveau** secret |
+| Après | écrire le nouveau secret **avant** d'utiliser la session : l'ancien est mort | l'ancien reste en empreinte pour reconnaître un rejeu |
+| Oublier | `POST /trusted-device/forget` avec `{ deviceId, secret }`, puis effacer la clé | `forget()`, réponse identique dans tous les cas |
+
+La biométrie reste **locale** : le serveur ne reçoit jamais de preuve
+biométrique, il reçoit le secret que le trousseau ne libère qu'après
+`gate.confirm()`. Un secret perdu entre la réponse et l'écriture (application
+tuée) ne se rattrape pas : l'appareil repasse par le mot de passe.
+
+**Attention à `createSecureSession().clear()`** : à la déconnexion, il efface le
+drapeau biométrique, donc `gate.confirm()` répond `false` ensuite — alors que
+l'appareil de confiance existe justement pour se reconnecter **après** une
+déconnexion. Garde le secret d'appareil sous sa propre clé (non effacée par
+`clear()`), et fonde l'offre « se connecter avec Face ID » sur la présence de ce
+secret et sur `gate.read().supported`, pas sur `enabled`.
+
 ## Tests
 
 ```bash

@@ -212,3 +212,94 @@ async function exerciseRefreshTokens(): Promise<void> {
 }
 
 void exerciseRefreshTokens;
+
+/* ────────────────────────── Private file links ────────────────────────── */
+
+import {
+  createPrivateFileLinks,
+  serializeForReader,
+  serializeForBroadcast,
+  resolveStoredFile,
+  privateFileHeaders,
+  createPrivateFileHandler,
+  PRIVATE_FILE_STEP_SECONDS,
+  ipFamily,
+  createMemoryLoginDeviceStore,
+  createLoginDeviceTracker,
+  createChangeAlerts,
+  createSecurityAlerter,
+  CHANGE_TYPES,
+  TrustedDeviceError,
+  createTrustedDeviceService,
+  createMemoryTrustedDeviceStore,
+  createMemoryAttemptCounter,
+  TRUSTED_DEVICE_ID_PATTERN
+} from '@astratra/security';
+import type { PrivateFileLinks, PrivateFileLinkCheck, ChangeType, TrustedDeviceExchange } from '@astratra/security';
+
+const fileLinks: PrivateFileLinks = createPrivateFileLinks({
+  secret: 'x'.repeat(32),
+  basePath: '/api/files',
+  accountVersion: async () => 0
+});
+
+async function exerciseFileLinks(): Promise<void> {
+  const signed = fileLinks.sign({ kind: 'messages', fileId: 'f1', accountId: 'u1', version: 2 });
+  const check: PrivateFileLinkCheck = await fileLinks.verify(signed.ticket, { kind: 'messages', fileId: 'f1' });
+  if (check.valid) void check.accountId; else void check.reason;
+  const forReader = serializeForReader({ fileUrl: '/x' }, { links: fileLinks, reader: { id: 'u1' }, kind: 'messages' });
+  const broadcast = serializeForBroadcast([{ fileUrl: '/x' }], { links: fileLinks, kind: () => 'messages', clearWhenDeleted: ['fileThumb'] });
+  const handler = createPrivateFileHandler<{ path: string }>({
+    links: fileLinks,
+    authenticate: (_req, _res, next) => next(),
+    loadFile: async () => ({ path: '/x' }),
+    canRead: async () => true,
+    loadReader: async (id) => ({ id }),
+    send: async () => undefined
+  });
+  void [forReader.fileUrl, broadcast.length, handler, fileLinks.pathFor('messages', 'f1'), fileLinks.linkFor('messages', 'f1', null),
+    resolveStoredFile('/srv', 'a.jpg'), privateFileHeaders({ mime: 'image/png' })['Content-Disposition'], PRIVATE_FILE_STEP_SECONDS];
+}
+
+void exerciseFileLinks;
+
+/* ────────────────────────── Sign-in devices ────────────────────────── */
+
+async function exerciseLoginDevices(): Promise<void> {
+  const tracker = createLoginDeviceTracker<{ id: string; locale: string }>({
+    store: createMemoryLoginDeviceStore(),
+    secret: 'x'.repeat(16),
+    notify: async (account, event) => { void [account.locale, event.type]; }
+  });
+  const recorded = await tracker.record({ id: 'u1' }, { ip: '203.0.113.7', userAgent: 'UA' });
+  const alerts = createChangeAlerts<{ locale: string }>({ send: async (message) => { void [message.key, message.locale]; } });
+  const change: ChangeType = CHANGE_TYPES[0];
+  const sent: boolean = await alerts.alert({ locale: 'fr' }, change, { to: 'a@b.test' });
+  const alerter = createSecurityAlerter({ channels: [async (a) => a.level] });
+  void [recorded.isNew, sent, await alerter.send({ level: 'FATAL', type: 'replay' }), ipFamily('::1')];
+}
+
+void exerciseLoginDevices;
+
+/* ────────────────────────── Trusted devices ────────────────────────── */
+
+async function exerciseTrustedDevices(): Promise<void> {
+  const trusted = createTrustedDeviceService({
+    store: createMemoryTrustedDeviceStore(),
+    attempts: createMemoryAttemptCounter(),
+    pepper: 'x'.repeat(32),
+    onReplay: async ({ accountId }) => { void accountId; }
+  });
+  const enrolled = await trusted.enroll({ accountId: 'u1', credentialStamp: 'hash', platform: 'ios' });
+  try {
+    const next: TrustedDeviceExchange = await trusted.exchange(enrolled, { loadAccount: async () => ({ credentialStamp: 'hash' }) });
+    void next.secret;
+  } catch (error) {
+    if (error instanceof TrustedDeviceError) void [error.code, error.statusCode, error.retryAfterMs];
+  }
+  await trusted.forget(enrolled);
+  void [await trusted.list('u1'), await trusted.remove('u1', enrolled.id), await trusted.revokeAll('u1'),
+    TRUSTED_DEVICE_ID_PATTERN.test(enrolled.deviceId)];
+}
+
+void exerciseTrustedDevices;

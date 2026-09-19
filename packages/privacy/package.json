@@ -1,16 +1,36 @@
 {
   "name": "@astratra/privacy",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Right of access, right to erasure, and log redaction — anonymise without destroying the records you must keep.",
-  "engines": { "node": ">=20" },
+  "engines": {
+    "node": ">=20"
+  },
   "main": "src/index.js",
   "types": "src/index.d.ts",
   "type": "commonjs",
-  "files": ["src"],
-  "scripts": { "test": "jest" },
-  "jest": { "testMatch": ["**/__tests__/**/*.test.js"] },
-  "keywords": ["astratra", "privacy", "gdpr", "rgpd", "anonymisation"],
+  "files": [
+    "src"
+  ],
+  "scripts": {
+    "test": "jest"
+  },
+  "jest": {
+    "testMatch": [
+      "**/__tests__/**/*.test.js"
+    ]
+  },
+  "keywords": [
+    "astratra",
+    "privacy",
+    "gdpr",
+    "rgpd",
+    "anonymisation"
+  ],
   "license": "MIT",
-  "publishConfig": { "access": "public" },
-  "devDependencies": { "jest": "30.4.2" }
+  "publishConfig": {
+    "access": "public"
+  },
+  "devDependencies": {
+    "jest": "30.4.2"
+  }
 }

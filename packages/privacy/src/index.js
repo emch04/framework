@@ -3,5 +3,6 @@ module.exports = {
   ...require('./exporter'),
   ...require('./anonymizer'),
   ...require('./erasure'),
+  ...require('./accountDeletion'),
   ...require('./stores')
 };

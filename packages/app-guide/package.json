@@ -1,0 +1,36 @@
+{
+  "name": "@astratra/app-guide",
+  "version": "0.1.0",
+  "description": "Generate a role-aware mobile app guide from the app's own screen configuration, detect usage questions, look up bounded answers, and test guide coverage without a mobile runtime.",
+  "engines": {
+    "node": ">=20"
+  },
+  "main": "src/index.js",
+  "types": "src/index.d.ts",
+  "type": "commonjs",
+  "files": [
+    "src"
+  ],
+  "scripts": {
+    "test": "jest"
+  },
+  "jest": {
+    "testMatch": [
+      "**/__tests__/**/*.test.js"
+    ]
+  },
+  "keywords": [
+    "astratra",
+    "mobile",
+    "guide",
+    "assistant",
+    "i18n"
+  ],
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
+  "devDependencies": {
+    "jest": "30.4.2"
+  }
+}

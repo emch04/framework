@@ -1,0 +1,38 @@
+{
+  "name": "@astratra/app-version",
+  "version": "0.1.0",
+  "description": "Tell mobile users a new build is in the App Store or Play Store: a public version route, one announcement push per version (claimed before sending, daytime only, behind phones only, in each account's language, off by default), and a client watcher that checks at most every six hours. Store, push and storage injected; no Express, Mongo or React Native.",
+  "engines": {
+    "node": ">=20"
+  },
+  "main": "src/index.js",
+  "types": "src/index.d.ts",
+  "type": "commonjs",
+  "files": [
+    "src"
+  ],
+  "scripts": {
+    "test": "jest"
+  },
+  "jest": {
+    "testMatch": [
+      "**/__tests__/**/*.test.js"
+    ]
+  },
+  "keywords": [
+    "astratra",
+    "mobile",
+    "app-store",
+    "play-store",
+    "version",
+    "update",
+    "push"
+  ],
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
+  "devDependencies": {
+    "jest": "30.4.2"
+  }
+}

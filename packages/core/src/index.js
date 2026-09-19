@@ -1,3 +1,5 @@
+const idempotency = require('./idempotency');
+
 module.exports = {
   apiResponse: require('./apiResponse'),
   asyncHandler: require('./asyncHandler'),
@@ -7,5 +9,6 @@ module.exports = {
   notFoundMiddleware: require('./notFoundMiddleware'),
   requestIdMiddleware: require('./requestIdMiddleware'),
   validateMiddleware: require('./validateMiddleware'),
-  loadEnv: require('./loadEnv')
+  loadEnv: require('./loadEnv'),
+  ...idempotency
 };

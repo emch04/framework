@@ -1,6 +1,6 @@
 {
   "name": "@astratra/core",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "description": "Generic core utilities for Astratra SaaS packages.",
   "engines": {
     "node": ">=20"

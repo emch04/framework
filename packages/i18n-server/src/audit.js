@@ -11,8 +11,7 @@
  * as a test in your own suite, and the rule enforces itself from then on —
  * which is the part worth copying, more than the code.
  */
-const fs = require('fs');
-const path = require('path');
+const { scanSourceTree } = require('./sourceScan');
 
 /**
  * Words a non-technical reader cannot act on. A starting point, not a law:
@@ -54,30 +53,20 @@ function collectMessages(options = {}) {
     throw new Error('collectMessages requires options.pattern to be a global RegExp with one capture group.');
   }
 
-  const extensions = options.extensions || ['.js'];
-  const ignore = new Set(options.ignore || ['node_modules', '.git', 'dist', 'build', 'coverage']);
-
-  const found = [];
-  const walk = (dir) => {
-    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-      if (ignore.has(entry.name)) continue;
-      const full = path.join(dir, entry.name);
-      if (entry.isDirectory()) { walk(full); continue; }
-      if (!extensions.some((ext) => entry.name.endsWith(ext))) continue;
-
-      const source = fs.readFileSync(full, 'utf8');
+  return scanSourceTree({
+    root,
+    extensions: options.extensions,
+    ignore: options.ignore,
+    inspect: (source) => {
       /* A shared regex carries its own lastIndex between files; resetting it
          is the difference between scanning everything and scanning half. */
       pattern.lastIndex = 0;
+      const found = [];
       let match;
-      while ((match = pattern.exec(source))) {
-        found.push({ file: path.relative(root, full), message: match[1] });
-      }
+      while ((match = pattern.exec(source))) found.push({ message: match[1] });
+      return found;
     }
-  };
-
-  walk(root);
-  return found;
+  });
 }
 
 /**

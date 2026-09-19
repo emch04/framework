@@ -1,13 +1,27 @@
 import {
   DEFAULT_JARGON,
   collectMessages,
+  createLanguageLeakCheck,
   createLanguageResolver,
   createMessageAudit,
   createMessageCatalog,
-  createTranslationMiddleware
+  createRecipientLanguage,
+  createRecipientReloader,
+  createTranslationMiddleware,
+  findDuplicateKeys,
+  findHardcodedSubjects,
+  htmlLanguage,
+  scanSourceTree,
+  visibleText
 } from './src';
 import type {
   AuditFindings,
+  DuplicateKeysReport,
+  HardcodedSubject,
+  LanguageLeakCheck,
+  LanguageLeakResult,
+  RecipientLanguage,
+  RecipientReloader,
   LanguageCoverage,
   LanguageResolver,
   MessageAudit,
@@ -64,9 +78,44 @@ const entries: MessageEntry[] = collectMessages({
 const findings: AuditFindings = audit.inspect(entries);
 const lines: string[] = audit.describe(findings);
 
-function exercise(req: RequestLike, res: ResponseLike, next: NextFunction): void {
+interface Account { id: string; email: string; lang?: string; emailLang?: string }
+
+const recipientLanguage: RecipientLanguage = createRecipientLanguage({
+  languages: ['fr', 'en', 'es'],
+  mailField: 'emailLang',
+  interfaceFields: ['lang', 'preferences.lang'],
+  followValue: 'auto'
+});
+const mailLanguage: string = recipientLanguage.languageOf({ lang: 'fr', emailLang: 'en' }, { headers: {} });
+const acceptable: boolean = recipientLanguage.isChoice('auto');
+
+const reloader: RecipientReloader<Account> = createRecipientReloader<Account>({
+  load: async (id, fields) => ({ id: String(id), email: fields.join(','), lang: 'fr' }),
+  fields: ['email'],
+  language: recipientLanguage
+});
+
+const duplicates: DuplicateKeysReport = findDuplicateKeys('const DICT = { a: 1 };', { start: /const DICT/ });
+const subjects: HardcodedSubject[] = findHardcodedSubjects('sendEmail(to, "Hi", t)', {
+  callee: 'sendEmail', argument: 1, test: /\p{L}/u, ignore: [/TEAM/]
+});
+const treeFindings: Array<HardcodedSubject & { file: string }> = scanSourceTree({
+  root: '/tmp/example',
+  inspect: (source) => findHardcodedSubjects(source, { callee: 'mailer.send', property: 'subject' }),
+  ignore: ['node_modules']
+});
+
+const leak: LanguageLeakCheck = createLanguageLeakCheck({ markers: { fr: ['vous', /\bvotre\b/i] }, requireHtmlLang: true });
+const leakResult: LanguageLeakResult = leak.inspect({ subject: 'Hello', html: '<html lang="en"></html>' }, 'en');
+const readable: string = visibleText('<p>Hi</p>');
+const declared: string | null = htmlLanguage('<html lang="en">');
+
+async function exercise(req: RequestLike, res: ResponseLike, next: NextFunction): Promise<void> {
   void middleware(req, res, next);
+  const reloaded = await reloader.reload({ id: 'u1' }, 'staff');
   void [translated, known, served, report, filled, language, findings.clean, lines, audit.minWords];
+  void [mailLanguage, acceptable, reloaded, reloader.fields, duplicates.duplicates, subjects, treeFindings];
+  void [leakResult.clean, leak.describe(leakResult), readable, declared];
 }
 
 void exercise;

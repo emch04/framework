@@ -170,3 +170,42 @@ void [
   board.counts(rows).pending, board.filter(rows, 'closed').length, board.tabCounts(rows).closed,
   board.invitableRoles('owner'), board.canInvite('owner'), board.looksLikeEmail('a@b.cd'), board.tabs
 ];
+
+/* ─────────────── A role only one account may hold ─────────────── */
+
+import { createUniqueRole, createMemoryUniqueRoleStore, pickIntruders, UniqueRoleError } from './src';
+import type { UniqueRole, UniqueRoleAlert, SweepResult } from './src';
+
+interface StaffAccount extends Record<string, unknown> { id: string; email: string; role: string }
+
+const accountsStore = createMemoryUniqueRoleStore<StaffAccount>([
+  { id: '1', email: 'owner@acme.test', role: 'owner' }
+]);
+
+const soleOwner: UniqueRole<StaffAccount> = createUniqueRole<StaffAccount>({
+  role: 'owner',
+  anchor: () => 'owner@acme.test',
+  store: accountsStore,
+  alert: async (event: UniqueRoleAlert<StaffAccount>) => void [event.kind, event.holder?.email],
+  messages: { role_taken: 'Only one owner.' },
+  allowBootstrap: false,
+  identifierOf: (account) => account.email,
+  logger: { error: () => {} }
+});
+
+async function exerciseUniqueRole(): Promise<void> {
+  const member: StaffAccount = { id: '2', email: 'm@acme.test', role: 'member' };
+  try {
+    await soleOwner.assertCanCreate({ role: 'owner', actor: member });
+    await soleOwner.assertCanChangeRole({ account: member, nextRole: 'owner', actor: member });
+    await soleOwner.assertCanRename({ account: member, nextIdentifier: 'owner@acme.test' });
+    await soleOwner.assertCanModify({ target: member, actor: member });
+  } catch (error) {
+    if (error instanceof UniqueRoleError) void [error.reason, error.statusCode];
+  }
+  const outcome: SweepResult<StaffAccount> = await soleOwner.sweep({ dryRun: true });
+  const picked = pickIntruders<StaffAccount>({ accounts: accountsStore.list(), anchor: 'owner@acme.test' });
+  void [outcome.removed.length, outcome.reason, picked.intruders, soleOwner.isRole('OWNER'), soleOwner.verdict({ role: 'owner', otherHolderExists: true })];
+}
+
+void exerciseUniqueRole;

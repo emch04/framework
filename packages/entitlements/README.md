@@ -283,7 +283,92 @@ update(id, patch)                 retirePending(email)   list(filter)
 
 `createMemoryInvitationStore()` est fourni pour les tests et le développement.
 
-## Ce que ce package ne fait pas
+# Un rôle, un seul titulaire
+
+Le compte au sommet — fondateur, propriétaire de la plateforme — détient les
+clés de service et l'accès de dernier recours. Un second compte de ce rang
+double ce pouvoir en silence, et deux titulaires peuvent se révoquer l'un
+l'autre. La règle est simple ; la tenir ne l'est pas, parce qu'un rôle arrive
+par plusieurs portes : la création, la promotion, le changement d'identifiant,
+et l'écriture directe en base qui ne traverse aucun code.
+
+`createUniqueRole` garde les trois premières portes, et sa sentinelle
+(`sweep`) rattrape la quatrième. Chaque tentative refusée déclenche une alerte.
+
+```js
+const { createUniqueRole } = require('@astratra/entitlements');
+
+const owner = createUniqueRole({
+  role: 'owner',                              // le nom du rôle, à toi
+  anchor: () => process.env.OWNER_EMAIL,      // l'identifiant du titulaire légitime
+  store: {
+    findHolders: (role) => Users.find({ role: new RegExp(`^\\s*${role}\\s*$`, 'i') }).lean(),
+    remove: async (account, role) =>
+      (await Users.deleteOne({ _id: account._id, role })).deletedCount === 1
+  },
+  alert: async (event) => mailer.send(ownerAddress, t(`alerts.${event.kind}`, event)),
+  messages: { role_taken: t('errors.role_taken'), holder_protected: t('errors.holder_protected') }
+});
+
+// sur chaque chemin d'écriture
+await owner.assertCanCreate({ role: body.role, actor: req.user });
+await owner.assertCanChangeRole({ account: stored, nextRole: body.role, actor: req.user });
+await owner.assertCanRename({ account: stored, nextIdentifier: body.email, actor: req.user });
+await owner.assertCanModify({ target: stored, actor: req.user });
+
+// toutes les heures, sous un verrou partagé entre instances
+await owner.sweep();
+```
+
+## Les décisions encodées, chacune testée
+
+| Tentative | Réponse | Alerte |
+|---|---|---|
+| Créer un titulaire alors qu'un autre existe | `409 role_taken` | `create_refused` |
+| Promouvoir un compte alors qu'un autre titulaire existe | `409 role_taken` | `promotion_refused` |
+| Rétrograder le titulaire | `409 last_holder` | `demotion_refused` |
+| Prendre l'identifiant du titulaire (quelqu'un d'autre) | `409 identity_taken` | `rename_refused` |
+| Modifier ou supprimer le compte du titulaire (quelqu'un d'autre) | `403 holder_protected` | `modify_refused` |
+| Créer le premier titulaire, plateforme vide | autorisé (`allowBootstrap: false` pour l'interdire, `403`) | — |
+| Le titulaire enregistre son propre compte | autorisé | — |
+
+- **La casse et les espaces ne contournent rien** : ` OWNER ` est le rôle.
+- **Le store fait foi, pas l'objet passé** : un compte qui arrive avec le rôle
+  déjà appliqué (le document vu par un hook d'ORM) est quand même comparé aux
+  titulaires en base, exclu par son identifiant seulement.
+- **Aucun texte en dur** : sans `messages[reason]`, le message est le code.
+  L'alerte reçoit un événement structuré ; destinataire et formulation sont à toi.
+- **L'alerte ne décide jamais** : si elle échoue, le refus tient quand même, et
+  la sentinelle efface quand même.
+
+## La sentinelle
+
+Elle efface des comptes : elle est écrite pour ne jamais effacer le bon. En
+cas de doute, elle ne fait RIEN.
+
+| Situation en base | Effacement | Alerte |
+|---|---|---|
+| Un titulaire, l'ancré | aucun | — |
+| Plusieurs titulaires, l'ancré parmi eux | tous sauf l'ancré | `intruders_removed` |
+| Plusieurs titulaires, pas d'ancre configurée | aucun | `anchor_missing` |
+| Plusieurs titulaires, aucun ne porte l'ancre | aucun | `anchor_not_found` |
+| Un seul titulaire, qui n'est PAS l'ancré | aucun | `anchor_mismatch` — c'est à ça que ressemble un titulaire remplacé |
+
+`sweep({ dryRun: true })` dit ce qu'elle ferait sans rien effacer ni envoyer.
+`store.remove` doit n'effacer que si le compte porte TOUJOURS le rôle : un
+compte rétrogradé entre la lecture et l'écriture n'est pas supprimé par erreur.
+
+## Ce que ce module ne fait pas
+
+- **Il ne ferme pas la course à l'amorçage.** Deux créations simultanées sur une
+  plateforme vide passent toutes deux la vérification ; seul un index unique
+  partiel en base (`{ role: 1 }` unique où `role = 'owner'`) l'empêche.
+- Il ne planifie rien : horaire et verrou entre instances sont à toi.
+- Il ne masque pas le titulaire dans les listes ni les exports.
+- Il ne voit pas les écritures en masse (`updateMany`, `insertMany`,
+  `bulkWrite`) si tu ne l'appelles pas pour chaque compte concerné.
+
+# Ce que ce package ne fait pas
 
 - Il ne sait pas **où** vit le plan d'un compte : tu le lui donnes.
 - Il ne décide pas **qui** est exempté de facturation.

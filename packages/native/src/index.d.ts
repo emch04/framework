@@ -280,3 +280,189 @@ export function createApiClient(options: {
   refreshPath?: string;
   onSessionExpired?: (cause: unknown) => void;
 }): ApiClient;
+
+/* ───────────────────────────── Connectivity ──────────────────────────── */
+
+/** What the OS reports, narrowed to what the rules read. NetInfo's state fits. */
+export interface NetworkSnapshot {
+  isConnected?: boolean | null;
+  isInternetReachable?: boolean | null;
+  type?: string | null;
+}
+
+export type Reachability = 'online' | 'offline' | 'unknown';
+export type ConnectionLink = 'wifi' | 'cellular' | 'none' | 'unknown';
+export type TransportFailure = 'timeout' | 'unreachable';
+
+export const TRANSPORT_BLACKOUT_MS: number;
+
+/** Offline ONLY without any interface. The OS "no Internet" stays unknown. */
+export function readReachability(snapshot: NetworkSnapshot | null | undefined): Reachability;
+export function readConnectionLink(snapshot: NetworkSnapshot | null | undefined): ConnectionLink;
+export function isDefinitelyOffline(snapshot: NetworkSnapshot | null | undefined): boolean;
+export function worthAttempting(snapshot: NetworkSnapshot | null | undefined): boolean;
+export function hasComeBack(previous: Reachability, next: Reachability): boolean;
+export function shouldDeclareTransportDown(input: { reason: TransportFailure; reachability: Reachability }): boolean;
+
+/** @react-native-community/netinfo's default export, narrowed. */
+export interface NetInfoLike {
+  addEventListener(listener: (state: NetworkSnapshot) => void): (() => void) | { remove(): void };
+  fetch(): Promise<NetworkSnapshot>;
+}
+
+export interface ConnectivityMonitor {
+  start(): void;
+  stop(): void;
+  /** Re-reads the OS without emitting the comeback. Resolves worthAttempting. */
+  refresh(): Promise<boolean>;
+  setSnapshot(next: NetworkSnapshot | null | undefined): void;
+  getReachability(): Reachability;
+  getConnectionLink(): ConnectionLink;
+  isTransportDown(): boolean;
+  isOffline(): boolean;
+  shouldAttemptRequest(): boolean;
+  noteTransportFailure(reason?: TransportFailure): void;
+  noteTransportSuccess(): void;
+  setRecoveryProbe(probe: (() => Promise<unknown> | unknown) | null): void;
+  /** Shaped for useSyncExternalStore. */
+  subscribe(listener: () => void): () => void;
+  onComeback(listener: () => void): () => void;
+}
+
+export function createConnectivityMonitor(options?: {
+  netInfo?: NetInfoLike;
+  blackoutMs?: number;
+  now?: () => number;
+}): ConnectivityMonitor;
+
+/* ────────────────────────── Over-the-air updates ─────────────────────── */
+
+export const UPDATE_CHECK_INTERVAL_MS: number;
+export const UPDATE_APPLY_GRACE_MS: number;
+
+export function shouldCheckForUpdate(
+  context: { enabled: boolean; online: boolean; lastCheckAt: number | null; now: number },
+  intervalMs?: number
+): boolean;
+
+export function shouldApplyUpdate(context: {
+  downloaded: boolean;
+  stillInBackground: boolean;
+  pendingWrites: number;
+}): boolean;
+
+export function describeRelease(input: {
+  version?: string | null;
+  updateId?: string | null;
+  isEmbeddedLaunch: boolean;
+}): string;
+
+/** expo-updates' module namespace, narrowed to what the watcher uses. */
+export interface UpdatesLike {
+  isEnabled: boolean;
+  isEmbeddedLaunch: boolean;
+  updateId?: string | null;
+  channel?: string | null;
+  runtimeVersion?: string | null;
+  checkForUpdateAsync(): Promise<{ isAvailable: boolean }>;
+  fetchUpdateAsync(): Promise<{ isNew: boolean }>;
+  reloadAsync(): Promise<void>;
+}
+
+/** React Native's AppState, narrowed. */
+export interface AppStateLike {
+  currentState: string | null;
+  addEventListener(event: 'change', listener: (state: string) => void): { remove(): void } | void;
+}
+
+export interface BuildDescription {
+  updateId: string | null;
+  channel: string | null;
+  runtimeVersion: string | null;
+  isEmbeddedLaunch: boolean;
+  release: string;
+}
+
+export interface UpdateWatcher {
+  start(): void;
+  stop(): void;
+  /** Resolves true when a new update was downloaded by this call. */
+  check(now?: number): Promise<boolean>;
+  hasPendingUpdate(): boolean;
+  describeBuild(version?: string | null): BuildDescription;
+}
+
+export function createUpdateWatcher(options: {
+  updates: UpdatesLike;
+  appState: AppStateLike;
+  isOnline?: () => boolean;
+  pendingWrites?: () => number;
+  onError?: (error: unknown, context: { where: 'checkForUpdate' | 'reloadAsync' }) => void;
+  checkIntervalMs?: number;
+  graceMs?: number;
+  now?: () => number;
+}): UpdateWatcher;
+
+/* ────────────────────────────── Media cache ──────────────────────────── */
+
+export const MEDIA_CACHE_MAX_FILES: number;
+export const MEDIA_CACHE_MAX_BYTES: number;
+export const MEDIA_CACHE_ABANDONED_MS: number;
+
+/** [a-z0-9-] only. Every part that changes the bytes — a version included. */
+export function contentKey(...parts: Array<string | number | null | undefined>): string;
+
+export function extensionFor(
+  contentType: string | null | undefined,
+  types: Record<string, string>,
+  fallback: string
+): string;
+
+export interface CachedFile {
+  name: string;
+  /** Bytes. */
+  size: number;
+  /** Milliseconds. */
+  modifiedAt: number;
+}
+
+export function planEviction(
+  files: CachedFile[],
+  options: {
+    extensions: string[];
+    maxFiles?: number;
+    maxBytes?: number;
+    abandonedAfterMs?: number;
+    now?: number;
+  }
+): string[];
+
+/** expo-file-system/legacy's shape, narrowed. `modificationTime` in seconds. */
+export interface FileSystemLike {
+  getInfoAsync(uri: string): Promise<{ exists: boolean; isDirectory?: boolean; size?: number; modificationTime?: number }>;
+  makeDirectoryAsync(uri: string, options?: { intermediates?: boolean }): Promise<void>;
+  moveAsync(options: { from: string; to: string }): Promise<void>;
+  deleteAsync(uri: string, options?: { idempotent?: boolean }): Promise<void>;
+  readDirectoryAsync(uri: string): Promise<string[]>;
+}
+
+export type MediaWriter = (tempUri: string) => Promise<unknown>;
+
+export interface MediaCache {
+  readonly directory: string;
+  lookup(key: string): Promise<string | null>;
+  store(key: string, extension: string, write: MediaWriter): Promise<string>;
+  resolve(key: string, download: () => Promise<{ extension: string; write: MediaWriter }>): Promise<string>;
+  /** Resolves the names deleted. */
+  tidy(): Promise<string[]>;
+}
+
+export function createMediaCache(options: {
+  fs: FileSystemLike;
+  directory: string;
+  extensions: string[];
+  maxFiles?: number;
+  maxBytes?: number;
+  abandonedAfterMs?: number;
+  now?: () => number;
+}): MediaCache;

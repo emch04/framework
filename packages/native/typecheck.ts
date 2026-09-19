@@ -1,4 +1,33 @@
 import {
+  TRANSPORT_BLACKOUT_MS,
+  UPDATE_APPLY_GRACE_MS,
+  UPDATE_CHECK_INTERVAL_MS,
+  MEDIA_CACHE_MAX_BYTES,
+  contentKey,
+  createConnectivityMonitor,
+  createMediaCache,
+  createUpdateWatcher,
+  describeRelease,
+  extensionFor,
+  hasComeBack,
+  planEviction,
+  readConnectionLink,
+  readReachability,
+  shouldApplyUpdate,
+  shouldCheckForUpdate,
+  shouldDeclareTransportDown
+} from './src';
+import type {
+  ConnectionLink,
+  ConnectivityMonitor,
+  FileSystemLike,
+  MediaCache,
+  NetInfoLike,
+  Reachability,
+  UpdateWatcher
+} from './src';
+
+import {
   FOREGROUND_POLL_MS,
   createBiometricGate,
   createNotificationRouter,
@@ -173,3 +202,59 @@ async function exercise(): Promise<void> {
 }
 
 void exercise;
+
+/* ──────────────────── Connectivity, updates, media cache ──────────────────── */
+
+const netInfo: NetInfoLike = {
+  addEventListener: () => () => undefined,
+  fetch: async () => ({ isConnected: true, isInternetReachable: null, type: 'wifi' })
+};
+const network: ConnectivityMonitor = createConnectivityMonitor({ netInfo, blackoutMs: TRANSPORT_BLACKOUT_MS });
+network.setRecoveryProbe(async () => undefined);
+const unsubscribeNetwork: () => void = network.subscribe(() => undefined);
+const reach: Reachability = readReachability({ isConnected: true, isInternetReachable: false });
+const link: ConnectionLink = readConnectionLink(null);
+const declare: boolean = shouldDeclareTransportDown({ reason: 'timeout', reachability: reach });
+
+const watcher: UpdateWatcher = createUpdateWatcher({
+  updates: {
+    isEnabled: true,
+    isEmbeddedLaunch: false,
+    updateId: null,
+    checkForUpdateAsync: async () => ({ isAvailable: false }),
+    fetchUpdateAsync: async () => ({ isNew: false }),
+    reloadAsync: async () => undefined
+  },
+  appState: { currentState: 'active', addEventListener: () => ({ remove: () => undefined }) },
+  isOnline: network.shouldAttemptRequest,
+  pendingWrites: () => 0,
+  onError: (_error, context) => void context.where,
+  graceMs: UPDATE_APPLY_GRACE_MS
+});
+const due: boolean = shouldCheckForUpdate({ enabled: true, online: true, lastCheckAt: null, now: 0 }, UPDATE_CHECK_INTERVAL_MS);
+const apply: boolean = shouldApplyUpdate({ downloaded: true, stillInBackground: true, pendingWrites: 0 });
+const release: string = describeRelease({ version: '1.0.0', updateId: null, isEmbeddedLaunch: true });
+
+const fsAdapter: FileSystemLike = {
+  getInfoAsync: async () => ({ exists: false }),
+  makeDirectoryAsync: async () => undefined,
+  moveAsync: async () => undefined,
+  deleteAsync: async () => undefined,
+  readDirectoryAsync: async () => []
+};
+const media: MediaCache = createMediaCache({ fs: fsAdapter, directory: 'file:///cache/media/', extensions: ['m4a'], maxBytes: MEDIA_CACHE_MAX_BYTES });
+const key: string = contentKey('v1', 'en', 'text');
+const extension: string = extensionFor('audio/mp4', { 'audio/mp4': 'm4a' }, 'wav');
+const evicted: string[] = planEviction([{ name: 'a.m4a', size: 1, modifiedAt: 0 }], { extensions: ['m4a'] });
+
+async function exerciseOffline(): Promise<void> {
+  const worth: boolean = await network.refresh();
+  const fetched: boolean = await watcher.check();
+  const build = watcher.describeBuild('1.0.0');
+  const uri: string = await media.resolve(key, async () => ({ extension, write: async () => undefined }));
+  const removed: string[] = await media.tidy();
+  unsubscribeNetwork();
+  void [worth, fetched, build.release, uri, removed, link, declare, due, apply, release, evicted, hasComeBack('offline', reach)];
+}
+
+void exerciseOffline;

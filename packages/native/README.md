@@ -1,10 +1,11 @@
 # @astratra/native
 
 La plomberie mobile, sans le moteur mobile : **session sécurisée, verrou
-biométrique, notifications natives, retour de paiement**.
+biométrique, notifications natives, retour de paiement, état du réseau, mises à
+jour à distance, cache de médias**.
 
 Le package ne charge ni `expo-secure-store`, ni `expo-local-authentication`,
-ni `expo-web-browser`. Il les **reçoit**. Même règle que `@astratra/notify`
+ni `expo-web-browser`, ni NetInfo, ni `expo-updates`, ni `expo-file-system`. Il les **reçoit**. Même règle que `@astratra/notify`
 avec son transport, et même bénéfice : tout ce qui suit se teste en Node, sans
 simulateur ni build natif.
 
@@ -202,3 +203,159 @@ resolveGlassMode({ platform, apiAvailable, effectAvailable }); // 'native' | 'fa
 
 Décidé une fois, pour que toutes les surfaces répondent pareil : un en-tête qui
 floute au-dessus d'une carte qui ne floute pas est pire que ni l'un ni l'autre.
+
+# Réseau
+
+```js
+import NetInfo from '@react-native-community/netinfo';
+import { createConnectivityMonitor } from '@astratra/native';
+
+export const network = createConnectivityMonitor({ netInfo: NetInfo });
+network.start();                                  // une fois, au lancement
+network.setRecoveryProbe(() => api.request('/health'));
+
+// dans le client HTTP
+if (!network.shouldAttemptRequest()) return fromCache();
+try { const r = await fetch(url); network.noteTransportSuccess(); return r; }
+catch (e) { network.noteTransportFailure(isAbort(e) ? 'timeout' : 'unreachable'); throw e; }
+
+// dans un écran
+const offline = useSyncExternalStore(network.subscribe, network.isOffline);
+useEffect(() => network.onComeback(reload), []);
+```
+
+**Hors ligne veut dire : aucune interface.** `isConnected === false`, rien
+d'autre. Un `isInternetReachable` à `null` — le système n'a pas encore tranché,
+les premières secondes de chaque lancement — n'est pas une panne : le traiter
+comme tel fait clignoter « hors ligne » à chaque ouverture.
+
+**Le « sans Internet » du système n'est pas une panne non plus.** Ce verdict ne
+vient pas de votre serveur : sur Android c'est le drapeau « validé » du Wi-Fi,
+posé seulement après avoir joint un serveur de Google ; ailleurs NetInfo sonde
+lui-même une adresse Google. Sur un Wi-Fi où ce test échoue (DNS du
+fournisseur, filtrage, lenteur), le réseau est déclaré mort alors que les
+requêtes de l'application passent. Constaté en production : l'application se
+disait hors ligne sur le Wi-Fi seul, et ne se croyait en ligne qu'avec les
+données mobiles allumées en même temps. L'état reste donc « inconnu », les
+requêtes partent, et **ce sont elles qui tranchent**.
+
+**Un échec de transport se retient trente secondes** (`blackoutMs`). Le cas le
+plus pénible — le Wi-Fi d'hôtel qui accepte la connexion et ne laisse rien
+passer — n'est jamais évident pour le système. Sans cette mémoire, chaque écran
+repayait tout le délai d'expiration avant de montrer son cache ; avec, le
+premier paie, les suivants affichent tout de suite. N'importe quel appel qui
+aboutit l'efface.
+
+**Une expiration n'accuse pas toujours le réseau.** Si le système affirme
+qu'Internet est joignable, un serveur lent expire comme un portail captif :
+c'est le serveur qui est en cause, et basculer tout le monde hors ligne
+servirait du cache périmé à tous les écrans. Un refus de transport, lui, est
+formel.
+
+**À l'échéance, on repose la question.** Sans cela, rien ne prévenait les
+écrans quand les trente secondes tombaient, et le seul signal de reprise était
+le retour de la radio — qui n'était jamais partie. La sonde part une fois ; si
+elle réussit, la reprise est annoncée, sinon le constat repart. Rien ne part
+quand le système affirme l'absence de réseau.
+
+**Le retour du réseau est un événement, pas un état** (`onComeback`) : c'est
+lui qui relance ce qui avait échoué, une seule fois. `refresh()`, pour une
+tâche d'arrière-plan qui se réveille, relit le système sans l'émettre — la
+tâche va vider la file elle-même.
+
+**Le lien compte à part** (`getConnectionLink()` : `wifi`, `cellular`, `none`,
+`unknown`). Passer du Wi-Fi aux données mobiles ne change pas « en ligne », et
+change tout pour ce qui se paie au mégaoctet. Traitez `unknown` comme facturé.
+
+Les règles sont aussi exportées seules, pures : `readReachability`,
+`readConnectionLink`, `worthAttempting`, `hasComeBack`,
+`shouldDeclareTransportDown`.
+
+# Mises à jour à distance
+
+```js
+import * as Updates from 'expo-updates';
+import { AppState } from 'react-native';
+import { createUpdateWatcher } from '@astratra/native';
+
+const watcher = createUpdateWatcher({
+  updates: Updates,
+  appState: AppState,
+  isOnline: network.shouldAttemptRequest,
+  pendingWrites: () => outbox.pending,
+  onError: (error, { where }) => report(error, where)
+});
+watcher.start();
+```
+
+**Vérifier au lancement, puis au plus une fois par heure** (`checkIntervalMs`),
+au retour au premier plan, et jamais hors ligne. Une mise à jour que
+l'application ne demande jamais ne sert à rien — c'était le cas.
+
+**Appliquer seulement quand personne ne regarde.** Au passage en arrière-plan,
+un délai de grâce de 45 secondes (`graceMs`) : répondre à un SMS et revenir
+prend quelques secondes, et recharger pendant cet aller-retour renvoyait la
+personne à l'écran de démarrage, sa page perdue. Revenir annule le délai ; un
+nouveau départ le recommence en entier.
+
+**À l'échéance, on revérifie.** Sur iOS, un minuteur gelé en arrière-plan part
+au retour au premier plan, avant l'événement de changement d'état : sans cette
+garde, le rechargement tombait sous les yeux de la personne.
+
+**Jamais avec des écritures en attente.** Recharger en pleine reprise de la
+file hors ligne peut rejouer une entrée avant qu'elle soit marquée partie.
+L'occasion suivante la posera.
+
+`describeBuild(version)` donne ce que tourne vraiment le téléphone ; son
+`release` (`1.2.0+3f2a9c1d`, ou `1.2.0+embedded`) distingue deux mises à jour du
+même binaire dans les rapports de plantage.
+
+# Cache de médias
+
+```js
+import * as FileSystem from 'expo-file-system/legacy';
+import { createMediaCache, contentKey, extensionFor } from '@astratra/native';
+
+const cache = createMediaCache({
+  fs: FileSystem,
+  directory: `${FileSystem.cacheDirectory}audio/`,
+  extensions: ['m4a', 'wav']
+});
+
+const uri = await cache.resolve(contentKey('v2', lang, text), async () => {
+  const response = await api.raw('/speak', { method: 'POST', body });
+  const bytes = await response.arrayBuffer();
+  return {
+    extension: extensionFor(response.headers.get('content-type'), { 'audio/mp4': 'm4a' }, 'wav'),
+    write: (tempUri) => FileSystem.writeAsStringAsync(tempUri, toBase64(bytes), { encoding: 'base64' })
+  };
+});
+```
+
+La première version de ce cache retéléchargeait tout le fichier à chaque
+lecture, et laissait chaque copie sous un nom horodaté que plus rien ne
+relisait : le dossier grossissait sans fin.
+
+**Une clé stable par contenu.** `contentKey(...parties)` : tout ce qui change
+les octets, **version comprise** — quand le serveur change son rendu, la
+nouvelle version retire les anciens fichiers. Les parties sont encodées, pas
+collées : `('a:b', 'c')` et `('a', 'b:c')` ne partagent pas de clé. 106 bits,
+en JS pur (une empreinte native serait asynchrone et ne tournerait pas en Node).
+
+**Écrire à côté, puis déplacer.** Une coupure au milieu de l'écriture laisse un
+`.tmp`, jamais un fichier tronqué pris pour valide à la lecture suivante. Deux
+appuis sur le même contenu : le déplacement perdant cède au fichier déjà posé.
+
+**Un dossier borné** : 40 fichiers et 60 Mo par défaut (`maxFiles`,
+`maxBytes`), les plus anciens partent d'abord. Le plus récent **ne part
+jamais**, même trop lourd à lui seul : c'est celui qu'on lit. Un temporaire de
+plus de cinq minutes (`abandonedAfterMs`) est le reste d'un téléchargement
+coupé ; plus jeune, il est peut-être en cours d'écriture, on n'y touche pas.
+Le rangement suit chaque écriture, sans retenir la lecture, un seul à la fois.
+
+Le dossier doit être **à lui seul** : tout ce qui n'y porte pas l'une des
+extensions déclarées est traité comme un temporaire abandonné.
+
+L'API historique d'Expo ne sait pas toucher la date d'un fichier sans le
+réécrire : l'éviction suit donc l'ordre de téléchargement, pas celui de
+lecture. Un fichier très relu finit par partir, puis revient au prochain appui.

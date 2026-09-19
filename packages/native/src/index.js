@@ -8,5 +8,8 @@ module.exports = {
   ...require('./pushSettings'),
   ...require('./pushService'),
   ...require('./checkout'),
-  ...require('./api')
+  ...require('./api'),
+  ...require('./connectivity'),
+  ...require('./updates'),
+  ...require('./mediaCache')
 };

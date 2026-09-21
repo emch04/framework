@@ -41,6 +41,6 @@
   "devDependencies": {
     "jest": "30.4.2",
     "mongodb-memory-server": "^10.2.0",
-    "mongoose": "^8.17.0"
+    "mongoose": "^9.9.3"
   }
 }

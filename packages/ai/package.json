@@ -41,6 +41,6 @@
   },
   "devDependencies": {
     "jest": "30.4.2",
-    "redis": "^4.7.0"
+    "redis": "^6.2.1"
   }
 }

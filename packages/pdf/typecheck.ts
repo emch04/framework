@@ -1,4 +1,4 @@
-import { blockHeight, defaultBottom, drawTable, fitText, keepTogether, line } from './src';
+import { blockHeight, CARD_SIZE, defaultBottom, drawQrMatrix, drawSocialLogo, drawTable, fitText, imposeCards, keepTogether, line, SOCIAL_NETWORKS } from './src';
 import type { PdfDocumentLike, TableColumn, TableResult } from './src';
 
 interface Result {
@@ -40,3 +40,10 @@ const table: TableResult = drawTable<Result>(doc, {
 });
 
 void [fitted, drawn, height, resumeY, table.y, table.pages, table.rows];
+
+const sheet = imposeCards(doc, { front: (d, x, y, w, h) => drawSocialLogo(d, 'instagram', x, y, h / 5), paper: 'A4' });
+const perPage: number = sheet.perPage;
+const cardWidth: number = CARD_SIZE.width;
+drawQrMatrix(doc, { size: 21, get: () => true }, 0, 0, 80, { radius: 4 });
+const networks: readonly string[] = SOCIAL_NETWORKS;
+export { perPage, cardWidth, networks };

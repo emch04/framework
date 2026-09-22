@@ -36,7 +36,9 @@ commande.
 | [`@astratra/credentials`](packages/credentials/README.md) | clés de service chiffrées en base, éditables depuis l'interface, sans redémarrage : catalogue, garde valeur réelle/test, code de déverrouillage, hydratation de `process.env` |
 | [`@astratra/entitlements`](packages/entitlements/README.md) | qui a le droit de quoi : plans et fonctionnalités, gardes de facturation et de statut, matrice écran/rôle, isolation par locataire qui échoue fermée, invitations par lien |
 | [`@astratra/i18n-server`](packages/i18n-server/README.md) | traduction des messages renvoyés par l'API (la clé est la phrase source), résolution de langue, audit de lisibilité des messages d'erreur |
-| [`@astratra/pdf`](packages/pdf/README.md) | primitives de mise en page PDFKit : texte borné qui ne déborde jamais, tableaux qui se paginent sans couper une rangée |
+| [`@astratra/pdf`](packages/pdf/README.md) | primitives de mise en page PDFKit : texte borné qui ne déborde jamais, tableaux qui se paginent sans couper une rangée, planches de cartes au format carte bancaire avec QR vectoriel et logos des réseaux |
+| [`@astratra/loyalty`](packages/loyalty/README.md) | carte à tampons : N visites dans une fenêtre de temps ouvrent une récompense, compteur remis à zéro dès qu'elle est utilisée, fin de mois sans glissement |
+| [`@astratra/wallet`](packages/wallet/README.md) | cartes Apple Wallet et Google Wallet qui se tiennent à jour : signature, service web Apple et push, classe et carte Google, lien d'ajout signé, contrôle des clés avant enregistrement |
 | [`@astratra/payments`](packages/payments/README.md) | le tuyau des webhooks de paiement : signature sur corps brut, protection contre les rejeux, et les réponses qui empêchent un prestataire de relancer pendant des jours |
 | [`@astratra/privacy`](packages/privacy/README.md) | droit d'accès, droit à l'oubli par approbation humaine, anonymisation qui préserve les dossiers à conserver, nettoyage des journaux |
 | [`@astratra/resilience`](packages/resilience/README.md) | disjoncteur à sonde unique, cache TTL qui se dégrade au lieu d'échouer, relance avec recul et brouillage |
@@ -120,6 +122,8 @@ npm install @astratra/credentials
 npm install @astratra/entitlements
 npm install @astratra/i18n-server
 npm install @astratra/pdf
+npm install @astratra/loyalty
+npm install @astratra/wallet
 npm install @astratra/payments
 npm install @astratra/privacy
 npm install @astratra/resilience

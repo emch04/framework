@@ -1,5 +1,6 @@
 module.exports = {
   ...require('./text'),
   ...require('./flow'),
-  ...require('./table')
+  ...require('./table'),
+  ...require('./cards')
 };

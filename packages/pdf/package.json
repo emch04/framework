@@ -1,7 +1,7 @@
 {
   "name": "@astratra/pdf",
-  "version": "0.1.0",
-  "description": "Layout primitives for PDFKit: text that never overruns its box, and tables that paginate without splitting a row.",
+  "version": "0.2.0",
+  "description": "Layout primitives for PDFKit: text that never overruns its box, tables that paginate without splitting a row, and credit-card sheets with vector QR codes and brand logos.",
   "engines": {
     "node": ">=20"
   },
@@ -39,6 +39,7 @@
   },
   "devDependencies": {
     "jest": "30.4.2",
-    "pdfkit": "^0.18.0"
+    "pdfkit": "^0.18.0",
+    "qrcode": "^1.5.4"
   }
 }

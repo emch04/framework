@@ -277,8 +277,8 @@ export const translation = createTranslationMiddleware({ catalog, resolver });
 
   pdf: {
     package: '@astratra/pdf',
-    version: '^0.1.0',
-    summary: 'texte borné et tableaux qui se paginent (PDFKit)',
+    version: '^0.2.0',
+    summary: 'texte borné, tableaux qui se paginent, planches de cartes (PDFKit)',
     file: 'api/bricks/pdf.js',
     contents: () => `import { drawTable, keepTogether, line } from '@astratra/pdf';
 

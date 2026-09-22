@@ -99,3 +99,38 @@ export function drawTable<Row = Record<string, unknown>>(doc: PdfDocumentLike, o
   headerFont?: string;
   color?: string;
 }): TableResult;
+
+/** Credit-card size (ISO/IEC 7810 ID-1, 85.6 × 54 mm), in PDF points. */
+export const CARD_SIZE: Readonly<{ width: number; height: number }>;
+export const PAPERS: Readonly<Record<'A4' | 'LETTER', Readonly<{ width: number; height: number }>>>;
+
+export type CardDrawer = (doc: PdfDocumentLike, x: number, y: number, width: number, height: number, index: number) => void;
+
+/**
+ * A home-printing sheet: a page of fronts, then a page of backs mirrored
+ * horizontally so long-edge duplex printing lands card on card.
+ */
+export function imposeCards(doc: PdfDocumentLike, options: {
+  front: CardDrawer;
+  back?: CardDrawer;
+  paper?: 'A4' | 'LETTER';
+  columns?: number;
+  rows?: number;
+  card?: { width: number; height: number };
+  columnGap?: number;
+  rowGap?: number;
+  cropMarks?: boolean;
+}): { perPage: number; positions: Array<{ x: number; y: number }> };
+
+export function drawCropMarks(doc: PdfDocumentLike, x: number, y: number, width: number, height: number,
+  options?: { length?: number; gap?: number; color?: string }): void;
+
+/** A QR code as vector squares, from a module matrix (e.g. `require('qrcode').create(text).modules`). */
+export function drawQrMatrix(doc: PdfDocumentLike, modules: { size: number; get(row: number, column: number): boolean | number },
+  x: number, y: number, size: number,
+  options?: { color?: string; background?: string | null; quietZone?: number; radius?: number }): void;
+
+export type SocialNetwork = 'instagram' | 'tiktok' | 'snapchat';
+export const SOCIAL_NETWORKS: readonly SocialNetwork[];
+/** The official logo, in brand colors, as a rounded app-style square. */
+export function drawSocialLogo(doc: PdfDocumentLike, network: SocialNetwork, x: number, y: number, size: number): void;

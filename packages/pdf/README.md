@@ -112,3 +112,38 @@ npm test --workspace @astratra/pdf
 
 Les tests tournent sur un vrai document PDFKit : chaque affirmation porte sur ce
 que PDFKit fait réellement des métriques de police, pas sur notre arithmétique.
+
+## Des cartes au format carte bancaire
+
+Carte de visite, carte de service, carte de membre : 85,6 × 54 mm, recto et
+verso. Trois briques pour les produire proprement.
+
+```js
+const PDFDocument = require('pdfkit');
+const QRCode = require('qrcode');
+const { CARD_SIZE, imposeCards, drawQrMatrix, drawSocialLogo } = require('@astratra/pdf');
+
+const doc = new PDFDocument({ autoFirstPage: false, margin: 0 });
+
+imposeCards(doc, {
+  front: (doc, x, y, w, h) => dessinerRecto(doc, x, y, w, h),
+  back: (doc, x, y, w, h) => {
+    dessinerVerso(doc, x, y, w, h);
+    drawQrMatrix(doc, QRCode.create('https://exemple.com/reservation').modules, x + w - 70, y + 12, 58, { radius: 4 });
+    drawSocialLogo(doc, 'instagram', x + 14, y + h - 26, 12);
+  }
+});
+```
+
+- **`imposeCards`** remplit une page A4 (ou Letter) de dix cartes, puis une page
+  de versos **en miroir horizontal** : imprimée en recto-verso (retournement
+  sur le bord long), chaque verso tombe derrière son recto. Traits de coupe
+  compris. Sans `back`, une seule page.
+- **`drawQrMatrix`** dessine un QR en carrés vectoriels, net à toute taille. Le
+  package ne dépend d'aucune bibliothèque de QR : passe-lui la matrice.
+- **`drawSocialLogo`** dessine les logos officiels d'Instagram, TikTok et
+  Snapchat (tracés Simple Icons, domaine public), aux couleurs des marques, en
+  carré arrondi comme une icône d'application.
+
+Pour un PDF « imprimeur » d'une seule carte, crée des pages à la taille exacte :
+`doc.addPage({ size: [CARD_SIZE.width, CARD_SIZE.height], margin: 0 })`.

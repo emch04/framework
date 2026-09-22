@@ -36,6 +36,8 @@ ORDER=(
   "@astratra/resilience"
   "@astratra/i18n-server"
   "@astratra/pdf"
+  "@astratra/loyalty"
+  "@astratra/wallet"
   "@astratra/closure"
   "@astratra/app-version"
   "@astratra/app-guide"

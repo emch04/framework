@@ -3,6 +3,32 @@
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Chaque package Astratra est versionné indépendamment.
 
+## 2026-09-22 (29) — extraction Barber Clean : fidélité et cartes Wallet
+
+`pdf` 0.2.0 (ajouts seulement) ; nouveaux paquets en 0.1.0.
+`create-astratra-app` 1.5.1 écrit le nouveau plancher `@astratra/pdf` `^0.2.0`
+(un caret sur une `0.x` ne franchit pas la mineure).
+
+### Ajoute
+
+- `@astratra/loyalty` (nouveau) — la carte à tampons : N visites dans une
+  fenêtre de temps ouvrent une récompense. La visite récompense ne compte pas
+  et remet le compteur à zéro immédiatement ; une récompense ne se réaccorde
+  jamais sur le même cycle ; un cycle ouvert un 30 novembre finit fin février,
+  pas un 2 mars. Aucune dépendance.
+- `@astratra/wallet` (nouveau) — cartes Apple Wallet et Google Wallet.
+  Signature `.pkpass` avec identifiant et équipe lus dans le certificat, WWDR
+  G4 fourni ; service web du protocole Apple et notification push, jetons
+  morts oubliés ; classe et carte Google créées ou mises à jour, lien d'ajout
+  signé (JWT RS256) ; contrôle certificat/clé et compte de service avant
+  enregistrement ; transport hexadécimal pour qu'un PEM traverse un pare-feu
+  applicatif sans l'affaiblir. Registre des appareils en mémoire ou sur une
+  connexion Mongoose.
+- `@astratra/pdf` 0.2.0 — cartes au format carte bancaire : `imposeCards`
+  (planche A4 ou Letter, versos en miroir pour le recto-verso, traits de
+  coupe), `drawQrMatrix` (QR vectoriel depuis une matrice), `drawSocialLogo`
+  (logos officiels Instagram, TikTok, Snapchat aux couleurs des marques).
+
 ## 2026-09-19 (28) — extraction Scolaris, lot de septembre
 
 Mineures seulement : chaque paquet ajoute des fonctions sans en retirer.

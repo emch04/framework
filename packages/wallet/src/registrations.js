@@ -8,6 +8,7 @@
  *   listForDevice(deviceLibraryIdentifier, passTypeIdentifier)                         → inscriptions
  *   listForPass(passTypeIdentifier, serialNumber)                                      → inscriptions
  *   forgetPushToken(pushToken)                                                         → jeton mort, oublié partout
+ *   forgetPass(passTypeIdentifier, serialNumber)                                       → carte supprimée, nombre d'appareils oubliés
  */
 
 const memeInscription = (a, b) => a.deviceLibraryIdentifier === b.deviceLibraryIdentifier
@@ -43,6 +44,16 @@ function createMemoryRegistrationStore() {
       for (let index = rows.length - 1; index >= 0; index -= 1) {
         if (rows[index].pushToken === pushToken) rows.splice(index, 1);
       }
+    },
+    async forgetPass(passTypeIdentifier, serialNumber) {
+      let oublies = 0;
+      for (let index = rows.length - 1; index >= 0; index -= 1) {
+        if (rows[index].passTypeIdentifier === passTypeIdentifier && rows[index].serialNumber === serialNumber) {
+          rows.splice(index, 1);
+          oublies += 1;
+        }
+      }
+      return oublies;
     }
   };
 }
@@ -91,6 +102,10 @@ function createMongooseRegistrationStore(connection, collection = 'apple_wallet_
     },
     async forgetPushToken(pushToken) {
       await Registration.deleteMany({ pushToken });
+    },
+    async forgetPass(passTypeIdentifier, serialNumber) {
+      const resultat = await Registration.deleteMany({ passTypeIdentifier, serialNumber });
+      return resultat.deletedCount;
     }
   };
 }

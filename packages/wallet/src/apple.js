@@ -41,6 +41,9 @@ function createApplePasses({
    * @param {Array<object>} [card.headerFields] … et primaryFields, secondaryFields, auxiliaryFields, backFields
    * @param {{message: string, altText?: string, format?: string}} [card.barcode]
    * @param {Record<string, Buffer>} [card.images] images propres à cette carte (strip.png…), prioritaires.
+   * @param {boolean} [card.voided] carte annulée : Apple Wallet la grise et la
+   *        déclare inutilisable. C'est la seule façon, côté émetteur, de
+   *        retirer une carte déjà ajoutée : seul son porteur peut l'effacer.
    * @returns {Buffer} le .pkpass
    */
   function build(card) {
@@ -57,7 +60,8 @@ function createApplePasses({
         ...(logoText ? { logoText } : {}),
         ...colors,
         webServiceURL,
-        authenticationToken: card.authenticationToken
+        authenticationToken: card.authenticationToken,
+        ...(card.voided ? { voided: true } : {})
       }
     );
     pass.type = type;

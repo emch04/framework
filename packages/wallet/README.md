@@ -21,6 +21,8 @@ le contenu vient de toi.
   (400, 410) sont oubliés.
 - **Google** : classe et carte créées au premier envoi puis mises à jour, lien
   « Ajouter à Google Wallet » signé (JWT RS256).
+- **Le retrait** : carte Apple annulée (grisée), carte Google inactive,
+  appareils oubliés.
 - **La saisie des clés** : contrôles avant enregistrement (clé qui correspond au
   certificat, certificat non expiré, vrai compte de service Google), et un
   transport hexadécimal pour qu'un PEM traverse un pare-feu applicatif qui
@@ -96,6 +98,32 @@ const lien = google.saveLink([{ id: google.objectId('C-000142'), classId }]);
 Une image référencée par Google doit être **publique** : Google la télécharge
 depuis ses serveurs. Change son URL quand son contenu change, c'est ce qui force
 Google à la rafraîchir.
+
+## Retirer une carte
+
+Une carte ajoutée à un téléphone n'en sort que par la main de son porteur :
+ni Apple ni Google ne laissent l'émetteur l'effacer. Ce qu'on peut faire
+quand une carte est supprimée chez toi :
+
+```js
+// Apple : la carte se grise et se déclare inutilisable.
+passes.build({ ...contenu, voided: true });
+// puis préviens les appareils, qui viennent chercher cette version :
+await notifyApplePass({ registrations, passTypeIdentifier, serialNumber, certificate, privateKey });
+
+// Google : la carte passe inactive, rangée avec les cartes passées.
+await google.deactivateObject(google.objectId('C-000142'));   // false si personne ne l'avait ajoutée
+
+// Plus rien à envoyer à ses appareils :
+await registrations.forgetPass(passTypeIdentifier, 'C-000142');
+```
+
+**L'ordre compte pour Apple.** Pour récupérer la version annulée, l'appareil
+demande d'abord quelles cartes ont changé (il faut encore son inscription),
+puis la carte elle-même (il faut encore `findPass` et `buildPass`). Garde donc
+de quoi servir la carte annulée — son numéro, son jeton, `voided: true` — et
+n'appelle `forgetPass` qu'une fois qu'il n'y a plus rien à lui dire. L'appareil
+se désinscrit tout seul quand le porteur supprime la carte.
 
 ## Saisir les clés depuis l'interface
 

@@ -1,7 +1,7 @@
 {
   "name": "@astratra/loyalty",
-  "version": "0.1.0",
-  "description": "Stamp-card loyalty rules: N visits within a time window earn a reward, the counter restarts once it is used.",
+  "version": "0.2.0",
+  "description": "Loyalty rules without a database: stamp cards (N visits in a window earn a reward) and monthly passes (N uses per calendar month).",
   "engines": {
     "node": ">=20"
   },
@@ -23,7 +23,9 @@
     "astratra",
     "loyalty",
     "stamp-card",
-    "rewards"
+    "rewards",
+    "subscription",
+    "monthly-pass"
   ],
   "license": "MIT",
   "publishConfig": {

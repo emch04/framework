@@ -39,3 +39,58 @@ export interface StampCard {
 
 export function createStampCard(options?: StampCardOptions): StampCard;
 export const REWARD_STATUSES: RewardStatus[];
+
+export type ScanDecision = 'count' | 'duplicate' | 'exhausted' | 'suspended';
+
+export interface MonthlyPassUse {
+  date: Date | string | number;
+  /** A cancelled use gives the credit back. */
+  cancelled?: boolean;
+}
+
+export interface MonthlyPassData {
+  status?: 'active' | string;
+  uses?: MonthlyPassUse[];
+}
+
+export interface MonthlyPassState {
+  /** Month in the business time zone, AAAA-MM. */
+  month: string;
+  used: number;
+  remaining: number;
+  quota: number;
+  exhausted: boolean;
+  active: boolean;
+  /** First day of next month, AAAA-MM-JJ. */
+  resetsOn: string;
+  /** Last three valid uses, any month, newest first (ISO). */
+  recentUses: string[];
+}
+
+export interface MonthlyPassOptions {
+  quota: number;
+  /** IANA time zone of the business, e.g. 'Europe/Paris'. Required. */
+  timeZone: string;
+  /** Two uses closer than this ask for confirmation. 0 disables. Default 120000. */
+  duplicateWindowMs?: number;
+  /** QR text prefix, e.g. 'BCA:'. Needed for qrText / tokenFromQr. */
+  qrPrefix?: string;
+  /** Readable card number, e.g. { prefix: 'A', digits: 6 } → A-000123. */
+  number?: { prefix: string; digits?: number };
+}
+
+export interface MonthlyPass {
+  quota: number;
+  timeZone: string;
+  monthOf(date: Date | string | number): string;
+  resetsOn(month: string): string;
+  evaluate(pass: MonthlyPassData | null | undefined, now?: Date | string | number): MonthlyPassState;
+  decideScan(pass: MonthlyPassData | null | undefined, now?: Date | string | number, options?: { force?: boolean }): ScanDecision;
+  qrText(token: string): string;
+  tokenFromQr(text: string): string | null;
+  formatNumber(n: number): string;
+  parseNumber(input: string): string | null;
+}
+
+export function createMonthlyPass(options: MonthlyPassOptions): MonthlyPass;
+export const SCAN_DECISIONS: readonly ScanDecision[];

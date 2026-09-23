@@ -126,4 +126,6 @@ function createStampCard({ threshold = 7, window: fenetre = { months: 3, days: 1
   return { threshold, cycleEnd, evaluate, isRewardAvailable };
 }
 
-module.exports = { createStampCard, REWARD_STATUSES: STATUTS_RECOMPENSE };
+const { createMonthlyPass, SCAN_DECISIONS } = require('./monthlyPass');
+
+module.exports = { createStampCard, REWARD_STATUSES: STATUTS_RECOMPENSE, createMonthlyPass, SCAN_DECISIONS };

@@ -47,6 +47,8 @@ export interface PassContent {
   backFields?: PassField[];
   barcode?: { message: string; altText?: string; format?: string };
   images?: Record<string, Buffer>;
+  /** Voided card: Apple Wallet greys it out. The only way for an issuer to retire a card already added. */
+  voided?: boolean;
 }
 
 export interface ApplePassesOptions {
@@ -96,6 +98,8 @@ export interface RegistrationStore {
   listForDevice(deviceLibraryIdentifier: string, passTypeIdentifier: string): Promise<Registration[]>;
   listForPass(passTypeIdentifier: string, serialNumber: string): Promise<Registration[]>;
   forgetPushToken(pushToken: string): Promise<void>;
+  /** Deleted card: forget every device registered for it. Returns how many. */
+  forgetPass(passTypeIdentifier: string, serialNumber: string): Promise<number>;
 }
 
 export function notifyApplePass(options: Omit<ApnsOptions, 'passTypeIdentifier'> & {
@@ -122,6 +126,8 @@ export interface GoogleWallet {
   objectId(suffix: string): string;
   ensureClass(definition: { id: string; [key: string]: unknown }): Promise<string>;
   upsertObject(object: { id: string; classId: string; [key: string]: unknown }): Promise<string>;
+  /** Retire a card: only `state` is sent. False when Google never had it (404). */
+  deactivateObject(id: string, state?: 'INACTIVE' | 'EXPIRED'): Promise<boolean>;
   saveLink(objects: Array<{ id: string; classId: string }>, options?: { now?: Date; origins?: string[] }): string;
 }
 

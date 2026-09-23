@@ -89,13 +89,32 @@ function createGoogleWallet({ issuerId, credentials, kind = 'loyalty', request }
     return upsert('Object', object);
   }
 
+  /**
+   * Carte retirée par l'émetteur : Google l'affiche comme expirée et la
+   * range avec les cartes passées. Seul le champ `state` est envoyé, rien
+   * n'est recréé. Renvoie false si la carte n'a jamais été créée chez Google
+   * (personne ne l'avait ajoutée) : il n'y a alors rien à retirer.
+   * @param {string} id  identifiant complet de la carte (voir objectId).
+   * @param {'INACTIVE'|'EXPIRED'} [state='INACTIVE']
+   */
+  async function deactivateObject(id, state = 'INACTIVE') {
+    if (!['INACTIVE', 'EXPIRED'].includes(state)) throw new Error(`État de retrait inconnu : ${state}`);
+    try {
+      await requete({ method: 'PATCH', url: url('Object', id), data: { state } });
+      return true;
+    } catch (error) {
+      if (error?.response?.status === 404) return false;
+      throw error;
+    }
+  }
+
   /** Le lien « Ajouter à Google Wallet » pour des cartes déjà créées. */
   function saveLink(objects, options) {
     const refs = objects.map(({ id, classId }) => ({ id, classId }));
     return `https://pay.google.com/gp/v/save/${signSaveJwt({ [type.jwtKey]: refs }, credentials, options)}`;
   }
 
-  return { classId: idOf, objectId: idOf, ensureClass, upsertObject, saveLink };
+  return { classId: idOf, objectId: idOf, ensureClass, upsertObject, deactivateObject, saveLink };
 }
 
 module.exports = { createGoogleWallet, signSaveJwt };

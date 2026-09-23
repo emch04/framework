@@ -1,6 +1,6 @@
 {
   "name": "@astratra/wallet",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Apple Wallet and Google Wallet loyalty cards: signed passes, live updates, add-to-wallet links.",
   "engines": {
     "node": ">=20"

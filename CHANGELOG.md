@@ -3,6 +3,27 @@
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Chaque package Astratra est versionné indépendamment.
 
+## 2026-09-23 (30) — extraction Barber Clean : carte d'abonnement et retrait des cartes
+
+`loyalty` 0.2.0 et `wallet` 0.2.0, ajouts seulement : rien ne change pour ce
+qui existait. Un caret sur une `0.x` ne franchit pas la mineure : passer à
+`^0.2.0` pour en profiter. `create-astratra-app` n'installe aucun des deux,
+son plancher ne bouge pas.
+
+### Ajoute
+
+- `@astratra/loyalty` 0.2.0 — `createMonthlyPass` : N passages par mois
+  calendaire dans le fuseau du commerce (obligatoire), remise à zéro le 1er
+  sans report, quota atteint = passage payant, double scan à confirmer
+  (2 minutes par défaut), carte non active = rien de compté. Le QR porte un
+  jeton secret à préfixe reconnaissable ; le numéro tapé au comptoir
+  (« a901 ») est reconnu. `SCAN_DECISIONS`.
+- `@astratra/wallet` 0.2.0 — retirer une carte déjà ajoutée : `voided` dans
+  `build()` (Apple la grise), `deactivateObject(id)` chez Google (seul l'état
+  est envoyé ; `false` si la carte n'a jamais été créée, rien n'est recréé),
+  `forgetPass(passType, serial)` sur les deux registres d'appareils. Le README
+  explique l'ordre à respecter côté Apple.
+
 ## 2026-09-22 (29) — extraction Barber Clean : fidélité et cartes Wallet
 
 `pdf` 0.2.0 (ajouts seulement) ; nouveaux paquets en 0.1.0.

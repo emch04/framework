@@ -106,6 +106,28 @@ describe('GlassButton', () => {
     expect(getByRole('button').getAttribute('aria-disabled')).toBe('true');
   });
 
+  test('the press moves on springs: down to the pressed depth, back to rest', () => {
+    const { getByRole } = render(h(ui.GlassButton, { onPress: () => {}, accessibilityLabel: 'Go' }, 'x'));
+    globalThis.__springs = [];
+    fireEvent.mouseDown(getByRole('button'));
+    fireEvent.mouseUp(getByRole('button'));
+    expect(globalThis.__springs).toEqual([1, 0]);
+    expect(getByRole('button').getAttribute('data-style')).not.toContain('0.96');
+  });
+
+  test('on Android the ripple is the press: nothing springs', () => {
+    globalThis.__platform = 'android';
+    try {
+      const { getByRole } = render(h(ui.GlassButton, { onPress: () => {}, accessibilityLabel: 'Go' }, 'x'));
+      globalThis.__springs = [];
+      fireEvent.mouseDown(getByRole('button'));
+      fireEvent.mouseUp(getByRole('button'));
+      expect(globalThis.__springs).toEqual([]);
+    } finally {
+      globalThis.__platform = undefined;
+    }
+  });
+
   test('a pill has no fixed width, a circle does', () => {
     const { container, rerender } = render(h(ui.GlassButton, { size: 40 }, 'x'));
     expect(style(byRn(container, 'GlassView')[0])).toMatchObject({ width: 40, height: 40, borderRadius: 20 });

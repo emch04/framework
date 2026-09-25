@@ -63,6 +63,9 @@ function host(name, tag = 'div') {
     }, []); // once, after mount: a layout pass, not a subscription
     const attrs = hostProps(name, props);
     if (onPress) attrs.onClick = () => (disabled ? undefined : onPress());
+    /* The finger down and up, as a mouse press. */
+    if (props.onPressIn) attrs.onMouseDown = () => (disabled ? undefined : props.onPressIn());
+    if (props.onPressOut) attrs.onMouseUp = () => (disabled ? undefined : props.onPressOut());
     if (props.onScroll) {
       attrs.onScroll = () =>
         props.onScroll({

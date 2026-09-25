@@ -8,7 +8,7 @@
  * order: the tint, the highlight, then the content. The content goes ABOVE
  * the highlight — a white veil over the icon would dim it.
  */
-const { h, RN, LinearGradient, getGlassMode, useScheme } = require('./runtime');
+const { h, RN, LinearGradient, getGlassMode, useScheme, Reanimated, AnimatedView, useReducedMotion } = require('./runtime');
 const { GlassSurface } = require('./GlassSurface');
 const { glassButtonMaterial, glassButtonTint } = require('../logic/glass');
 
@@ -31,9 +31,15 @@ const control = {
   paddingHorizontal: 12
 };
 
+const { useAnimatedStyle, useSharedValue, withSpring } = Reanimated;
+
 /* The press is iOS's gesture; on Android the ripple is enough, and both
-   together make a button that jerks. */
-const PRESSED = { opacity: 0.75, transform: [{ scale: 0.96 }] };
+   together make a button that jerks. It moves, never jumps: the finger sinks
+   the content on a spring with no bounce, the release brings it back on a
+   short one that overshoots by a hair. With "Reduce Motion" it only dims. */
+const PRESSED = { opacity: 0.75, scale: 0.96 };
+const PRESS_IN = { stiffness: 600, damping: 2 * Math.sqrt(600), mass: 1 };
+const RELEASE = { stiffness: 380, damping: 20, mass: 1 };
 
 function GlassButton({
   children,
@@ -53,6 +59,20 @@ function GlassButton({
   const mode = getGlassMode();
   const material = glassButtonMaterial({ mode, scheme, tinted: Boolean(tint) });
   const android = RN.Platform.OS === 'android';
+  const reduceMotion = useReducedMotion();
+  /* 0 at rest, 1 under the finger. */
+  const press = useSharedValue(0);
+  const pressed = useAnimatedStyle(() => {
+    const depth = Math.min(Math.max(press.value, 0), 1);
+    return {
+      opacity: 1 - (1 - PRESSED.opacity) * depth,
+      transform: [{ scale: reduceMotion ? 1 : 1 - (1 - PRESSED.scale) * press.value }]
+    };
+  });
+  const sink = (to, spring) => {
+    if (android) return;
+    press.value = withSpring(to, spring);
+  };
   return h(
     GlassSurface,
     {
@@ -94,6 +114,8 @@ function GlassButton({
         hitSlop: 6,
         onPress,
         onLongPress,
+        onPressIn: () => sink(1, PRESS_IN),
+        onPressOut: () => sink(0, RELEASE),
         /* Without it the button had no touch feedback at all on Android. The
            ripple is light on a tinted button, dark on a light one. */
         android_ripple: {
@@ -101,15 +123,14 @@ function GlassButton({
           borderless: true,
           foreground: true
         },
-        style: ({ pressed }) => [
+        style: [
           control,
           /* With no fill of its own, iOS casts this shadow onto the silhouette
              of the icon and text only: the glow that lifts them out. */
-          material.glow,
-          pressed && !android ? PRESSED : null
+          material.glow
         ]
       },
-      children
+      h(AnimatedView, { style: [control, pressed] }, children)
     )
   );
 }

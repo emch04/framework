@@ -3,6 +3,18 @@
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Chaque package Astratra est versionné indépendamment.
 
+## 2026-09-25 (31) — native-ui : le bouton en verre s'enfonce sur un ressort
+
+`native-ui` 0.1.1, correctif : rien ne change dans l'API. `^0.1.0` l'installe.
+
+### Corrige
+
+- `@astratra/native-ui` 0.1.1 — `GlassButton` : sur iOS, le contenu sautait
+  d'un coup à 0,96 et 0,75 d'opacité au toucher. Il s'enfonce maintenant sur
+  un ressort sans rebond et revient sur un ressort court qui dépasse d'un
+  cheveu (Reanimated, sur le fil UI). « Réduire les animations » : il pâlit
+  seulement. Android garde l'onde seule, comme avant.
+
 ## 2026-09-23 (30) — extraction Barber Clean : carte d'abonnement et retrait des cartes
 
 `loyalty` 0.2.0 et `wallet` 0.2.0, ajouts seulement : rien ne change pour ce

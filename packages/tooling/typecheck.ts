@@ -34,8 +34,41 @@ import {
   runAuditSecrets,
   runCli,
   runDeploy,
-  runTests
+  runTests,
+  ToolingError,
+  acquireLock,
+  analysePm2,
+  applyVersionBump,
+  authorizedKeysLine,
+  backupAgeDays,
+  buildAltoolCommand,
+  buildEasBuildArgs,
+  buildRemoteDeployArgs,
+  buildSshInvocation,
+  checkAscKey,
+  checkHealth,
+  computeFingerprint,
+  createAscToken,
+  createGooglePlayClient,
+  decideVersionBump,
+  findTrackedSecrets,
+  generateDispatcherScript,
+  loadAscCredentials,
+  loadServiceAccount,
+  parseMarkers,
+  pm2ReloadCommand,
+  resolveDispatchAction,
+  runDispatchGenerate,
+  runHealth,
+  runProcess,
+  runPublish,
+  runPublishFingerprint,
+  runRemoteDeploy,
+  shellQuote,
+  signJwt,
+  waitForBuild
 } from '@astratra/tooling';
+import type { DispatchConfig, PublishResult, RemoteDeployConfig } from '@astratra/tooling';
 
 const rootDir = '.';
 const config = mergeConfig(DEFAULT_CONFIG, {
@@ -112,3 +145,54 @@ assertNoForbiddenTerms('text', ['acme']);
 const fileReport = findForbiddenTermsInFiles({ dirs: ['content'], terms: ['acme'] });
 const scanned: number = fileReport.fileCount;
 void scanned;
+
+/* ---- publishing, remote deploy, dispatcher ---- */
+
+const decision = decideVersionBump({ current: 'a', published: null });
+const mustBump: boolean = decision.bump;
+void mustBump;
+computeFingerprint('.', { compute: async () => ({ hash: 'x' }) });
+applyVersionBump('.', 'patch');
+buildEasBuildArgs({ platform: 'ios', profile: 'production' });
+waitForBuild({ buildId: 'b', view: async () => ({ status: 'FINISHED', url: 'u', buildNumber: '1', appVersion: null }) });
+signJwt({ algorithm: 'ES256', header: { kid: 'K' }, payload: { aud: 'x' }, privateKey: 'pem' });
+createAscToken({ keyId: 'ABCDE12345', issuerId: 'uuid', privateKey: 'pem' });
+const credentials = loadAscCredentials({ envFile: '~/.appstoreconnect/app.env' });
+checkAscKey({ credentials, bundleId: 'com.example.app' });
+buildAltoolCommand({ filePath: 'a.ipa', keyId: credentials.keyId, issuerId: credentials.issuerId });
+const play = createGooglePlayClient({ packageName: 'com.example.app', serviceAccount: loadServiceAccount({ path: 'sa.json' }) });
+play.uploadBundle({ filePath: 'a.aab', track: 'internal', releaseStatus: 'completed' });
+runPublish(rootDir, { publish: { projectDir: 'mobile', android: { packageName: 'com.example.app' } } }, { target: 'all' })
+  .then((published: PublishResult) => published.results.map((entry) => entry.platform));
+runPublishFingerprint(rootDir, {}, { record: true });
+
+const remote: RemoteDeployConfig = {
+  host: 'vps',
+  appDir: '/srv/app',
+  pm2: { ecosystem: 'ecosystem.config.cjs', only: ['api'] },
+  health: { internal: ['http://127.0.0.1:3000/health'], public: ['https://example.com/health'] }
+};
+runRemoteDeploy(rootDir, { deploy: { steps: [], modes: {}, remote } }, { sleep: async () => {} });
+runDeploy(rootDir, config, { remote: true });
+runHealth(rootDir, { deploy: { steps: [], modes: {}, remote } });
+buildRemoteDeployArgs(remote, 'abcdef1');
+buildSshInvocation({ host: 'vps', args: ['a'] });
+parseMarkers('@@astratra result=deployed').result;
+pm2ReloadCommand({ ecosystem: 'eco.cjs' });
+checkHealth({ url: 'http://127.0.0.1/health', attempts: 3 });
+analysePm2('[]', ['api']);
+backupAgeDays('2026-09-28 ok');
+findTrackedSecrets(['.env']);
+acquireLock('/tmp/x.lock').release();
+runProcess('git', ['status'], { quiet: true }).then((result) => result.stdout);
+shellQuote("it's");
+
+const dispatch: DispatchConfig = { statusAction: 'etat', actions: [{ name: 'deployer', cwd: '/srv', command: ['npx', 'astratra', 'deploy', '--remote'] }] };
+generateDispatcherScript(dispatch);
+resolveDispatchAction('deployer', ['deployer']);
+authorizedKeysLine({ scriptPath: '/usr/local/bin/actions.sh', publicKey: 'ssh-ed25519 AAAA key' });
+runDispatchGenerate(rootDir, { dispatch }, { out: 'actions.sh' });
+
+const failure = new ToolingError('X', 'message', 400);
+const failureCode: string = failure.code;
+void failureCode;

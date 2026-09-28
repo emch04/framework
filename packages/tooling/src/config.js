@@ -39,8 +39,14 @@ const DEFAULT_CONFIG = {
   },
   deploy: {
     steps: [],
-    modes: {}
-  }
+    modes: {},
+    // Full push -> pull -> reload -> health -> rollback flow, see commands/deployRemote.js.
+    remote: null
+  },
+  // App-store publishing (EAS build, Google Play, App Store Connect), see commands/publish.js.
+  publish: null,
+  // Forced-command script for a restricted SSH key, see dispatch/dispatcher.js.
+  dispatch: null
 };
 
 function isPlainObject(value) {

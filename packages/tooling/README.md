@@ -16,7 +16,14 @@ astratra audit:routes  [--dir=<path>]        # détecte les routes Express *.rou
 astratra audit:i18n    [--dir=<path>]        # détecte les incohérences de clés de traduction entre langues
 astratra audit:deps    [--severity=<level>]  # relaie "npm audit" et échoue si une dépendance a une CVE >= seuil
 astratra test                                # lance le script 'test' de chaque workspace et agrège le résultat
-astratra deploy [--mode=<name>]              # exécute les étapes de déploiement définies dans votre propre config — aucune logique de déploiement intégrée
+astratra deploy [--mode=<name>]              # exécute les étapes de déploiement définies dans votre propre config
+astratra deploy --remote  (ou deploy:remote)  # déploiement git complet vers un serveur (voir « Déploiement distant »)
+astratra deploy:health                       # santé du serveur : URLs publiques et internes, pm2, âge de la dernière sauvegarde
+astratra publish <ios|android|all|update>    # build EAS, montée de version auto, envoi Google Play / App Store Connect
+astratra publish:fingerprint [--record]      # compare l'empreinte native à la dernière publiée
+astratra publish:upload --platform=<p> --file=<archive>   # envoie un .aab/.ipa déjà construit
+astratra publish:check-ios                   # vérifie la clé App Store Connect (un appel signé, rien de construit)
+astratra dispatch:generate [--out=<file>] [--key=<file.pub>]   # script de commande forcée SSH + ligne authorized_keys
 ```
 
 Chaque commande retourne un exit code non-zéro en cas de findings/échecs —
@@ -51,10 +58,129 @@ seuil configurable au lieu du tout-ou-rien de npm.
 }
 ```
 
-`deploy` est un orchestrateur, pas un mécanisme de déploiement : il exécute
-simplement les commandes shell que vous listez, dans l'ordre, et s'arrête au
-premier échec. Il ne connaît ni pm2, ni Docker, ni aucun VPS précis — cette
-logique reste dans votre propre projet.
+`deploy` sans option exécute les commandes shell que vous listez, dans
+l'ordre, et s'arrête au premier échec. Une étape peut porter son propre `cwd`,
+un `env` et un `logFile` (sortie longue envoyée dans un fichier).
+
+## Déploiement distant (`deploy --remote`)
+
+Aucun hôte, utilisateur, port ni nom pm2 n'est écrit dans le package : tout
+vient de `deploy.remote`.
+
+```json
+{
+  "deploy": {
+    "remote": {
+      "host": "mon-vps",
+      "appUser": "app", "appDir": "/home/app/app", "nodeDir": "/home/app/node",
+      "branch": "main",
+      "preSteps": [{ "name": "tests serveur", "command": "npm test", "cwd": "apps/server", "logFile": ".deploy/tests.log" }],
+      "depsPattern": "^(package-lock\\.json|apps/server/package\\.json)$",
+      "installCommand": "npm ci --omit=dev --workspace server --include-workspace-root=false",
+      "pm2": { "ecosystem": "deploy/ecosystem.config.cjs" },
+      "health": {
+        "internal": ["http://127.0.0.1:3100/health", "http://127.0.0.1:3101/health"],
+        "public": ["https://api.example.com/health"]
+      },
+      "allowTrackedFiles": []
+    }
+  }
+}
+```
+
+Dans l'ordre : verrou (un seul déploiement à la fois ; le verrou d'un
+processus mort est repris), refus d'un arbre non commité, refus d'une autre
+branche que `branch`, refus d'un fichier secret suivi par git (`.env`,
+`.env.*` sauf `.example/.sample/.template`, clés `.p8/.pem/.p12/.jks/.keystore`,
+`id_rsa`…, JSON de compte de service — `secretPatterns` remplace la liste,
+`allowTrackedFiles` excepte un chemin précis), `preSteps` (les tests), `git
+push`, vérification que `HEAD` est bien `remote/branch`, puis sur le serveur
+(`ssh host bash -s`, script sur l'entrée standard, valeurs en arguments
+quotés) : `git fetch` + `reset --hard <commit>`, installation seulement si un
+fichier de dépendances a bougé, rechargement, santé interne avec relances, et
+**retour au commit précédent** sur toute panne (installation, rechargement ou
+santé), dépendances réinstallées si besoin. Enfin la santé publique, depuis la
+machine locale. Codes : `DEPLOY_DIRTY_TREE`, `DEPLOY_WRONG_BRANCH`,
+`DEPLOY_SECRET_TRACKED`, `DEPLOY_PRESTEP_FAILED`, `DEPLOY_PUSH_FAILED`,
+`DEPLOY_TARGET_NOT_PUSHED`, `DEPLOY_ROLLED_BACK`, `DEPLOY_ROLLBACK_FAILED`,
+`DEPLOY_REMOTE_FAILED`, `DEPLOY_SSH_FAILED`, `DEPLOY_PUBLIC_UNHEALTHY`,
+`DEPLOY_LOCKED`.
+
+`deploy:health` lit la même section, plus `status` :
+`{ "pm2Apps": ["api", "ai"], "backupLog": "/home/app/backup.log", "backupPattern": "backup sent", "backupMaxAgeDays": 1 }`.
+
+## Publication mobile (`publish`)
+
+```json
+{
+  "publish": {
+    "appName": "MonApp",
+    "projectDir": "apps/mobile",
+    "fingerprintFile": "scripts/.empreinte-native-publiee",
+    "versionBump": "patch",
+    "eas": { "profile": "production", "channel": "production" },
+    "downloadsDir": "~/Downloads",
+    "android": { "packageName": "com.exemple.app", "track": "internal", "serviceAccountPath": "play-service-account.json" },
+    "ios": { "ascEnvFile": "~/.appstoreconnect/monapp.env", "bundleId": "com.exemple.app", "fallback": "transporter" }
+  }
+}
+```
+
+- **Version automatique** : l'empreinte native (`@expo/fingerprint`, pair
+  optionnel, ou `fingerprint.command`) est comparée à celle du dernier build
+  publié ; si elle diffère, `package.json` (et `package-lock.json`) montent
+  d'un cran. À utiliser avec `runtimeVersion: { policy: "appVersion" }` —
+  un avertissement s'affiche sinon.
+- **Android** : JWT RS256 signé avec `node:crypto`, puis édition Google Play :
+  création → envoi du `.aab` → piste → validation ; une édition ouverte avant
+  une panne est supprimée. Codes `PLAY_KEY_MISSING`, `PLAY_KEY_INVALID`,
+  `PLAY_TOKEN_REFUSED`, `PLAY_EDIT_FAILED`, `PLAY_UPLOAD_FAILED`,
+  `PLAY_TRACK_FAILED`, `PLAY_COMMIT_FAILED`, `PLAY_NETWORK`.
+  `"upload": "manual"` ouvre la Play Console à la place.
+- **iOS** : la clé (`ASC_KEY_ID`, `ASC_ISSUER_ID` lus dans le fichier — lu,
+  jamais exécuté — ou l'environnement ; `AuthKey_<id>.p8` cherché dans les
+  dossiers d'altool) est vérifiée par un appel ES256 à `/v1/apps` **avant**
+  le build, puis `xcrun altool --upload-app` envoie le `.ipa` (une erreur
+  `ITMS-` fait échouer même si altool sort en 0). Sans clé : Transporter
+  s'ouvre avec le fichier (`fallback: "none"` pour échouer).
+- **update** : `eas update` seul, message = dernier commit si absent.
+- `all` s'arrête à la première plateforme en échec ; l'empreinte est
+  enregistrée dès qu'une plateforme est passée.
+
+Aucun secret n'est affiché ni journalisé : clés par chemin de fichier ou nom de
+variable d'environnement, jeton Google et identifiants Apple masqués dans les
+erreurs et la sortie d'altool.
+
+## Commandes à distance (`dispatch:generate`)
+
+Produit le script d'une clé SSH à commande forcée : la clé ne peut lancer
+que les actions listées.
+
+```json
+{
+  "dispatch": {
+    "installPath": "/Users/moi/bin/actions-distantes.sh",
+    "publicKeyFile": "keys/iphone.pub",
+    "logDir": "~/Library/Logs/actions-distantes",
+    "path": ["/opt/homebrew/bin", "/usr/bin", "/bin"],
+    "notify": "macos",
+    "statusAction": "etat",
+    "actions": [
+      { "name": "deployer", "cwd": "~/projets/app", "command": ["npx", "astratra", "deploy", "--remote"] },
+      { "name": "sante", "cwd": "~/projets/app", "command": ["npx", "astratra", "deploy:health"], "background": false }
+    ]
+  }
+}
+```
+
+Le nom reçu (`$SSH_ORIGINAL_COMMAND`) doit valoir `^[a-z][a-z0-9-]{0,63}$`
+en entier, sinon il est **refusé** (jamais « nettoyé » en un nom valide), puis
+égaler une entrée d'un `case` figé. Les actions longues partent en arrière-plan
+avec verrou par action (repris si son processus est mort, libéré même si le
+dossier manque), journal horodaté et notification ; `etat` montre la fin de
+chaque journal. La ligne `authorized_keys` produite :
+`command="…",no-port-forwarding,no-pty,no-agent-forwarding,no-X11-forwarding <clé>`.
+Rien n'est installé dans `~/.ssh` : la ligne est affichée.
 
 ## Gardes de test
 

@@ -3,6 +3,82 @@
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Chaque package Astratra est versionné indépendamment.
 
+## 2026-09-28 (33) — extraction Oracle + Tertius : voix, direct, recherche, modèles, publication
+
+Nouveaux paquets `@astratra/rag` 0.1.0, `@astratra/live` 0.1.0 et
+`@astratra/models` 0.1.0. `create-astratra-app` ne les installe pas.
+
+### Ajoute
+
+- `@astratra/rag` (nouveau) — découpage par paragraphes (titres gardés, groupes
+  de paragraphes, chevauchement, identifiants stables), normalisation texte,
+  HTML et Markdown, vecteurs injectés marqués de leur modèle (recherche refusée
+  entre deux espaces), BM25 + sens fusionnés (RRF pondéré), seuil de similarité,
+  plafond par document, reclasseur optionnel borné dans le temps, masquage avant
+  tout fournisseur extérieur, vérification des sources (appuyé, contredit, non
+  étayé), indexation incrémentale et continue avec verrou injecté.
+- `@astratra/live` (nouveau) — appel vocal en direct : session serveur
+  (authentification, interruption, délais), adaptateur Gemini Live, mode
+  confidentiel local bâti sur `@astratra/voice`, outils de `@astratra/ai` avec
+  confirmation à voix haute, garde d'entrée et de sortie, minutes comptées avec
+  avertissement, reprise d'une conversation seulement si elle a servi dans la
+  fenêtre (30 min par défaut), protocole et états de l'écran d'appel.
+- `@astratra/models` (nouveau) — service local de modèles pour VPS sans carte
+  graphique (vecteurs, reclasseur, NLI, entités, transcription), jeton comparé
+  en temps constant, limites de taille, de file et de mémoire ; client Node qui
+  rend des codes au lieu de lever ; générateurs pm2 et systemd.
+
+### Change
+
+- `@astratra/voice` 0.2.0 — chaîne de fournisseurs avec rotation des clés et
+  repos après quota, découpage de la voix, garde anti-écho, silence de fin,
+  détection des transcriptions douteuses (un texte vide l'est), règle du mode
+  confidentiel.
+- `@astratra/tooling` 1.3.0 — `astratra publish` (empreinte native, montée de
+  version, Google Play par l'API, App Store Connect), `deploy --remote` avec
+  retour arrière et message fidèle, `deploy:health`, `dispatch:generate`.
+- `@astratra/ai` 1.4.0 — un disjoncteur par fournisseur, masquage réversible
+  avant tout fournisseur ou outil extérieur, passages en langue étrangère
+  marqués, registre des sources, limite de demandes, fournisseur compatible
+  OpenAI.
+- `@astratra/credentials` 0.4.0 — sonde de solde des clés (adaptateur Serper).
+- `@astratra/privacy` 0.3.0 — consentement versionné par usage, garde à codes,
+  client avec copie locale.
+- `@astratra/native` 0.3.0 et `@astratra/native-ui` 0.2.0 — sources d'image
+  qui n'envoient jamais le jeton hors de l'origine de l'app, image à ses
+  proportions, lumière d'attente, visionneuse plein écran.
+- `create-astratra-app` 1.6.0 — planchers relevés sur les versions publiées :
+  `@astratra/ai` ^1.4.0, `@astratra/native` ^0.3.0 (gabarit mobile), briques
+  `@astratra/credentials` ^0.4.0 et `@astratra/privacy` ^0.3.0. À publier en
+  dernier.
+
+## 2026-09-28 (32) — extraction Oracle + Tertius : les souvenirs d'un assistant
+
+Nouveau paquet `@astratra/memory` 0.1.0. Aucun autre paquet ne change de
+version ; `create-astratra-app` ne l'installe pas.
+
+### Ajoute
+
+- `@astratra/memory` (nouveau) — les souvenirs par personne d'un assistant
+  d'IA, extraits d'Oracle (Scolaris, MongoDB) et de Tertius (Postgres), le
+  meilleur des deux. Un souvenir vit dans un lieu `{ ownerId, scope }` ;
+  stockage, vecteurs, modèle, masquage, chiffrement, horloge et identifiants
+  injectés, magasin en mémoire fourni avec sa suite de contrat
+  (`runStoreContract`) pour prouver un adaptateur. Refus rendus en codes,
+  jamais en phrases ; règles de contenu injectées (`patternRule`). Nom d'une
+  autre personne refusé en mots entiers ; à la modification, un nom que le
+  souvenir portait déjà reste permis. Genre et importance lus comme les
+  modèles les envoient (majuscules, alias, « 4 », 4,6). Correction = nouvelle
+  version, `undo` rend l'ancienne ; `forget` efface aussi les versions
+  antérieures. Rappel hybride sens + mots (même source de vecteurs
+  seulement), repli sur les mots et la récence sans vecteurs. Consolidation
+  après conversation qui ne lève jamais, une fois par conversation, rejouée
+  après un échec. Portrait coupé sur un souvenir entier. Voir, mettre en
+  pause, annuler et effacer restent possibles IA coupée
+  (`createMemoryHandlers`, `PRIVACY_OPERATIONS`). Outils `remember`,
+  `recall`, `update_memory`, `forget` au format du registre de
+  `@astratra/ai`.
+
 ## 2026-09-25 (31) — native-ui : le bouton en verre s'enfonce sur un ressort
 
 `native-ui` 0.1.1, correctif : rien ne change dans l'API. `^0.1.0` l'installe.

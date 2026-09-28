@@ -22,7 +22,7 @@ const FULLSTACK_ONLY = new Set(['client', 'prerender']);
 const BRICKS = {
   credentials: {
     package: '@astratra/credentials',
-    version: '^0.3.0',
+    version: '^0.4.0',
     summary: 'clés de service chiffrées en base, modifiables sans redémarrage',
     file: 'api/bricks/credentials.js',
     contents: () => `import { createFieldCipher } from '@astratra/security';
@@ -176,7 +176,7 @@ export const webhook = createWebhookHandler({
 
   privacy: {
     package: '@astratra/privacy',
-    version: '^0.2.0',
+    version: '^0.3.0',
     summary: 'droit d’accès, droit à l’oubli, nettoyage des journaux',
     file: 'api/bricks/privacy.js',
     contents: () => `import {

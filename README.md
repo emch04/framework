@@ -30,9 +30,11 @@ commande.
 | Package | Rôle |
 |---|---|
 | [`@astratra/core`](packages/core/README.md) | réponses API, gestion d'erreurs, logs, request id, config env |
-| [`@astratra/tooling`](packages/tooling/README.md) | CLI : audit secrets/routes/i18n, lanceur de tests, orchestrateur de déploiement |
+| [`@astratra/tooling`](packages/tooling/README.md) | CLI : audit secrets/routes/i18n, lanceur de tests, orchestrateur de déploiement ; publication mobile sans question (App Store, Google Play), déploiement distant avec retour arrière, commandes SSH forcées |
 | [`@astratra/security`](packages/security/README.md) | primitives JWT/RBAC, rate limiting (mémoire ou Redis optionnel), CSP configurable, WAF heuristique, WebAuthn/passkeys, signature HMAC entre services, journal d'audit chaîné |
 | [`@astratra/ai`](packages/ai/README.md) | routing IA multi-provider avec quotas/fallback/Redis optionnel, registre d'outils, boucle d'agent, sas de confirmation humaine, repli déterministe |
+| [`@astratra/memory`](packages/memory/README.md) | souvenirs par personne d'un assistant d'IA : stockage, vecteurs et modèle injectés, rappel hybride sens + mots, doublons fusionnés, corrections annulables, consolidation après conversation, portrait, voir/effacer même IA coupée, outils pour `@astratra/ai` |
+| [`@astratra/rag`](packages/rag/README.md) | recherche dans des documents pour un assistant d'IA : découpage par paragraphes, vecteurs injectés marqués de leur modèle (jamais deux espaces mélangés), recherche mixte mots + sens, reclasseur optionnel borné dans le temps, vérification des sources, indexation continue |
 | [`@astratra/credentials`](packages/credentials/README.md) | clés de service chiffrées en base, éditables depuis l'interface, sans redémarrage : catalogue, garde valeur réelle/test, code de déverrouillage, hydratation de `process.env` |
 | [`@astratra/entitlements`](packages/entitlements/README.md) | qui a le droit de quoi : plans et fonctionnalités, gardes de facturation et de statut, matrice écran/rôle, isolation par locataire qui échoue fermée, invitations par lien |
 | [`@astratra/i18n-server`](packages/i18n-server/README.md) | traduction des messages renvoyés par l'API (la clé est la phrase source), résolution de langue, audit de lisibilité des messages d'erreur |
@@ -42,13 +44,15 @@ commande.
 | [`@astratra/payments`](packages/payments/README.md) | le tuyau des webhooks de paiement : signature sur corps brut, protection contre les rejeux, et les réponses qui empêchent un prestataire de relancer pendant des jours |
 | [`@astratra/privacy`](packages/privacy/README.md) | droit d'accès, droit à l'oubli par approbation humaine, anonymisation qui préserve les dossiers à conserver, nettoyage des journaux |
 | [`@astratra/resilience`](packages/resilience/README.md) | disjoncteur à sonde unique, cache TTL qui se dégrade au lieu d'échouer, relance avec recul et brouillage |
+| [`@astratra/models`](packages/models/README.md) | service local de modèles pour un VPS sans carte graphique (vecteurs, reclasseur, NLI, entités, transcription) avec jeton et limites, son client Node qui ne lève jamais, générateurs pm2 et systemd |
 | [`@astratra/closure`](packages/closure/README.md) | clôture de période volontaire : liste à points bloquants et reconnus, archive nettoyée de tout identifiant, sections en échec nommées |
 | [`@astratra/notify`](packages/notify/README.md) | messages sortants — e-mail, SMS, push : transport injecté, ne lève jamais, en-têtes protégés de l'injection, abonnements morts rendus pour élagage |
 | [`@astratra/native`](packages/native/README.md) | plomberie mobile sans le moteur mobile : session dans le trousseau, verrou biométrique, notifications natives et veille au premier plan, retour de paiement — adaptateurs injectés, testable en Node |
 | [`@astratra/native-ui`](packages/native-ui/README.md) | kit d'interface mobile React Native / Expo : verre liquide d'Apple sur iOS et surface visible calibrée sur Android, boutons en verre, cartes pâles, barres qui se replient au défilement, barre d'onglets à pastille, en-tête repliable, rendu Markdown des réponses d'IA — règles pures testables en Node (`/logic`) |
 | [`@astratra/app-version`](packages/app-version/README.md) | prévenir d'une nouvelle version dans les magasins : route publique des versions, une annonce par version (réservée avant l'envoi, en journée, aux seuls téléphones en retard, dans la langue de chacun, éteinte par défaut), veilleur côté téléphone |
 | [`@astratra/app-guide`](packages/app-guide/README.md) | guide d'usage pour un assistant d'IA, généré depuis la configuration des écrans de l'appli : filtré par rôle, détection des questions « comment faire », recherche bornée, contrôles de couverture routes et clés de traduction |
-| [`@astratra/voice`](packages/voice/README.md) | finition et cache de la synthèse vocale côté serveur : arguments Piper et ffmpeg, clé de cache versionnée partagée serveur/téléphone, exécution et stockage injectés |
+| [`@astratra/voice`](packages/voice/README.md) | synthèse vocale côté serveur (Piper, ffmpeg, cache versionné), chaîne de fournisseurs avec rotation des clés, découpage de la voix, garde anti-écho, transcription locale et détection des transcriptions douteuses, règle du mode confidentiel |
+| [`@astratra/live`](packages/live/README.md) | appel vocal en direct avec une IA : session serveur, adaptateur temps réel injecté (Gemini Live fourni), mode confidentiel local, outils avec confirmation à voix haute, minutes comptées, reprise de conversation bornée dans le temps, protocole et états de l'écran d'appel côté client |
 | [`@astratra/client`](packages/client/README.md) | plomberie côté client, agnostique : rafraîchissement 401 à vol unique, garde de route à liste publique, règles de mot de passe, file hors ligne |
 | [`@astratra/saas-kit`](packages/saas-kit/README.md) | starter : `createSaasApp()` assemblant users/auth/settings/notifications/dashboard, validation d'entrée intégrée |
 | [`@astratra/store-mongo`](packages/store-mongo/README.md) | adapter de persistance réel (MongoDB/Mongoose) pour `usersStore`/`settingsStore` |
@@ -118,6 +122,7 @@ npm install @astratra/core @astratra/security @astratra/ai @astratra/saas-kit
 npm install @astratra/store-mongo mongoose
 npm install @astratra/store-postgres pg
 npm install @astratra/saas-kit-ui react react-dom
+npm install @astratra/memory @astratra/rag @astratra/live @astratra/models
 npm install @astratra/credentials
 npm install @astratra/entitlements
 npm install @astratra/i18n-server
@@ -127,6 +132,7 @@ npm install @astratra/wallet
 npm install @astratra/payments
 npm install @astratra/privacy
 npm install @astratra/resilience
+npm install @astratra/memory
 npm install @astratra/closure
 npm install @astratra/notify
 npm install @astratra/app-version @astratra/app-guide @astratra/voice

@@ -7,7 +7,7 @@
  * through untouched.
  */
 import type { ComponentType, ReactElement, ReactNode } from 'react';
-import type { ColorScheme, GlassMode } from './logic';
+import type { ColorScheme, GlassMode, PictureSize } from './logic';
 
 export * from './logic';
 
@@ -227,3 +227,119 @@ export interface MarkdownViewProps {
 export function MarkdownView(props: MarkdownViewProps): ReactElement | null;
 export function MarkdownTable(props: { header: string[]; rows: string[][] }): ReactElement;
 export const MARKDOWN_STYLES: Readonly<Record<string, NativeStyle>>;
+
+/* ────────────────────────────── Pictures ────────────────────────────── */
+
+/** What an image component takes (React Native's Image or expo-image). */
+export interface ImageSourceLike {
+  uri: string;
+  headers?: Record<string, string>;
+  [prop: string]: unknown;
+}
+
+export interface ImageShimmerProps {
+  /** Width / height of the place held (1: a square). */
+  ratio?: number;
+  borderRadius?: number;
+  colors?: { base?: string; light?: string; caption?: string };
+  /** Read by the screen reader: the app's words ("Drawing the picture"). */
+  accessibilityLabel?: string;
+  caption?: string;
+  captionStyle?: NativeStyle;
+  passMs?: number;
+  scheme?: ColorScheme;
+  style?: NativeStyle;
+  testID?: string;
+}
+export function ImageShimmer(props: ImageShimmerProps): ReactElement;
+
+export interface AutoRatioImageProps {
+  /** A ready source. */
+  source?: ImageSourceLike | null;
+  /** Or a source to fetch; resolving null or rejecting shows the error slot. */
+  load?: () => ImageSourceLike | null | undefined | Promise<ImageSourceLike | null | undefined>;
+  /** Names the picture (required with `load`): a new key starts over. Defaults to `source.uri`. */
+  sourceKey?: string | number;
+  /** React Native's Image by default; expo-image's Image fits. */
+  ImageComponent?: ComponentType<any>;
+  imageProps?: Record<string, unknown>;
+  fit?: 'contain' | 'cover';
+  /** The shape held until the picture is known (1). */
+  initialRatio?: number;
+  minRatio?: number;
+  maxRatio?: number;
+  borderRadius?: number;
+  surfaceColor?: string;
+  /** Replaces the default shimmer while loading; null for none. */
+  placeholder?: ReactNode;
+  loadingLabel?: string;
+  renderError?: (input: { retry: () => void }) => ReactNode;
+  accessibilityLabel?: string;
+  accessibilityHint?: string;
+  onPress?: () => void;
+  onLongPress?: () => void;
+  onLoad?: (size: PictureSize | null) => void;
+  onError?: (error: unknown) => void;
+  onRatio?: (ratio: number) => void;
+  revealMs?: number;
+  scheme?: ColorScheme;
+  style?: NativeStyle;
+  testID?: string;
+}
+export function AutoRatioImage(props: AutoRatioImageProps): ReactElement;
+
+export interface ViewerPicture {
+  /** Stable across renders. */
+  key: string;
+  title?: string;
+  /** Read by the screen reader; defaults to the title. */
+  accessibilityLabel?: string;
+  /** Used when no `resolveSource` is given. */
+  source?: ImageSourceLike;
+  [prop: string]: unknown;
+}
+
+export interface ViewerAction<P extends ViewerPicture = ViewerPicture> {
+  key: string;
+  label: string;
+  icon: ReactNode;
+  /** May resolve a short notice to show ("Saved"); a rejection goes to onActionError. */
+  onPress: (picture: P) => void | string | Promise<void | string | null | undefined>;
+}
+
+export interface ImageViewerProps<P extends ViewerPicture = ViewerPicture> {
+  pictures: readonly P[];
+  /** The picture to open on; null: closed. */
+  start: number | null;
+  onClose: () => void;
+  onIndexChange?: (index: number) => void;
+  resolveSource?: (picture: P) => ImageSourceLike | null | undefined | Promise<ImageSourceLike | null | undefined>;
+  ImageComponent?: ComponentType<any>;
+  imageProps?: Record<string, unknown>;
+  labels: {
+    close: string;
+    share?: string;
+    details?: string;
+    /** "3 of 12": position from 1. */
+    counter?: (position: number, count: number) => string;
+    zoomHint?: string;
+  };
+  icons: {
+    close: ReactNode;
+    share?: ReactNode;
+    details?: ReactNode;
+    detailsActive?: ReactNode;
+    failed?: ReactNode;
+    notice?: ReactNode;
+  };
+  /** The share hook; shown with icons.share. */
+  onShare?: (picture: P) => void | string | Promise<void | string | null | undefined>;
+  actions?: readonly ViewerAction<P>[];
+  onActionError?: (error: unknown, key: string, picture: P) => void;
+  renderDetails?: (picture: P) => ReactNode;
+  /** The safe area (react-native-safe-area-context's insets). */
+  insets?: { top?: number; bottom?: number };
+  onHaptic?: (kind: 'selection' | 'impact' | 'success' | 'failure') => void;
+  testID?: string;
+}
+export function ImageViewer<P extends ViewerPicture>(props: ImageViewerProps<P>): ReactElement;

@@ -1,7 +1,7 @@
 {
   "name": "@astratra/native",
-  "version": "0.2.0",
-  "description": "Mobile plumbing without the mobile runtime: secure token session with an injected keystore, a biometric gate, native push registration and foreground watching, a checkout round-trip that survives a missing native module, network state that only calls a missing interface offline, over-the-air updates applied when nobody is looking, and a bounded on-disk media cache. Adapters injected, so it tests in plain Node.",
+  "version": "0.3.0",
+  "description": "Mobile plumbing without the mobile runtime: secure token session with an injected keystore, a biometric gate, native push registration and foreground watching, a checkout round-trip that survives a missing native module, network state that only calls a missing interface offline, over-the-air updates applied when nobody is looking, a bounded on-disk media cache, and picture sources that send the token to the app's own origin only, with originals kept as files. Adapters injected, so it tests in plain Node.",
   "engines": {
     "node": ">=20"
   },
@@ -30,7 +30,9 @@
     "netinfo",
     "offline",
     "expo-updates",
-    "cache"
+    "cache",
+    "image",
+    "pictures"
   ],
   "license": "MIT",
   "publishConfig": {

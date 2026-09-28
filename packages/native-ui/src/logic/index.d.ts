@@ -201,3 +201,107 @@ export function measureColumns(
 export const ANCHOR_MARGIN: number;
 export function anchorOffset(anchorY: number): number;
 export function reserveBelowQuestion(input: { viewportHeight: number; contentHeight: number; anchorY: number }): number;
+
+/* ─────────────────────────────── Pictures ───────────────────────────── */
+
+export interface PictureSize {
+  width: number;
+  height: number;
+}
+
+/** Past these ratios a picture is shown whole inside a bounded box (0.2 – 5). */
+export const PICTURE_RATIO_LIMITS: Readonly<{ min: number; max: number }>;
+/** 700 ms, from 0.96. */
+export const PICTURE_REVEAL: Readonly<{ durationMs: number; fromScale: number }>;
+/** One pass of the placeholder's light (1600 ms). */
+export const SHIMMER_PASS_MS: number;
+
+export interface ViewerGestures {
+  doubleTapMs: number;
+  zoomIn: number;
+  maxZoom: number;
+  closeDistance: number;
+  closeSpeed: number;
+  pullSlop: number;
+  pullSlant: number;
+  tapSlop: number;
+  chromeFadeMs: number;
+  noticeMs: number;
+  closeMs: number;
+}
+export const VIEWER_GESTURES: Readonly<ViewerGestures>;
+
+export function naturalRatio(
+  size: Partial<PictureSize> | null | undefined,
+  options?: { fallback?: number; min?: number; max?: number }
+): number;
+/** From expo-image's load event or React Native's. */
+export function loadedSize(event: unknown): PictureSize | null;
+export function revealStyle(
+  progress: number,
+  reveal?: { durationMs: number; fromScale: number }
+): { opacity: number; transform: [{ scale: number }] };
+/** '-100%' → '100%'. */
+export function shimmerTranslate(progress: number): string;
+
+export interface Point {
+  x: number;
+  y: number;
+}
+export interface ZoomTransform {
+  scale: number;
+  x: number;
+  y: number;
+}
+export interface TouchLike {
+  pageX: number;
+  pageY: number;
+}
+
+export function isDoubleTap(previousAt: number | null | undefined, now: number, windowMs?: number): boolean;
+export function zoomRect(point: Point, frame: PictureSize, zoom?: number): Point & PictureSize;
+export function panLimits(scale: number, frame: PictureSize): Point;
+export function clampPan(translation: Point, scale: number, frame: PictureSize): Point;
+export function zoomAt(point: Point, frame: PictureSize, scale: number): ZoomTransform;
+export function touchDistance(touches: readonly TouchLike[] | null | undefined): number;
+export function touchCentre(touches: readonly TouchLike[] | null | undefined): Point;
+export function pinchTransform(
+  start: ZoomTransform & { distance: number; focus: Point },
+  distance: number,
+  focus: Point,
+  frame: PictureSize,
+  limits?: { min?: number; max?: number; overshoot?: number }
+): ZoomTransform;
+export function settleTransform(transform: ZoomTransform, frame: PictureSize, limits?: { min?: number; max?: number }): ZoomTransform;
+export function isPullToClose(gesture: { dx: number; dy: number }, zoomed: boolean, rules?: ViewerGestures): boolean;
+export function shouldClose(gesture: { dy: number; vy: number }, rules?: ViewerGestures): boolean;
+export function pullEffect(pull: number, height: number, reduceMotion?: boolean): { backdrop: number; scale: number };
+export function clampIndex(index: number | null | undefined, count: number): number | null;
+export function pageFromOffset(offset: number, width: number, count: number): number;
+
+export interface ArrivingSlot {
+  id: string;
+  /** 'working': on its way; 'ready': its job ended, the picture itself not here yet. */
+  state: 'working' | 'ready';
+}
+export interface PicturesArrivingState {
+  slots: readonly ArrivingSlot[];
+}
+export type PicturesArrivingEvent =
+  | { type: 'started'; id: string }
+  | { type: 'finished'; id: string; ok?: boolean }
+  | { type: 'arrived'; id?: string }
+  | { type: 'ended' }
+  | { type: 'reset' };
+
+export const PICTURES_ARRIVING_EMPTY: PicturesArrivingState;
+/** The same state object when an event changes nothing. */
+export function reducePicturesArriving(
+  state: PicturesArrivingState | null | undefined,
+  event: PicturesArrivingEvent | null | undefined
+): PicturesArrivingState;
+export function picturesArrivingCount(state: PicturesArrivingState | null | undefined): number;
+export function countRunningSteps(
+  steps: ReadonlyArray<{ tool: string; state: string } | null> | null | undefined,
+  tool: string | readonly string[]
+): number;

@@ -15,7 +15,18 @@
  *   __platform ('ios'), __liquidGlass (true), __scheme ('light'),
  *   __windowWidth (390), __reduceMotion (false), __fontScale (1).
  * Recorded calls: __springs (withSpring targets), __links (openURL),
- * __probes (how many times Apple's glass API was probed).
+ * __probes (how many times Apple's glass API was probed), __timings
+ * (withTiming targets), __repeats (withRepeat calls), __cancels
+ * (cancelAnimation calls), __zooms (ScrollView.scrollResponderZoomTo),
+ * __scrolledTo (FlatList.scrollToIndex), __pans (PanResponder configs, in
+ * creation order — a test calls their handlers directly).
+ *
+ * A press carries `{ nativeEvent: { locationX: __tapX, locationY: __tapY } }`.
+ * Image is an <img>: `fireEvent.load` calls onLoad with a React Native event
+ * whose size is `__imageSize` (1600×900 by default), `fireEvent.error` calls
+ * onError. Modal renders its children only while visible. FlatList renders
+ * every item; a DOM `scroll` event on it calls onMomentumScrollEnd at the
+ * offset `__scrollX`.
  */
 const React = require('react');
 
@@ -62,7 +73,12 @@ function host(name, tag = 'div') {
       }
     }, []); // once, after mount: a layout pass, not a subscription
     const attrs = hostProps(name, props);
-    if (onPress) attrs.onClick = () => (disabled ? undefined : onPress());
+    if (onPress) {
+      attrs.onClick = () =>
+        disabled
+          ? undefined
+          : onPress({ nativeEvent: { locationX: globalThis.__tapX ?? 0, locationY: globalThis.__tapY ?? 0 } });
+    }
     /* The finger down and up, as a mouse press. */
     if (props.onPressIn) attrs.onMouseDown = () => (disabled ? undefined : props.onPressIn());
     if (props.onPressOut) attrs.onMouseUp = () => (disabled ? undefined : props.onPressOut());
@@ -87,6 +103,61 @@ function host(name, tag = 'div') {
 const View = host('View');
 const Text = host('Text', 'span');
 
+function Image(props) {
+  const attrs = hostProps('Image', props);
+  attrs.onLoad = () => {
+    const size = globalThis.__imageSize || { width: 1600, height: 900 };
+    if (props.onLoad) props.onLoad({ nativeEvent: { source: { ...size, uri: props.source && props.source.uri } } });
+  };
+  attrs.onError = () => {
+    if (props.onError) props.onError({ nativeEvent: { error: 'failed' } });
+  };
+  return h('img', attrs);
+}
+
+const BaseScrollView = host('ScrollView');
+function ScrollView(props) {
+  React.useImperativeHandle(props.ref, () => ({
+    scrollResponderZoomTo: (rect) => (globalThis.__zooms = globalThis.__zooms || []).push(rect),
+    scrollTo: () => {}
+  }));
+  return h(BaseScrollView, props);
+}
+
+function Modal(props) {
+  if (!props.visible) return null;
+  globalThis.__modal = props;
+  return h('div', hostProps('Modal', props), props.children);
+}
+
+function FlatList(props) {
+  React.useImperativeHandle(props.ref, () => ({
+    scrollToIndex: (options) => (globalThis.__scrolledTo = globalThis.__scrolledTo || []).push(options)
+  }));
+  const attrs = hostProps('FlatList', props);
+  attrs.onScroll = () => {
+    if (props.onMomentumScrollEnd) {
+      props.onMomentumScrollEnd({ nativeEvent: { contentOffset: { x: globalThis.__scrollX ?? 0, y: 0 } } });
+    }
+  };
+  const data = props.data || [];
+  return h(
+    'div',
+    attrs,
+    data.map((item, index) =>
+      h(React.Fragment, { key: props.keyExtractor ? props.keyExtractor(item, index) : index }, props.renderItem({ item, index }))
+    )
+  );
+}
+
+const PanResponder = {
+  create(config) {
+    const pans = (globalThis.__pans = globalThis.__pans || []);
+    pans.push(config);
+    return { panHandlers: { 'data-pan': pans.length - 1 } };
+  }
+};
+
 function reactNative() {
   class AnimatedValue {
     constructor(value) {
@@ -100,7 +171,13 @@ function reactNative() {
     View,
     Text,
     Pressable: host('Pressable'),
-    ScrollView: host('ScrollView'),
+    ScrollView,
+    Image,
+    Modal,
+    FlatList,
+    PanResponder,
+    StatusBar: host('StatusBar'),
+    ActivityIndicator: host('ActivityIndicator'),
     Animated: {
       View,
       Value: AnimatedValue,
@@ -155,6 +232,28 @@ function reanimated() {
     withSpring: (to) => {
       (globalThis.__springs = globalThis.__springs || []).push(to);
       return to;
+    },
+    /* A timing lands at once; its end callback runs, as it would on completion. */
+    withTiming: (to, config, done) => {
+      (globalThis.__timings = globalThis.__timings || []).push({ to, duration: config && config.duration });
+      if (typeof done === 'function') done(true);
+      return to;
+    },
+    withRepeat: (animation, count, reverse) => {
+      (globalThis.__repeats = globalThis.__repeats || []).push({ animation, count, reverse });
+      return animation;
+    },
+    cancelAnimation: (shared) => {
+      (globalThis.__cancels = globalThis.__cancels || []).push(shared);
+    },
+    runOnJS: (fn) => fn,
+    Easing: {
+      linear: (t) => t,
+      quad: (t) => t * t,
+      cubic: (t) => t * t * t,
+      in: (f) => f,
+      out: (f) => f,
+      inOut: (f) => f
     },
     interpolate,
     useReducedMotion: () => Boolean(globalThis.__reduceMotion)

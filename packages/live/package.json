@@ -1,0 +1,16 @@
+{
+  "name": "@astratra/live",
+  "version": "0.1.0",
+  "description": "Injected real-time voice call sessions and client protocol helpers.",
+  "engines": { "node": ">=20" },
+  "main": "src/index.js",
+  "types": "src/index.d.ts",
+  "type": "commonjs",
+  "files": ["src"],
+  "scripts": { "test": "jest --runInBand" },
+  "jest": { "testMatch": ["**/__tests__/**/*.test.js"] },
+  "license": "MIT",
+  "publishConfig": { "access": "public" },
+  "dependencies": { "@astratra/voice": "^0.2.0", "@astratra/ai": "^1.4.0" },
+  "devDependencies": { "jest": "30.4.2" }
+}

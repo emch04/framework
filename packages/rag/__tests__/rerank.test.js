@@ -1,0 +1,11 @@
+const { createReranker } = require('../src');
+const docs = [{ id: 'a', text: 'first passage' }, { id: 'b', title: 'Second', text: 'second passage' }];
+test('disabled by default', async () => { const score = jest.fn(); expect(await createReranker({ score })('q', docs, 0)).toEqual({ status: 'disabled', scores: null }); expect(score).not.toHaveBeenCalled(); });
+test('candidate count and text size are bounded', async () => { const score = jest.fn(async () => [0.7]); await createReranker({ score, maxCandidates: 1, maxTextLength: 5 })('question', docs, 50); expect(score).toHaveBeenCalledWith('quest', ['first']); });
+test('valid scores preserve candidate order', async () => { expect(await createReranker({ score: async () => [0.2, 0.9] })('q', docs, 50)).toEqual({ status: 'applied', scores: [0.2, 0.9] }); });
+test('invalid response degrades', async () => { expect((await createReranker({ score: async () => [0.1] })('q', docs, 50)).status).toBe('invalid'); });
+test('scorer error degrades and logs only a code', async () => { const logger = { warn: jest.fn() }; const result = await createReranker({ score: async () => { throw Error('private text'); }, logger })('q', docs, 50); expect(result.status).toBe('failed'); expect(logger.warn).toHaveBeenCalledWith({ code: 'RERANK_FAILED' }); });
+test('budget expiry is reported', async () => { expect((await createReranker({ score: () => new Promise(() => {}) })('q', docs, 1)).status).toBe('timeout'); });
+test('outside reranker needs mask', async () => { const score = jest.fn(); expect((await createReranker({ score, external: true })('q', docs, 50)).status).toBe('mask_required'); expect(score).not.toHaveBeenCalled(); });
+test('outside reranker masks query and passages', async () => { const score = jest.fn(async () => [0.5, 0.6]); await createReranker({ score, external: true, maskText: () => '[MASK]' })('private', docs, 50); expect(score).toHaveBeenCalledWith('[MASK]', ['[MASK]', '[MASK]']); });
+test('budget includes slow masking before scoring', async () => { const score = jest.fn(); const rerank = createReranker({ score, external: true, maskText: () => new Promise(() => {}) }); expect((await rerank('q', docs, 1)).status).toBe('timeout'); expect(score).not.toHaveBeenCalled(); });

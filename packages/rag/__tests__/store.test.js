@@ -1,0 +1,8 @@
+const { createMemoryVectorStore, runStoreContract, assertVectorStoreContract, cosine, tokenize } = require('../src');
+runStoreContract(createMemoryVectorStore);
+test('async assertion helper covers the same core methods', async () => { await expect(assertVectorStoreContract(createMemoryVectorStore)).resolves.toBeUndefined(); });
+test('BM25 favors title matches over body matches', async () => { const s = createMemoryVectorStore(); await s.replaceSource('s', 'v1', [{ id: 'a', sourceId: 's', title: 'garden', text: 'plain', vector: [1], modelId: 'm' }, { id: 'b', sourceId: 's', title: 'plain', text: 'garden', vector: [1], modelId: 'm' }]); expect((await s.searchKeyword('garden'))[0].id).toBe('a'); });
+test('keyword search removes accents for matching', async () => { const s = createMemoryVectorStore(); await s.replaceSource('s', 'v1', [{ id: 'a', sourceId: 's', text: 'Résumé détaillé', vector: [1], modelId: 'm' }]); expect((await s.searchKeyword('resume'))[0].id).toBe('a'); });
+test('duplicate id across sources is rejected without modifying either', async () => { const s = createMemoryVectorStore(); const doc = { id: 'same', sourceId: 'a', text: 'a', vector: [1], modelId: 'm' }; await s.replaceSource('a', 'v1', [doc]); await expect(s.replaceSource('b', 'v1', [{ ...doc, sourceId: 'b' }])).rejects.toThrow('DUPLICATE_DOCUMENT_ID'); expect(await s.listSourceIds()).toEqual(['a']); });
+test('zero vector has zero cosine and dimension mismatch has null', () => { expect(cosine([0, 0], [1, 0])).toBe(0); expect(cosine([1], [1, 0])).toBeNull(); });
+test('tokenizer handles Unicode and digits', () => { expect(tokenize('École 2026')).toEqual(['ecole', '2026']); });

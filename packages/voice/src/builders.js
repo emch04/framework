@@ -32,6 +32,18 @@ function buildFfmpegArgs(inputPath, outputPath, options = {}) {
   ];
 }
 
+function measuredLoudness(report, target = 'loudnorm=I=-16:TP=-1.5:LRA=11') {
+  const found = /\{[^{}]*"input_i"[^{}]*\}/u.exec(String(report ?? ''));
+  if (!found) return target;
+  try {
+    const values = JSON.parse(found[0]);
+    const numbers = [values.input_i, values.input_tp, values.input_lra, values.input_thresh, values.target_offset].map(Number);
+    if (numbers.some((value) => !Number.isFinite(value))) return target;
+    const [i, tp, lra, thresh, offset] = numbers;
+    return `${target}:measured_I=${i}:measured_TP=${tp}:measured_LRA=${lra}:measured_thresh=${thresh}:offset=${offset}:linear=true`;
+  } catch (_error) { return target; }
+}
+
 function normalizeLanguage(language, fallback = 'default') {
   const value = String(language || '').trim().toLowerCase().replace('_', '-');
   return value ? value.split('-')[0] : fallback;
@@ -97,6 +109,7 @@ module.exports = {
   VOICE_FILTER,
   VOICE_VERSION,
   buildFfmpegArgs,
+  measuredLoudness,
   buildPiperArgs,
   buildVoiceCacheKey,
   mimeTypeForAudio,

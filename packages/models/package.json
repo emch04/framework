@@ -1,0 +1,48 @@
+{
+  "name": "@astratra/models",
+  "version": "0.1.0",
+  "description": "Local CPU model service for servers without GPU (embeddings, reranking, NLI, entities, speech-to-text) and its Node client: optional lazy-loaded models, token auth, request limits, per-endpoint timeouts, retries and circuit breakers, results that degrade instead of throwing, plus pm2/systemd generators and a pinned venv setup script.",
+  "engines": {
+    "node": ">=20"
+  },
+  "main": "src/index.js",
+  "types": "src/index.d.ts",
+  "type": "commonjs",
+  "files": [
+    "src",
+    "server/app.py",
+    "server/backends.py",
+    "server/requirements*.txt",
+    "server/setup-venv.sh",
+    "server/README.md"
+  ],
+  "scripts": {
+    "test": "jest",
+    "test:server": "PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s server/tests",
+    "check:setup": "bash -n server/setup-venv.sh && bash server/setup-venv.sh --check-only"
+  },
+  "jest": {
+    "testMatch": [
+      "**/__tests__/**/*.test.js"
+    ]
+  },
+  "keywords": [
+    "astratra",
+    "models",
+    "embeddings",
+    "reranker",
+    "nli",
+    "ner",
+    "speech-to-text",
+    "onnx",
+    "cpu",
+    "circuit-breaker"
+  ],
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
+  "devDependencies": {
+    "jest": "30.4.2"
+  }
+}

@@ -1,0 +1,5 @@
+# embed, rerank, nli: ONNX Runtime on the CPU (the light set, no torch).
+# Versions pinned from the environment the service was tested in (Python 3.14).
+onnxruntime==1.30.0
+tokenizers==0.23.2
+numpy==2.5.3

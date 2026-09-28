@@ -1,0 +1,4 @@
+# Every model of the service. Install a subset with setup-venv.sh --components.
+-r requirements-onnx.txt
+-r requirements-entities.txt
+-r requirements-transcribe.txt

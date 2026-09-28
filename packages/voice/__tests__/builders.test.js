@@ -4,9 +4,19 @@ const {
   buildFfmpegArgs,
   buildPiperArgs,
   buildVoiceCacheKey,
+  measuredLoudness,
   mimeTypeForAudio,
   voiceCacheSource
 } = require('../src');
+
+test('measured loudness uses valid whole-reading analysis', () => {
+  const report = JSON.stringify({ input_i: -24, input_tp: -3, input_lra: 7, input_thresh: -35, target_offset: 2 });
+  expect(measuredLoudness(report)).toContain('measured_I=-24');
+  expect(measuredLoudness(report)).toContain('linear=true');
+});
+test('invalid loudness analysis uses stable target', () => {
+  expect(measuredLoudness('invalid')).toBe('loudnorm=I=-16:TP=-1.5:LRA=11');
+});
 
 describe('ffmpeg finishing', () => {
   test('keeps the proven EQ, cleanup, AAC size and streaming rules together', () => {

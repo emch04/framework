@@ -1,8 +1,8 @@
 # @astratra/voice
 
-Server-side text-to-speech finishing and caching without a bundled speech
-engine. Piper, ffmpeg, the file system, the clock, and the cache are adapters;
-tests therefore run in plain Node without Piper or ffmpeg installed.
+Speech synthesis, segmentation, echo filtering, local transcription helpers,
+and session privacy policy without bundled models or engines. Providers,
+keys, storage, clock, network, classifiers, and decoders are injected.
 
 ## Pure builders shared by server and client
 
@@ -27,6 +27,8 @@ The default finishing chain is the production-proven mono AAC pipeline:
 64 kb/s, 24 kHz, MP4 fast-start, equalizers at 160/3000/8000 Hz, high-pass,
 de-esser, compressor, and -16 LUFS normalization. `mimeTypeForAudio` reports
 `audio/mp4` for the finished M4A and `audio/wav` for the fallback.
+`measuredLoudness` converts a valid first-pass ffmpeg loudness report into
+second-pass measured parameters and otherwise returns the configured target.
 
 The Piper builder defaults to `length_scale=0.92`,
 `sentence_silence=0.35`, `noise_scale=0.73`, and `noise_w=0.92`. Speakers are
@@ -92,11 +94,133 @@ The crucial server-side detail is that Piper returns one chunk per sentence:
 `sentence_silence` must become zero-valued PCM between chunks (not merely be
 read from configuration), or adjacent sentences run together.
 
+## Provider chain
+
+`createProviderVoiceService({ providers, cache, clock, cooldownMs,
+voiceVersion })` tries providers in order. Each provider can declare ordered
+`models`, `keys`, and `synthesize({ text, language, voice, model, key })`.
+Keys rotate across calls. Quota/429 rests the specific provider, model and key
+for one hour by default. `cooldownStore` can persist that rest between service
+instances; `usageStore` can limit successful keyed calls per UTC day (nine by
+default). `cooldownMsByCode` can set rest times for `AUTH` or `TRANSIENT`
+failures. Failed optional stores do not prevent synthesis.
+
+Cache identity includes text, language, provider, selected voice and the
+caller's voice version. A cached fallback cannot masquerade as the primary
+voice. The result includes `provider`, `model`, `fallback`, and `attempts`
+with error codes only. A `fallbackScope` plus injected `fallbackStore` can
+pin a caller's later synthesis to the same fallback provider for five minutes
+by default. This avoids changing voice inside one response. Keys are hashed
+in store identifiers and omitted from attempts and errors.
+
+```js
+const { createProviderVoiceService, createPiperProvider,
+  createGeminiTtsAdapter } = require('@astratra/voice');
+
+const cloud = createGeminiTtsAdapter({
+  fetch: injectedFetch,
+  endpoint: (model) => configuredEndpoint(model),
+  model: configuredModel,
+  voice: configuredVoice,
+  keys: () => configuredKeys()
+});
+const service = createProviderVoiceService({
+  providers: [cloud, createPiperProvider(piperService)],
+  cache: voiceCache,
+  clock: injectedClock,
+  cooldownStore: injectedCooldownStore,
+  usageStore: injectedUsageStore,
+  fallbackStore: injectedFallbackStore,
+  voiceVersion: configuredVoiceVersion
+});
+
+const spoken = await service.synthesize({
+  text, language, voiceVersion: currentVoiceVersion,
+  fallbackScope: conversationId
+});
+```
+
+The optional Gemini adapter uses the source `generateContent` speech request
+shape (snake case by default, camel case via `wireStyle`), converts mono 16-bit
+PCM to WAV or accepts a WAV response, selects a voice from `voices[language]`
+or an explicit request, and puts the key in a header. Its `fetch`, endpoint,
+model names, voices and keys are supplied by the caller. HTTP 429, 401/403,
+server and timeout errors classify as `QUOTA`, `AUTH` or `TRANSIENT`.
+Applications supply any user-facing text.
+
+## Segmentation, echo, transcription and privacy
+
+`createVadSegmenter` accepts normalized PCM in order. With `frameSize`, it
+buffers partial frames and processes multiple frames in one `push`; without
+it, each push is one frame. `classify(frame)` may return a model probability;
+the default uses frame energy. It has configurable start, minimum speech,
+hangover, pre-roll and maximum segment frames. A classifier failure switches
+to energy. `push` returns completed `Float32Array` segments; `flush` emits a
+final segment and `reset` discards buffered audio.
+`createVadSpeechGate` is the continuous variant: it preserves stream timing by
+replacing rejected frames with equal-length silence, with lookback and hangover.
+If its injected classifier fails, it releases held audio and passes subsequent
+audio through.
+
+`createEchoGuard({ compare, now, threshold, tailMs, minSamples,
+windowSamples, passGapMs })` accepts playback duration through `playbackSent(bytes,
+sampleRate)`, extends queued playback, and retains an echo tail after
+`playbackInterrupted()`. `inspect(segment)` returns a segment or `null` with a
+reason code. `push(segment)` can hold sequential audio up to a comparison
+window. Matching audio is dropped; too-short held audio may be dropped
+conservatively. Exact silence is excluded from speaker comparison; a
+different speaker continues without a second comparison during the configured
+short pass gap. The existing `setPlaying` and `filter` methods remain. With
+no comparator or a comparator failure, audio passes through. The host
+supplies the speaker comparator and audio clock.
+`chainEchoGuards(...guards)` applies several optional audio guards in order
+and forwards playback events to each one.
+
+`appendTrailingSilence` pads float PCM, `Int16Array` PCM or little-endian
+PCM16 bytes by 500 ms at the supplied sample rate. `createLocalTranscriber`
+normalizes PCM16 for an injected decoder and returns `{ text, durationMs,
+doubtful, reason, confidence }`. `analyzeTranscription` (and its boolean
+wrapper `isDoubtfulTranscription`) checks empty text, caller-supplied stock
+phrases by language, sparse words, repeated words or phrases, non-word ratio,
+model log probability, no-speech probability and echoes of injected expected
+vocabulary. Heuristics return reason codes and a low confidence value; they
+are not proof of transcription quality. `confidenceFromLogProbabilities`
+converts a decoder's token log probabilities to a bounded score when present.
+`createTranscriptionProviderChain` tries injected transcribers in order. It
+first asks each to detect language; if that result is absent or outside the
+caller-supplied supported list, it can retry in the requested language. A
+failed or empty result moves to the next provider and returns provider and
+fallback codes. Cloud HTTP clients and model choices remain caller owned.
+
+`createConfidentialPolicy({ defaultRoles, lockedRoles, cloudFallbackRoles,
+localUnsupportedLanguages })` returns session decisions with `mode`,
+`cloudAudioAllowed`, and a reason code. An unlocked session may override its
+default. A locked role stays confidential. Local failure may enable cloud
+audio only when the role is allowed and the session explicitly opts in.
+`createConfidentialSession(policy, session)` tracks accepted, doubtful and
+failed local transcriptions, falls back after repeated doubt where allowed,
+and ends after repeated local failures where cloud is forbidden. Integrators
+must enforce `cloudAudioAllowed` before sending any audio to a provider.
+
+`createSpeechChunker` releases complete sentences from streamed text, with an
+injected abbreviation list and a configurable length limit. `compareSpokenText`
+measures ordered precision and coverage; `hasSpeechDrift` applies separate
+partial and final thresholds. `buildExpectedVocabulary` merges injected term
+lists within a character budget. No language or product vocabulary is bundled.
+
+`splitSpeechPieces` groups whole sentences under an injected size limit.
+`createPieceVoiceService` synthesizes pieces with bounded concurrency. If any
+piece fails, it waits for active work, discards every piece from that provider,
+and retries the whole reading with the next injected provider. It returns the
+ordered pieces and the provider that completed them, preventing mixed voices
+within a reading. Combining audio and applying pauses remain caller owned.
+
 ## Intentionally out of scope
 
 - no Piper, ffmpeg, Redis, filesystem, or HTTP dependency;
-- no text normalization, language detection, user-facing copy, or app roles;
-- no Python server implementation or provider-specific HTTP client;
+- no text normalization, language detection, user-facing copy, or fixed app roles;
+- no Python server implementation or bundled network client;
+- no model files, ONNX, sherpa, or Whisper bindings;
 - no cache eviction policy: the backing store owns retention beyond the TTL.
 
 ## Tests

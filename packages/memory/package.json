@@ -1,0 +1,39 @@
+{
+  "name": "@astratra/memory",
+  "version": "0.1.0",
+  "description": "Per-person memories for an AI assistant: injected store, embeddings and model, hybrid recall, duplicate merging, undoable corrections, background consolidation, portrait, and privacy operations that keep working with the AI switched off.",
+  "engines": {
+    "node": ">=20"
+  },
+  "main": "src/index.js",
+  "types": "src/index.d.ts",
+  "type": "commonjs",
+  "files": [
+    "src"
+  ],
+  "scripts": {
+    "test": "jest"
+  },
+  "jest": {
+    "testMatch": [
+      "**/__tests__/**/*.test.js"
+    ]
+  },
+  "keywords": [
+    "astratra",
+    "memory",
+    "ai",
+    "agent",
+    "embeddings",
+    "recall",
+    "privacy"
+  ],
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
+  "devDependencies": {
+    "@astratra/ai": "^1.3.0",
+    "jest": "30.4.2"
+  }
+}

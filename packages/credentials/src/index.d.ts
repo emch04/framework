@@ -256,7 +256,111 @@ export function createCredentialsRoutes(options: {
   challenge?: UnlockChallenge | null;
   subjectOf?: (req: unknown) => string | number;
   logger?: { info?(message: string): void };
+  /** Adds `balance` next to each configured key that has a probe, and GET /:key/balance. */
+  balances?: BalanceProbe | null;
 }): Router;
+
+/* ─────────────────── Provider balances ─────────────────── */
+
+export type BalanceStatus = 'ok' | 'low' | 'empty' | 'unknown' | 'error';
+export type BalanceErrorCode = 'unreachable' | 'timeout' | 'rejected' | 'unreadable' | 'no_balance' | 'failed';
+
+export const BALANCE_STATUSES: readonly BalanceStatus[];
+export const BALANCE_ERRORS: {
+  readonly UNREACHABLE: 'unreachable';
+  readonly TIMEOUT: 'timeout';
+  readonly REJECTED: 'rejected';
+  readonly UNREADABLE: 'unreadable';
+  readonly NO_BALANCE: 'no_balance';
+  readonly FAILED: 'failed';
+};
+export const BALANCE_OK: 'ok';
+export const BALANCE_LOW: 'low';
+export const BALANCE_EMPTY: 'empty';
+export const BALANCE_UNKNOWN: 'unknown';
+export const BALANCE_ERROR: 'error';
+
+export class BalanceProbeError extends Error {
+  constructor(code: BalanceErrorCode | string, detail?: { httpStatus?: number });
+  code: BalanceErrorCode | string;
+  httpStatus?: number;
+}
+
+export interface BalanceThresholds {
+  /** Under this: "low". */
+  low?: number;
+  /** Under this: "low" and critical. Cannot exceed `low`. */
+  critical?: number;
+}
+
+export interface BalanceReading {
+  balance: number;
+  rateLimit?: number | null;
+  limit?: number | null;
+}
+
+export interface BalanceProbeDefinition {
+  /** Reads the provider. Throw a BalanceProbeError to say why it failed. */
+  read(value: string, context: { signal: AbortSignal }): Promise<BalanceReading> | BalanceReading;
+  thresholds?: BalanceThresholds;
+  unit?: string;
+  renewable?: boolean;
+  timeoutMs?: number;
+}
+
+/** Never carries the key: not its value, not a fingerprint, not its length. */
+export interface BalanceReport {
+  key: string;
+  status: BalanceStatus;
+  critical: boolean;
+  balance: number | null;
+  rateLimit: number | null;
+  limit: number | null;
+  unit: string | null;
+  renewable: boolean | null;
+  code: BalanceErrorCode | string | null;
+  checkedAt: string | null;
+}
+
+export interface BalanceProbe {
+  /** Never rejects. Null for a key without a probe. */
+  check(key: string, options?: { refresh?: boolean }): Promise<BalanceReport | null>;
+  checkAll(keys?: string[], options?: { refresh?: boolean }): Promise<Record<string, BalanceReport>>;
+  forget(key?: string): void;
+  has(key: string): boolean;
+  keys(): string[];
+}
+
+export function createBalanceProbe(options: {
+  probes: Record<string, BalanceProbeDefinition>;
+  vault?: Pick<CredentialVault, 'get'>;
+  getValue?: (key: string) => Promise<string | null | undefined> | string | null | undefined;
+  catalog?: Pick<CredentialCatalog, 'has'>;
+  cacheMs?: number;
+  errorCacheMs?: number;
+  minRefreshMs?: number;
+  now?: () => number;
+  logger?: { warn?(message: string): void };
+}): BalanceProbe;
+
+export function classifyBalance(balance: unknown, thresholds?: BalanceThresholds): { status: BalanceStatus; critical: boolean };
+
+export type FetchLike = (url: string, init?: {
+  method?: string;
+  headers?: Record<string, string>;
+  signal?: AbortSignal;
+}) => Promise<{ status: number; json(): Promise<unknown> }>;
+
+export const SERPER_ACCOUNT_URL: string;
+export const SERPER_THRESHOLDS: Readonly<{ low: number; critical: number }>;
+export function createSerperBalanceReader(options: { fetch: FetchLike; url?: string }): (apiKey: string, context?: { signal?: AbortSignal }) => Promise<{ balance: number; rateLimit: number | null }>;
+export function serperBalanceProbe(options: {
+  fetch: FetchLike;
+  url?: string;
+  thresholds?: BalanceThresholds;
+  renewable?: boolean;
+  timeoutMs?: number;
+}): BalanceProbeDefinition;
 
 export interface RotationReport {
   apply: boolean;
@@ -320,6 +424,20 @@ export interface CredentialEntry {
   where: string | null;
   readOnly: boolean;
   readOnlyReason: string | null;
+  /** Present only when the server read a balance for this key. */
+  balance?: BalanceView;
+}
+
+/** A balance the screen may show; a status claiming a number without one reads as 'error'. */
+export interface BalanceView {
+  status: BalanceStatus;
+  critical: boolean;
+  balance: number | null;
+  rateLimit: number | null;
+  unit: string | null;
+  renewable: boolean | null;
+  code: string | null;
+  checkedAt: string | null;
 }
 
 export interface CredentialSpaceView {
@@ -337,3 +455,6 @@ export function firstSpaceToOpen(spaces: CredentialSpaceView[]): string | null;
 /** Judged when it is read, never when it arrived. */
 export function unlockState(raw: unknown, now?: number): { unlocked: boolean; minutesLeft: number };
 export function cleanUnlockCode(input: unknown, length?: number): string;
+export function readBalance(raw: unknown): BalanceView | undefined;
+/** Most urgent first: empty, critical, low, unreadable. */
+export function balanceAlerts(spaces: CredentialSpaceView[]): Array<{ space: string; key: string; label: string; balance: BalanceView }>;

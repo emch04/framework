@@ -132,3 +132,54 @@ describe('cleanUnlockCode', () => {
     expect(cleanUnlockCode('123456789', 4)).toBe('1234');
   });
 });
+
+describe('the sources the vault actually sends', () => {
+  test('environment, disconnected and absent read as the screen names them', () => {
+    const [space] = readSpaces({ spaces: [{ id: 's', keys: [
+      { key: 'A', source: 'environment' }, { key: 'B', source: 'disconnected' }, { key: 'C', source: 'absent' }, { key: 'D', source: 'interface' }
+    ] }] });
+    expect(space.keys.map((entry) => entry.source)).toEqual(['serveur', 'retiree', 'absente', 'interface']);
+  });
+});
+
+describe('readBalance', () => {
+  const { readBalance, balanceAlerts } = require('../src');
+
+  test('a readable balance keeps its number and status', () => {
+    expect(readBalance({ status: 'low', critical: true, balance: 150, rateLimit: 5, unit: 'credits', renewable: false })).toMatchObject({
+      status: 'low', critical: true, balance: 150, rateLimit: 5, unit: 'credits', renewable: false
+    });
+  });
+
+  test('a status that claims a number without carrying one reads as unreadable — never a guessed figure', () => {
+    expect(readBalance({ status: 'ok', balance: '2449' })).toMatchObject({ status: 'error', balance: null, critical: false });
+    expect(readBalance({ status: 'martian', balance: 3 }).status).toBe('error');
+    expect(readBalance('nope').status).toBe('error');
+  });
+
+  test('absent stays absent, and an unknown or failed reading carries no number', () => {
+    expect(readBalance(undefined)).toBeUndefined();
+    expect(readBalance({ status: 'unknown', balance: 12 }).balance).toBeNull();
+    expect(readBalance({ status: 'error', code: 'timeout' })).toMatchObject({ status: 'error', code: 'timeout' });
+  });
+
+  test('readSpaces reads the balance field only where the server sent one', () => {
+    const [space] = readSpaces({ spaces: [{ id: 's', keys: [{ key: 'A', balance: { status: 'ok', balance: 9 } }, { key: 'B' }] }] });
+    expect(space.keys[0].balance).toMatchObject({ status: 'ok', balance: 9 });
+    expect('balance' in space.keys[1]).toBe(false);
+  });
+
+  test('alerts come most urgent first, and a failed reading is one of them', () => {
+    const spaces = readSpaces({ spaces: [{ id: 's', label: 'Web', keys: [
+      { key: 'FINE', balance: { status: 'ok', balance: 5000 } },
+      { key: 'BROKEN', balance: { status: 'error', code: 'rejected' } },
+      { key: 'LOW', balance: { status: 'low', balance: 500 } },
+      { key: 'GONE', balance: { status: 'empty', balance: 0 } },
+      { key: 'CRIT', balance: { status: 'low', critical: true, balance: 100 } },
+      { key: 'NONE', balance: { status: 'unknown' } }
+    ] }] });
+    expect(balanceAlerts(spaces).map((alert) => alert.key)).toEqual(['GONE', 'CRIT', 'LOW', 'BROKEN']);
+    expect(balanceAlerts(spaces)[0].space).toBe('Web');
+    expect(balanceAlerts(null)).toEqual([]);
+  });
+});

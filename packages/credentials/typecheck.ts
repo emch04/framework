@@ -27,7 +27,17 @@ import {
   maskSecret,
   missingKeys,
   readSpaces,
-  unlockState
+  unlockState,
+  BALANCE_ERRORS,
+  BALANCE_STATUSES,
+  BalanceProbeError,
+  SERPER_THRESHOLDS,
+  balanceAlerts,
+  classifyBalance,
+  createBalanceProbe,
+  createSerperBalanceReader,
+  readBalance,
+  serperBalanceProbe
 } from './src';
 import type {
   ChallengeStore,
@@ -47,7 +57,11 @@ import type {
   FieldCipher,
   HydrationResult,
   UnlockChallenge,
-  ValueGuard
+  ValueGuard,
+  BalanceProbe,
+  BalanceReport,
+  BalanceView,
+  FetchLike
 } from './src';
 
 const catalog: CredentialCatalog = createCredentialCatalog({
@@ -201,3 +215,37 @@ const unlock: { unlocked: boolean; minutesLeft: number } = unlockState({ unlocke
 const code: string = cleanUnlockCode(' 12 34 56 ', 6);
 
 void [coverage.total, missing.length, openFirst, unlock.minutesLeft, code];
+
+/* ─────────────────── Provider balances ─────────────────── */
+
+const fakeFetch: FetchLike = async () => ({ status: 200, json: async () => ({ balance: 12, rateLimit: 5 }) });
+const balances: BalanceProbe = createBalanceProbe({
+  vault,
+  catalog,
+  probes: {
+    GROQ_API_KEY: serperBalanceProbe({ fetch: fakeFetch, thresholds: SERPER_THRESHOLDS }),
+    PUBLIC_CLIENT_ID: {
+      read: async (_value, { signal }) => { void signal; throw new BalanceProbeError(BALANCE_ERRORS.TIMEOUT, { httpStatus: 504 }); },
+      thresholds: { low: 10, critical: 2 },
+      unit: 'requests'
+    }
+  },
+  cacheMs: 60_000,
+  errorCacheMs: 10_000,
+  minRefreshMs: 5_000,
+  logger: { warn: () => {} }
+});
+const reader = createSerperBalanceReader({ fetch: fakeFetch });
+
+async function exerciseBalances(): Promise<void> {
+  const one: BalanceReport | null = await balances.check('GROQ_API_KEY', { refresh: true });
+  const all: Record<string, BalanceReport> = await balances.checkAll();
+  balances.forget('GROQ_API_KEY');
+  const read: { balance: number; rateLimit: number | null } = await reader('key');
+  const view: BalanceView | undefined = readBalance(one);
+  const alerts = balanceAlerts(spaces);
+  const level = classifyBalance(12, { low: 10 });
+  void [one, all, read, view, alerts.length, level.status, BALANCE_STATUSES.length, balances.keys(), balances.has('X')];
+  void createCredentialsRoutes({ vault, balances, authorize: (_q, _s, next) => next() });
+}
+void exerciseBalances;

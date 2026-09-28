@@ -150,3 +150,78 @@ describe('credentials routes', () => {
     expect(() => createCredentialsRoutes({ vault })).toThrow(/authorize/);
   });
 });
+
+describe('credentials routes with balances', () => {
+  const { createBalanceProbe } = require('../src');
+  const webCatalog = createCredentialCatalog({
+    spaces: [{ id: 'web', label: 'Web', keys: [{ key: 'SERPER_API_KEY', label: 'Serper' }, { key: 'GROQ_API_KEY', label: 'Groq' }] }]
+  });
+
+  function buildWithBalances({ reading = { balance: 2449, rateLimit: 5 }, env = {} } = {}) {
+    const vault = createCredentialVault({
+      store: createMemoryCredentialStore(),
+      catalog: webCatalog,
+      cipher: createFieldCipher({ key: generateFieldEncryptionKey() }),
+      env,
+      cacheMs: 0
+    });
+    const reads = [];
+    const balances = createBalanceProbe({
+      vault,
+      probes: { SERPER_API_KEY: { read: async (key) => { reads.push(key); if (reading instanceof Error) throw reading; return reading; }, thresholds: { low: 600, critical: 200 } } },
+      minRefreshMs: 0
+    });
+    const app = express();
+    app.use(express.json());
+    app.use((req, _res, next) => { req.user = { id: 'owner-1' }; next(); });
+    app.use('/api/credentials', createCredentialsRoutes({ vault, balances, authorize: (_req, _res, next) => next() }));
+    app.use(errorMiddleware);
+    return { app, vault, reads };
+  }
+
+  const serperOf = (response) => response.body.data.spaces[0].keys.find((entry) => entry.key === 'SERPER_API_KEY');
+
+  test('the status carries the balance next to a configured key — the number, never the key', async () => {
+    const { app } = buildWithBalances({ env: { SERPER_API_KEY: 'serper-server-key-1234' } });
+    const response = await request(app).get('/api/credentials').expect(200);
+    expect(serperOf(response).balance).toMatchObject({ status: 'ok', balance: 2449, rateLimit: 5 });
+    expect(response.text).not.toContain('serper-server-key-1234');
+    const groq = response.body.data.spaces[0].keys.find((entry) => entry.key === 'GROQ_API_KEY');
+    expect(groq.balance).toBeUndefined();
+  });
+
+  test('without a key, no reading and no balance field at all', async () => {
+    const { app, reads } = buildWithBalances();
+    const response = await request(app).get('/api/credentials').expect(200);
+    expect(serperOf(response).balance).toBeUndefined();
+    expect(reads).toEqual([]);
+  });
+
+  test('a failed reading shows as such and the screen still loads', async () => {
+    const { app } = buildWithBalances({ reading: Object.assign(new Error('down'), { code: 'unreachable' }), env: { SERPER_API_KEY: 'k-1234' } });
+    const response = await request(app).get('/api/credentials').expect(200);
+    expect(serperOf(response).balance).toMatchObject({ status: 'error', code: 'unreachable', balance: null });
+  });
+
+  test('refresh reads again; a key without a probe has no balance route', async () => {
+    const { app, reads } = buildWithBalances({ env: { SERPER_API_KEY: 'k-1234' } });
+    await request(app).get('/api/credentials').expect(200);
+    const refreshed = await request(app).get('/api/credentials/SERPER_API_KEY/balance').expect(200);
+    expect(refreshed.body.data).toMatchObject({ status: 'ok', balance: 2449 });
+    expect(reads).toHaveLength(2);
+    await request(app).get('/api/credentials/GROQ_API_KEY/balance').expect(404);
+  });
+
+  test('storing a new key forgets the reading of the old one', async () => {
+    const { app, reads } = buildWithBalances({ env: { SERPER_API_KEY: 'old-key-1111' } });
+    await request(app).get('/api/credentials').expect(200);
+    await request(app).put('/api/credentials/SERPER_API_KEY').send({ value: 'new-key-2222' }).expect(200);
+    await request(app).get('/api/credentials').expect(200);
+    expect(reads).toEqual(['old-key-1111', 'new-key-2222']);
+  });
+
+  test('balances that are not a probe are refused at wiring time', () => {
+    const vault = createCredentialVault({ store: createMemoryCredentialStore(), catalog: webCatalog, cipher: createFieldCipher({ key: generateFieldEncryptionKey() }) });
+    expect(() => createCredentialsRoutes({ vault, authorize: (_q, _s, n) => n(), balances: {} })).toThrow(/createBalanceProbe/);
+  });
+});

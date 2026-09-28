@@ -218,6 +218,7 @@ app.use('/api/credentials', createCredentialsRoutes({
 | `POST /unlock` | vérifie le code, ouvre la fenêtre |
 | `PUT /:key` | enregistre une valeur |
 | `DELETE /:key` | débranche une clé |
+| `GET /:key/balance` | relit le solde chez le fournisseur (avec `balances`) |
 
 `authorize` est **obligatoire** : ces clés engagent les paiements de toute la
 plateforme, pas ceux d'un locataire, et Astratra n'a pas d'avis sur qui possède
@@ -324,6 +325,82 @@ un passage interrompu se relance simplement.
 | `plain` | déclarée `secret: false`, son clair est voulu |
 | `skipped` | marqueur de débranchement ou valeur vide |
 | `unreadable` | **aucun des deux ciphers ne la lit** — à examiner |
+
+## Le solde chez le fournisseur
+
+Certains fournisseurs vendent un quota qui s'épuise — et certaines offres
+gratuites ne se renouvellent jamais. Sans le chiffre à l'écran, on découvre la
+panne le jour où le service cesse de répondre, et ce qui en dépendait se
+dégrade sans rien dire.
+
+```js
+const { createBalanceProbe, serperBalanceProbe } = require('@astratra/credentials');
+
+const balances = createBalanceProbe({
+  vault,
+  catalog,
+  probes: {
+    // Premier exemple fourni : le stock de crédits Serper.
+    SERPER_API_KEY: serperBalanceProbe({ fetch }),
+    // N'importe quel autre fournisseur : un read() au-dessus d'un fetch injecté.
+    AUTRE_API_KEY: {
+      read: async (cle, { signal }) => lireQuota(cle, signal), // -> { balance, rateLimit? }
+      thresholds: { low: 1000, critical: 100 },
+      unit: 'requêtes',
+      renewable: true
+    }
+  }
+});
+
+app.use('/api/credentials', createCredentialsRoutes({ vault, challenge, authorize, balances }));
+```
+
+`GET /` ajoute alors `balance` à chaque clé **en place** qui a une sonde :
+
+```js
+{ status: 'low', critical: true, balance: 199, rateLimit: 5, unit: 'credits',
+  renewable: false, code: null, checkedAt: '2026-09-28T10:00:00.000Z' }
+```
+
+| `status` | Sens |
+|---|---|
+| `ok` | au-dessus des seuils |
+| `low` | sous `low` ; `critical: true` sous `critical` |
+| `empty` | zéro ou moins, quels que soient les seuils |
+| `unknown` | aucune clé à sonder (absente ou débranchée) |
+| `error` | le relevé a échoué — `code` dit pourquoi, `balance` vaut `null` |
+
+Les codes d'échec : `unreachable`, `timeout`, `rejected` (avec `httpStatus`,
+pour distinguer une clé révoquée d'une panne), `unreadable`, `no_balance`,
+`failed`. Des codes, jamais du texte : l'écran traduit.
+
+Ce que les tests fixent :
+
+**Un relevé raté se dit, jamais de chiffre inventé.** Une réponse sans solde
+exploitable est une erreur, pas un zéro.
+
+**La clé sondée est celle que sert le coffre** : celle saisie dans
+l'interface l'emporte sur le `.env`, une clé débranchée n'est pas sondée.
+
+**La clé ne ressort jamais** : ni dans le résultat, ni dans un journal, ni dans
+une erreur — ni sa valeur, ni une empreinte, ni sa longueur. Une empreinte est
+gardée en mémoire seulement, pour remarquer qu'elle a changé : le relevé mis
+en cache décrivait alors un autre compte.
+
+**Un relevé est mis en cache** (`cacheMs`, 5 minutes), un échec moins
+longtemps (`errorCacheMs`, 30 secondes) ; deux écrans qui demandent en même
+temps partagent une seule requête ; un rafraîchissement forcé ne repart pas
+chez le fournisseur à moins de `minRefreshMs` du précédent. Enregistrer ou
+débrancher la clé oublie le relevé.
+
+Côté écran, `readBalance(raw)` lit le solde sans croire sa forme — un statut
+qui prétend un chiffre sans en porter un est lu comme illisible — et
+`balanceAlerts(spaces)` liste ce qui demande attention, du plus urgent au
+moins urgent : épuisé, critique, bas, illisible.
+
+`readSpaces` lit aussi désormais les sources telles que le coffre les envoie
+(`environment`, `disconnected`, `absent`) : auparavant une clé servie par le
+`.env` s'affichait « absente ».
 
 ## Ce que ce package ne fait pas
 

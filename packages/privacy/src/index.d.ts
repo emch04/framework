@@ -262,3 +262,156 @@ export const DELETION_SCHEDULED: 'scheduled';
 export const DELETION_ERASING: 'erasing';
 export const DELETION_ERASED: 'erased';
 export const DEFAULT_GRACE_MS: number;
+
+/* ─────────────────── Consent for AI and web features ─────────────────── */
+
+export type ConsentState = 'granted' | 'refused' | 'required';
+
+export const CONSENT_GRANTED: 'granted';
+export const CONSENT_REFUSED: 'refused';
+export const CONSENT_REQUIRED: 'required';
+export const CONSENT_MAX_VERSION: number;
+export const CONSENT_CODES: {
+  readonly REQUIRED: 'CONSENT_REQUIRED';
+  readonly REFUSED: 'CONSENT_REFUSED';
+  readonly UNKNOWN_SCOPE: 'CONSENT_UNKNOWN_SCOPE';
+  readonly INVALID_VERSION: 'CONSENT_INVALID_VERSION';
+  readonly INVALID_SUBJECT: 'CONSENT_INVALID_SUBJECT';
+};
+export type ConsentCode = typeof CONSENT_CODES[keyof typeof CONSENT_CODES];
+
+export class ConsentError extends Error {
+  constructor(code: ConsentCode, detail?: { statusCode?: number; scope?: string });
+  code: ConsentCode;
+  statusCode: number;
+  scope?: string;
+}
+
+/** On the wire: `decidedAt` is an ISO date. */
+export interface ConsentDecision {
+  granted: boolean;
+  version: number;
+  decidedAt: string;
+}
+
+export interface ConsentRecord {
+  subject: string;
+  scope: string;
+  granted: boolean;
+  version: number;
+  decidedAt: string | Date;
+  [key: string]: unknown;
+}
+
+/** One row per subject and scope: put() replaces. */
+export interface ConsentStore {
+  get(subject: string | number, scope: string): Promise<ConsentRecord | null>;
+  put(record: ConsentRecord): Promise<void>;
+  list(subject: string | number): Promise<ConsentRecord[]>;
+  /** Every scope of the subject when `scope` is omitted. Resolves the number removed. */
+  remove(subject: string | number, scope?: string): Promise<number>;
+}
+
+export function createMemoryConsentStore(): ConsentStore & { size(): number };
+
+export interface ConsentScopeDefinition {
+  /** Raise it when the text changes in substance: every yes is asked again. */
+  version: number;
+  /** Scopes that must also be granted (web search requires the assistant…). */
+  requires?: string[];
+}
+
+export interface ConsentCheck {
+  scope: string;
+  state: ConsentState;
+  currentVersion: number;
+  decidedVersion: number | null;
+  decidedAt: string | null;
+}
+
+export type ConsentVerdict =
+  | { allowed: true }
+  | { allowed: false; code: 'CONSENT_REQUIRED' | 'CONSENT_REFUSED'; scope: string; state: ConsentState };
+
+export interface Consent {
+  decision(subject: string | number, scope: string): Promise<ConsentDecision | null>;
+  check(subject: string | number, scope: string): Promise<ConsentCheck>;
+  /** `version` is the text shown; defaults to the current one; a version above it is refused. */
+  grant(subject: string | number, scope: string, options?: { version?: number }): Promise<ConsentDecision>;
+  revoke(subject: string | number, scope: string): Promise<ConsentDecision>;
+  /** Checks the scope(s) and their prerequisites. Never throws for a missing consent. */
+  guard(subject: string | number, scopes: string | string[]): Promise<ConsentVerdict>;
+  /** Throws a 403 ConsentError. */
+  assert(subject: string | number, scopes: string | string[]): Promise<void>;
+  guarded<Args extends unknown[], T>(
+    scopes: string | string[],
+    subjectOf: (...args: Args) => string | number,
+    action: (...args: Args) => Promise<T> | T
+  ): (...args: Args) => Promise<T | { blocked: true; code: ConsentCode; scope: string }>;
+  overview(subject: string | number): Promise<ConsentCheck[]>;
+  exportFor(subject: string | number): Promise<Array<ConsentDecision & { scope: string }>>;
+  forget(subject: string | number, scope?: string): Promise<number>;
+  scopes: string[];
+  versionOf(scope: string): number;
+}
+
+export function createConsent(options: {
+  store: ConsentStore;
+  scopes: Record<string, ConsentScopeDefinition>;
+  now?: () => Date;
+  onChange?: (change: { subject: string; scope: string; granted: boolean; version: number }) => void;
+}): Consent;
+
+export function readDecision(raw: unknown): ConsentDecision | null;
+export function consentState(decision: { granted: boolean; version?: number } | null | undefined, currentVersion: number): ConsentState;
+export function mergeDecisions(
+  local: ConsentDecision | null,
+  remote: ConsentDecision | null | 'unavailable'
+): { kept: ConsentDecision | null; push: boolean };
+export function newDecision(granted: boolean, version: number, now?: Date): ConsentDecision;
+export function readConsentInput(body: unknown): { granted: boolean; version: number } | null;
+export function consentAudience(role: string | null | undefined, options?: { simple?: string[] }): 'simple' | 'standard';
+export interface ConsentCopyKeys {
+  title: string; lead: string; details: string; refuseNote: string; refusedStatus: string;
+  eyebrow: string; accept: string; refuse: string; keepDisabled: string; saveError: string; privacyLink: string;
+}
+export function consentCopyKeys(scope: string, audience?: string, options?: { prefix?: string }): ConsentCopyKeys;
+export function consentDialogActions(state: ConsentState): { primary: 'accept'; secondary: 'refuse' | 'keepDisabled' };
+
+export interface ConsentClientState {
+  subject: string | null;
+  decision: ConsentDecision | null;
+  loaded: boolean;
+}
+
+export interface ConsentClient {
+  load(subject: string | number | null | undefined, options?: { refresh?: boolean }): Promise<ConsentDecision | null>;
+  decide(subject: string | number, granted: boolean): Promise<ConsentDecision>;
+  /** THE guard: call it just before any send. Throws a ConsentError. */
+  require(subject?: string | number | null): Promise<void>;
+  isGranted(subject?: string | number | null): Promise<boolean>;
+  state(): ConsentClientState;
+  stateOf(): ConsentState;
+  subscribe(listener: (state: ConsentClientState) => void): () => void;
+  version: number;
+}
+
+export function createConsentClient(options: {
+  version: number;
+  local: { get(key: string): Promise<string | null> | string | null; set(key: string, value: string): Promise<void> | void };
+  remote: { get(): Promise<unknown>; put(body: { granted: boolean; version: number }): Promise<unknown> };
+  currentSubject?: () => string | number | null | undefined;
+  keyPrefix?: string;
+  scope?: string;
+  now?: () => Date;
+  onError?: (where: 'local' | 'push', error: unknown) => void;
+}): ConsentClient;
+
+export interface ConsentContractRunner {
+  describe?: (name: string, fn: () => void) => void;
+  test?: (name: string, fn: () => Promise<void> | void) => void;
+  expect?: (value: unknown) => any;
+}
+
+export function runConsentStoreContract(makeStore: () => ConsentStore | Promise<ConsentStore>, runner?: ConsentContractRunner): void;
+export function consentRecord(overrides?: Partial<ConsentRecord>): ConsentRecord;

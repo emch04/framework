@@ -11,25 +11,49 @@ async function runAgentLoop({
   userRole,
   maxSteps = DEFAULT_MAX_STEPS,
   onChunk,
-  confirmTool
+  confirmTool,
+  masker,
+  reportToolErrors = false,
+  toolTimeoutMs,
+  maxMs,
+  finalInstruction,
+  now = Date.now
 }) {
   if (!registry) throw new AppError('agentLoop requires a registry', 500);
   if (!router || typeof router.ask !== 'function') throw new AppError('agentLoop requires a router', 500);
+  if (masker && (typeof masker.mask !== 'function' || typeof masker.unmask !== 'function')) {
+    throw new AppError('agentLoop requires masker from createReversibleMasker()', 500);
+  }
 
   const messages = Array.isArray(history) ? [...history] : [];
   messages.push({ role: 'user', content: prompt });
+  const started = now();
 
-  for (let step = 0; step < maxSteps; step += 1) {
-    const modelPrompt = buildPrompt(registry, userRole, messages);
+  /* The question is read by the entity detector once, so every name in it is
+     known before the first byte leaves; afterwards the prompt is masked with
+     what the masker has learnt. Inside the loop everything stays in clear —
+     masking happens at the door, on the way out. */
+  if (masker && typeof masker.maskAsync === 'function') await masker.maskAsync(String(prompt || ''));
+
+  async function askModel(modelPrompt) {
+    const outbound = masker ? masker.mask(modelPrompt) : modelPrompt;
+    const raw = await router.ask(outbound, {
+      complexity: 'agent',
+      intent: 'agent_loop',
+      estimatedTokens: estimateTokens(outbound)
+    }, ctx);
+    const readable = masker ? unmaskAnswer(masker, raw) : raw;
     // onChunk, when provided, is called with each chunk AS IT ARRIVES if
     // router.ask() returns a stream — real token-by-token streaming to the
     // caller. The loop itself still needs the fully-assembled text to
     // detect a <tool_call>, so it accumulates in parallel regardless.
-    const response = await stringifyModelResponse(await router.ask(modelPrompt, {
-      complexity: 'agent',
-      intent: 'agent_loop',
-      estimatedTokens: estimateTokens(modelPrompt)
-    }, ctx), onChunk);
+    return stringifyModelResponse(readable, onChunk);
+  }
+
+  const outOfTime = () => Number.isFinite(maxMs) && now() - started >= maxMs;
+
+  for (let step = 0; step < maxSteps && !outOfTime(); step += 1) {
+    const response = await askModel(buildPrompt(registry, userRole, messages));
     const toolCall = parseToolCall(response);
 
     if (!toolCall) {
@@ -61,19 +85,70 @@ async function runAgentLoop({
       }
     }
 
-    const result = await tool.handler(toolCall.params, ctx);
+    /* A tool that reaches OUTSIDE (a web search, a third-party API) gets its
+       parameters masked: the model wrote them from a masked prompt, the loop
+       read them in clear, and they must not leave in clear. */
+    const params = masker && tool.external === true ? masker.maskDeep(toolCall.params) : toolCall.params;
+    let result;
+    try {
+      result = await runTool(tool, params, ctx, toolTimeoutMs);
+    } catch (error) {
+      if (!reportToolErrors) throw error;
+      /* The model reads a code, never the error message: it may quote
+         internals, and it is not the model's business. */
+      result = { error: error && error.code === 'TOOL_TIMEOUT' ? 'tool_timeout' : 'tool_failed' };
+    }
+    if (masker && tool.external === true) result = masker.unmaskDeep(result);
+    const serialized = JSON.stringify(result);
+    /* Your own data (a class list, a file) carries names the register may not
+       know: the detector reads the result before it can reach the prompt. */
+    if (masker && tool.external !== true && typeof masker.maskAsync === 'function') await masker.maskAsync(String(serialized));
     messages.push({ role: 'assistant', content: response });
     messages.push({
       role: 'tool',
-      content: `<tool_result name="${tool.name}">${JSON.stringify(result)}</tool_result>`
+      content: `<tool_result name="${tool.name}">${serialized}</tool_result>`
     });
+  }
+
+  /* Out of steps or time: one last turn without tools, when the caller says
+     how to ask for it — an answer with what was read beats an error. */
+  if (typeof finalInstruction === 'string' && finalInstruction.trim()) {
+    const last = await askModel(`${buildPrompt(null, userRole, messages)}\n\n${finalInstruction}`);
+    const stray = parseToolCallSafely(last);
+    return stray ? last.replace(TOOL_CALL_PATTERN, '').trim() : last;
   }
 
   throw new AppError(`agentLoop reached maxSteps (${maxSteps}) before a final answer`, 500);
 }
 
+async function runTool(tool, params, ctx, timeoutMs) {
+  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) return tool.handler(params, ctx);
+  let timer;
+  const timeout = new Promise((_resolve, reject) => {
+    timer = setTimeout(() => reject(Object.assign(new Error(`Tool "${tool.name}" timed out`), { code: 'TOOL_TIMEOUT' })), timeoutMs);
+  });
+  try {
+    return await Promise.race([Promise.resolve().then(() => tool.handler(params, ctx)), timeout]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function unmaskAnswer(masker, raw) {
+  if (isAsyncIterable(raw) && typeof masker.unmaskStream === 'function') return masker.unmaskStream(raw);
+  return typeof raw === 'string' ? masker.unmask(raw) : raw;
+}
+
+function parseToolCallSafely(text) {
+  try {
+    return parseToolCall(text);
+  } catch (_error) {
+    return { name: 'invalid', params: {} };
+  }
+}
+
 function buildPrompt(registry, userRole, messages) {
-  const tools = registry.formatToolsForPrompt(userRole);
+  const tools = registry ? registry.formatToolsForPrompt(userRole) : '';
   const renderedHistory = messages.map(message => {
     if (typeof message === 'string') return message;
     return `${message.role || 'message'}: ${message.content || ''}`;
@@ -84,6 +159,8 @@ function buildPrompt(registry, userRole, messages) {
     renderedHistory
   ].filter(Boolean).join('\n\n');
 }
+
+const TOOL_CALL_PATTERN = /<tool_call\s+name="([^"]+)">\s*([\s\S]*?)\s*<\/tool_call>/gi;
 
 function parseToolCall(text) {
   const match = String(text || '').match(/<tool_call\s+name="([^"]+)">\s*([\s\S]*?)\s*<\/tool_call>/i);

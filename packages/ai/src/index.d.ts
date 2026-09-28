@@ -12,6 +12,8 @@ export interface ProviderModel {
 export interface Provider {
   id: string;
   models: ProviderModel[];
+  /** False for a model running on this machine: the router does not mask for it. */
+  external?: boolean;
   call(prompt: string, ctx: Record<string, unknown>, model: ProviderModel): Awaitable<unknown>;
   [key: string]: unknown;
 }
@@ -33,6 +35,8 @@ export interface ProviderRouterConfig {
   intentRouting?: Record<string, { preferred?: string[] }>;
   redisKeyPrefix?: string;
   redisUrl?: string;
+  /** One circuit per provider: a factory (providerId) => breaker, or a pool. */
+  breakers?: ((providerId: string) => BreakerLike) | BreakerPool;
 }
 
 export interface ProviderStats {
@@ -46,6 +50,8 @@ export interface ProviderStats {
   cooldown: boolean;
   degraded: boolean;
   failures: number;
+  /** The provider's circuit state, or null without breakers. */
+  circuit: string | null;
 }
 
 export interface ProviderRouter {
@@ -53,6 +59,7 @@ export interface ProviderRouter {
   /** Les entrées sont indexées par "providerId:modelId". */
   getStats(): Record<string, ProviderStats>;
   stop(): void;
+  breakers: BreakerPool | null;
 }
 
 export function createProviderRouter(config?: ProviderRouterConfig): ProviderRouter;
@@ -62,6 +69,8 @@ export interface ToolDefinition<TParams = Record<string, unknown>, TResult = unk
   description: string;
   type: string;
   roles: string[];
+  /** Reaches outside (web search, third-party API): its parameters are masked. */
+  external?: boolean;
   params?: Record<string, unknown>;
   handler(params: TParams, ctx: Record<string, unknown>): Awaitable<TResult>;
 }
@@ -115,6 +124,19 @@ export interface AgentLoopOptions {
    * every allowed tool call, unchanged from before.
    */
   confirmTool?: (toolCall: ToolCall, ctx: Record<string, unknown>) => Awaitable<boolean>;
+  /**
+   * Masks what leaves for the model, unmasks what comes back. Tools marked
+   * `external: true` receive masked parameters.
+   */
+  masker?: ReversibleMasker;
+  /** A throwing tool becomes { error: 'tool_failed' | 'tool_timeout' } for the model. Default false (throws). */
+  reportToolErrors?: boolean;
+  toolTimeoutMs?: number;
+  /** Time budget for the whole loop. */
+  maxMs?: number;
+  /** When steps or time run out: one last turn without tools, with this instruction. */
+  finalInstruction?: string;
+  now?: () => number;
 }
 
 export function runAgentLoop(options: AgentLoopOptions): Promise<string>;
@@ -285,3 +307,233 @@ export function createFormatInstructions(options: {
   defaultSurface?: string;
   fallbackLanguage?: string;
 }): FormatInstructions;
+
+/* ─────────────────── Circuits ─────────────────── */
+
+export interface BreakerLike {
+  call<T>(fn: () => Awaitable<T>): Promise<T>;
+  status?(): { state?: string; [key: string]: unknown };
+  reset?(): void;
+}
+
+export interface BreakerPool {
+  get(key: string): BreakerLike;
+  run<T>(key: string, fn: () => Awaitable<T>): Promise<T>;
+  status(): Record<string, unknown>;
+  stateOf(key: string): string | null;
+  reset(key?: string): void;
+  keys(): string[];
+}
+
+/** Refuses a factory that returns the same breaker for two keys. */
+export function createBreakerPool(options: { create: (key: string) => BreakerLike }): BreakerPool;
+/** Timeouts, network errors, 408 and 5xx are outages; 429 and other 4xx are not. */
+export function isProviderOutage(error: unknown): boolean;
+export function isCircuitOpen(error: unknown): boolean;
+
+/* ─────────────────── Outbound masking ─────────────────── */
+
+export interface DetectedEntity {
+  text: string;
+  type: string;
+  score: number;
+}
+
+export interface ReversibleMasker {
+  mask(text: string, options?: { names?: string[] }): string;
+  /** Runs the detector first (keep it local), learns, then masks. */
+  maskAsync(text: string, options?: { names?: string[] }): Promise<string>;
+  maskDeep<T>(value: T): T;
+  unmask(text: string): string;
+  unmaskDeep<T>(value: T): T;
+  unmaskStream(chunks: AsyncIterable<unknown>): AsyncGenerator<string>;
+  detectNames(text: string): Promise<string[]>;
+  size(): number;
+}
+
+export function createReversibleMasker(options?: {
+  names?: string[];
+  patterns?: Array<{ type: string; pattern: RegExp }>;
+  detect?: (text: string) => Awaitable<DetectedEntity[] | null | undefined>;
+  detectTypes?: string[];
+  minScore?: number;
+  detectMaxChars?: number;
+  minLength?: number;
+  token?: (type: string, sequence: number) => string;
+  typeOf?: (value: string) => string;
+  keep?: (value: string) => boolean;
+}): ReversibleMasker;
+
+export function withOutboundMasking<Rest extends unknown[], R>(
+  masker: ReversibleMasker,
+  call: (input: any, ...rest: Rest) => Awaitable<R>
+): (input: unknown, ...rest: Rest) => Promise<R>;
+
+export function headWithoutCuttingWords(text: string, max: number): string;
+
+/* ─────────────────── Passages in another language ─────────────────── */
+
+export interface Passage {
+  title?: string;
+  text: string;
+  lang?: string;
+  kind?: string;
+  ref?: unknown;
+  url?: string;
+}
+
+export interface PassageTexts {
+  header?: string;
+  footer?: string;
+  /** Required when a passage can be foreign. `{languages}` becomes the tags found. */
+  foreign?: string;
+  empty?: string;
+}
+
+export function primaryLanguage(tag: unknown): string | null;
+export function isForeignLanguage(passageLanguage: unknown, readerLanguage: unknown): boolean;
+export function markForeignPassages(passages: Passage[], options: { lang: string; tag?: (language: string) => string }): { blocks: string[]; languages: string[] };
+/** `passages: null` means the search failed: nothing is said. */
+export function buildPassagesContext(options: { passages: Passage[] | null | undefined; lang: string; texts?: PassageTexts; tag?: (language: string) => string }): string[];
+export function passageSource(passage: Passage, options?: { excerptMax?: number }): Omit<Passage, 'text'> & { excerpt: string };
+
+/* ─────────────────── Sources ─────────────────── */
+
+export interface SourceLedger<S = Record<string, unknown>> {
+  keep(found: S[], data?: unknown): void;
+  sources(): S[];
+  evidence(): string[];
+  size(): number;
+}
+
+export function createSourceLedger<S = Record<string, unknown>>(options?: { keyOf?: (source: S) => string }): SourceLedger<S>;
+
+export function usedSources<S extends { url?: string; title?: string }, Place = unknown>(
+  answer: string,
+  sources: S[],
+  evidence?: string[],
+  options?: {
+    references?: (text: string) => Place[];
+    sameReference?: (a: Place, b: Place) => boolean;
+    ownReference?: (source: S) => Place | null | undefined;
+    commonWords?: Iterable<string>;
+    minWordLength?: number;
+    sharedMin?: number;
+    shortEvidence?: number;
+  }
+): S[];
+
+export interface NliScores { entailment: number; neutral?: number; contradiction: number }
+
+export function findContradiction(
+  answer: string,
+  sources: Array<string | { content?: string; snippet?: string; url?: string; source?: string }>,
+  options: {
+    compare: (pairs: Array<{ premise: string; hypothesis: string }>) => Awaitable<NliScores[] | null>;
+    timeoutMs?: number;
+    minWords?: number;
+    sharedMin?: number;
+    maxPairs?: number;
+    contradictionMin?: number;
+    entailmentMax?: number;
+    commonWords?: Iterable<string>;
+  }
+): Promise<{ contradicts: boolean; sentence: string | null; source: string | null } | null>;
+
+export function factualSentences(answer: string, minWords: number): string[];
+
+export function rerankResults<R, S, F extends { results: R[]; sources?: S[] }>(
+  query: string,
+  found: F,
+  options: {
+    score: (query: string, passages: string[]) => Awaitable<number[] | null>;
+    passageOf?: (result: R) => string;
+    sourceMatches?: (source: S, result: R) => boolean;
+  }
+): Promise<F>;
+
+/* ─────────────────── Answer text ─────────────────── */
+
+export function plainText(text: unknown): string;
+export function tidyMarkdown(text: unknown, options?: { removeEmoji?: boolean }): string;
+export function isFaithfulQuotation(quoted: string, source: string): boolean;
+export function verifyQuotations<Refs = unknown>(text: string, options: {
+  findReferences: (text: string) => Awaitable<Array<{ start: number; end: number; refs: Refs }>>;
+  resolve: (refs: Refs) => Awaitable<string | null | undefined>;
+}): Promise<string>;
+
+/* ─────────────────── Reply language ─────────────────── */
+
+export interface LanguageDetector {
+  byWords(text: string): string | null;
+  reply(text: string, appLanguage: string): Promise<string>;
+  languages: string[];
+}
+
+export function createLanguageDetector(options: {
+  words: Record<string, string[]>;
+  identify?: (text: string) => Awaitable<{ language: string; confidence: number }>;
+  fallback?: string;
+  confidenceMin?: number;
+  shortConfidenceMin?: number;
+  shortWords?: number;
+  lead?: number;
+  maxChars?: number;
+}): LanguageDetector;
+
+/* ─────────────────── Ask limit ─────────────────── */
+
+export interface AskLimitVerdict { allowed: boolean; remaining: number; retryInMs: number }
+
+export interface AskLimit {
+  /** Throws a 429 AppError with `code` and `retryInMs` past the limit. */
+  take(subject: string | number, now?: number): AskLimitVerdict;
+  peek(subject: string | number, now?: number): AskLimitVerdict;
+  reset(subject?: string | number): void;
+  size(): number;
+  sweep(now: number): void;
+}
+
+export function createAskLimit(options: { max: number; windowMs: number; code?: string; sweepEvery?: number }): AskLimit;
+
+/* ─────────────────── OpenAI-compatible endpoints ─────────────────── */
+
+export interface ChatMessage {
+  role: 'user' | 'assistant' | 'tool' | 'system';
+  text?: string;
+  content?: string;
+  images?: Array<{ mimeType: string; data: string }>;
+  toolCalls?: Array<{ id: string; name: string; args: unknown }>;
+  toolCallId?: string;
+  result?: unknown;
+}
+
+export interface ChatToolCall {
+  id: string;
+  name: string;
+  args: Record<string, unknown> | null;
+  /** The model sent arguments that are not a JSON object. */
+  invalid?: true;
+}
+
+export type FetchLike = (url: string, init: { method: string; headers: Record<string, string>; body: string; signal?: AbortSignal }) => Promise<{ ok: boolean; status: number; json(): Promise<any> }>;
+
+export function askChatModel(
+  target: { url: string; key: string; model: string; extra?: Record<string, unknown> },
+  request: { system?: string; messages: ChatMessage[]; tools?: Array<Record<string, unknown>>; maxTokens?: number; temperature?: number },
+  io: { fetch: FetchLike; signal?: AbortSignal; timeoutMs?: number }
+): Promise<{ status: number; text?: string | null; toolCalls?: ChatToolCall[]; cut?: boolean }>;
+
+export function readToolArguments(raw: unknown): { args: Record<string, unknown> | null; invalid: boolean };
+
+export function createOpenAICompatibleProvider(options: {
+  id: string;
+  url: string;
+  getKey: () => Awaitable<string | null | undefined>;
+  models: ProviderModel[];
+  fetch: FetchLike;
+  external?: boolean;
+  timeoutMs?: number;
+  extra?: Record<string, unknown>;
+  toRequest?: (prompt: string, ctx: Record<string, unknown>) => { system?: string; messages: ChatMessage[] };
+}): Provider;

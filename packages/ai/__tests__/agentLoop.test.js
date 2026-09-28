@@ -194,3 +194,59 @@ describe('agentLoop', () => {
     expect(router.ask.mock.calls[1][0]).toContain('"denied":true');
   });
 });
+
+describe('agent loop: failing tools, time budget, last turn', () => {
+  const { createToolRegistry: makeRegistry, runAgentLoop: loop } = require('../src');
+
+  function registryWith(handler) {
+    const registry = makeRegistry();
+    registry.register({ name: 'lookup', description: 'Lookup', type: 'read', roles: ['owner'], handler });
+    return registry;
+  }
+
+  test('with reportToolErrors, a tool that throws becomes a code the model reads — never its message', async () => {
+    const prompts = [];
+    const router = { ask: async (prompt) => { prompts.push(prompt); return prompts.length === 1 ? '<tool_call name="lookup">{}</tool_call>' : 'Je n\'ai pas pu vérifier.'; } };
+    const registry = registryWith(async () => { throw new Error('ECONNREFUSED 10.0.0.3:27017 internal'); });
+    await expect(loop({ prompt: 'q', registry, router, userRole: 'owner', reportToolErrors: true })).resolves.toBe('Je n\'ai pas pu vérifier.');
+    expect(prompts[1]).toContain('"error":"tool_failed"');
+    expect(prompts[1]).not.toContain('10.0.0.3');
+  });
+
+  test('without it, a failing tool still throws as before', async () => {
+    const router = { ask: async () => '<tool_call name="lookup">{}</tool_call>' };
+    await expect(loop({ prompt: 'q', registry: registryWith(async () => { throw new Error('boom'); }), router, userRole: 'owner' })).rejects.toThrow('boom');
+  });
+
+  test('a tool slower than toolTimeoutMs is reported as a timeout', async () => {
+    const prompts = [];
+    const router = { ask: async (prompt) => { prompts.push(prompt); return prompts.length === 1 ? '<tool_call name="lookup">{}</tool_call>' : 'fin'; } };
+    const registry = registryWith(() => new Promise((resolve) => setTimeout(() => resolve('late'), 200)));
+    await loop({ prompt: 'q', registry, router, userRole: 'owner', reportToolErrors: true, toolTimeoutMs: 20 });
+    expect(prompts[1]).toContain('"error":"tool_timeout"');
+  });
+
+  test('out of steps with a finalInstruction: one last turn without tools answers', async () => {
+    const prompts = [];
+    const router = { ask: async (prompt) => { prompts.push(prompt); return prompts.length <= 2 ? '<tool_call name="lookup">{}</tool_call>' : 'Voici ce que j\'ai lu.'; } };
+    const answer = await loop({ prompt: 'q', registry: registryWith(async () => ({ ok: 1 })), router, userRole: 'owner', maxSteps: 2, finalInstruction: 'Answer now, no more tools.' });
+    expect(answer).toBe('Voici ce que j\'ai lu.');
+    expect(prompts[2]).toContain('Answer now, no more tools.');
+    expect(prompts[2]).toContain('Available tools:\n(none)');
+  });
+
+  test('a stray tool call in the last turn is removed rather than shown', async () => {
+    let n = 0;
+    const router = { ask: async () => { n += 1; return n === 1 ? '<tool_call name="lookup">{}</tool_call>' : 'Réponse <tool_call name="lookup">{}</tool_call>'; } };
+    const answer = await loop({ prompt: 'q', registry: registryWith(async () => ({})), router, userRole: 'owner', maxSteps: 1, finalInstruction: 'Answer now.' });
+    expect(answer).toBe('Réponse');
+  });
+
+  test('the time budget stops the loop before maxSteps', async () => {
+    let time = 0;
+    let asked = 0;
+    const router = { ask: async () => { asked += 1; time += 40_000; return '<tool_call name="lookup">{}</tool_call>'; } };
+    await expect(loop({ prompt: 'q', registry: registryWith(async () => ({})), router, userRole: 'owner', maxSteps: 10, maxMs: 60_000, now: () => time })).rejects.toThrow(/maxSteps/);
+    expect(asked).toBe(2);
+  });
+});

@@ -1,5 +1,6 @@
 const { AppError } = require('@astratra/core');
 const { randomUUID } = require('crypto');
+const { createBreakerPool, isCircuitOpen } = require('./breakers');
 
 const DEFAULT_COOLDOWN_MS = 60 * 1000;
 const DEFAULT_COOLDOWN_JITTER_MS = 8 * 1000;
@@ -46,6 +47,11 @@ function createProviderRouter(config = {}) {
     intentRouting: config.intentRouting || {},
     redisKeyPrefix: config.redisKeyPrefix || 'astratra:ai:provider'
   };
+  /* One circuit per PROVIDER, never one for all: a provider that is down must
+     not take the others with it. Optional — the per-model cooldown and
+     degradation below work without it. Resolved BEFORE any timer or
+     connection starts: a wiring error must not leave a timer behind. */
+  const breakers = resolveBreakers(config.breakers);
   let midnightTimer = null;
   const resetDailyAtMidnight = () => {
     resetDailyUsage(state);
@@ -56,26 +62,42 @@ function createProviderRouter(config = {}) {
   const redis = createRedisLink(config, options);
   const redisReady = redis.connect().then(() => redis.restoreState(state)).catch(() => {});
 
+
   async function ask(prompt, request = {}, ctx = {}) {
     await redisReady;
     const candidates = selectCandidates(providers, options.intentRouting, request);
     const errors = [];
+    const masker = ctx && ctx.masker && typeof ctx.masker.mask === 'function' ? ctx.masker : null;
+    const providerCtx = masker ? withoutMasker(ctx) : ctx;
 
     for (const candidate of candidates) {
       const { provider, model } = candidate;
       const key = modelKey(provider, model);
       if (!isModelAvailable(state, key, model, request)) continue;
-      if (!await redis.reserveUsage(key, model, request)) continue;
+      const reservation = await redis.reserveUsage(key, model, request);
+      if (!reservation) continue;
 
-      reserveUsage(state, key, request);
+      const undo = reserveUsage(state, key, request);
+
+      /* Masked at the moment it leaves: a provider that runs on this machine
+         (`external: false`) gets the text as it is. */
+      const outbound = masker && provider.external !== false;
+      const send = async () => provider.call(outbound ? await masker.maskAsync(prompt) : prompt, providerCtx, model);
 
       try {
-        const result = await provider.call(prompt, ctx, model);
+        const raw = breakers ? await breakers.run(provider.id, send) : await send();
         clearFailures(state, key);
         redis.mirrorFailures(key, state.models[key]);
-        return result;
+        return outbound ? unmaskResult(masker, raw) : raw;
       } catch (error) {
         errors.push(error);
+        if (isCircuitOpen(error)) {
+          /* The breaker refused before anything was sent: nothing was used,
+             and the model itself did not fail. */
+          undo();
+          redis.releaseUsage(reservation);
+          continue;
+        }
         markFailure(state, key, error, options);
         redis.mirrorFailure(key, state.models[key]);
       }
@@ -102,7 +124,8 @@ function createProviderRouter(config = {}) {
           tpd_limit: model.tpd ?? null,
           cooldown: isUntilActive(modelState.cooldownUntil, now),
           degraded: isUntilActive(modelState.degradedUntil, now),
-          failures: modelState.failures || 0
+          failures: modelState.failures || 0,
+          circuit: breakers ? breakers.stateOf(provider.id) || 'closed' : null
         };
       });
     });
@@ -117,7 +140,29 @@ function createProviderRouter(config = {}) {
     redis.disconnect();
   }
 
-  return { ask, getStats, stop };
+  return { ask, getStats, stop, breakers };
+}
+
+/** A pool, a factory, or nothing. */
+function resolveBreakers(value) {
+  if (!value) return null;
+  if (typeof value === 'function') return createBreakerPool({ create: value });
+  if (typeof value.run === 'function' && typeof value.get === 'function') return value;
+  throw new Error('createProviderRouter: breakers must be a factory (providerId) => breaker or a pool from createBreakerPool().');
+}
+
+/* The masker is the router's business; the provider never sees it. */
+function withoutMasker(ctx) {
+  const rest = { ...ctx };
+  delete rest.masker;
+  return rest;
+}
+
+function unmaskResult(masker, value) {
+  if (value && typeof value[Symbol.asyncIterator] === 'function' && typeof masker.unmaskStream === 'function') {
+    return masker.unmaskStream(value);
+  }
+  return typeof masker.unmaskDeep === 'function' ? masker.unmaskDeep(value) : value;
 }
 
 function createInitialState(providers) {
@@ -148,6 +193,7 @@ function createRedisLink(config, options) {
     connect: async () => {},
     restoreState: async () => {},
     reserveUsage: async () => true,
+    releaseUsage: () => {},
     mirrorFailure: () => {},
     mirrorFailures: () => {},
     disconnect: () => {}
@@ -205,6 +251,8 @@ function createRedisLink(config, options) {
 
   async function reserveUsage(key, model, request) {
     if (!client || !client.isOpen) return true;
+    const reservationId = randomUUID();
+    const tokenCost = estimatedTokens(request);
     try {
       const reserved = await client.eval(RESERVE_USAGE_SCRIPT, {
         keys: [
@@ -217,17 +265,27 @@ function createRedisLink(config, options) {
           String(model.rpm || 0),
           String(model.rpd || 0),
           String(model.tpd || 0),
-          String(estimatedTokens(request)),
-          randomUUID(),
+          String(tokenCost),
+          reservationId,
           String(RPM_WINDOW_MS),
           String(Math.ceil(RPM_WINDOW_MS / 1000)),
           String(secondsUntilMidnight())
         ]
       });
-      return Number(reserved) === 1;
+      return Number(reserved) === 1 ? { key, reservationId, tokenCost } : false;
     } catch (_error) {
       return true;
     }
+  }
+
+  /* Best effort: a reservation for a call that never left is given back. */
+  function releaseUsage(reservation) {
+    if (!reservation || reservation === true || !client || !client.isOpen) return;
+    const { key, reservationId, tokenCost } = reservation;
+    const quietly = (fn) => { try { Promise.resolve(fn()).catch(() => {}); } catch (_error) { /* never surfaces */ } };
+    quietly(() => client.zRem(stateKey('rpm', key), reservationId));
+    quietly(() => client.decrBy(dayKey('rpd', key), 1));
+    if (tokenCost) quietly(() => client.decrBy(dayKey('tpd', key), tokenCost));
   }
 
   function mirrorFailures(key, modelState) {
@@ -256,7 +314,7 @@ function createRedisLink(config, options) {
     client = null;
   }
 
-  return { connect, restoreState, reserveUsage, mirrorFailure, mirrorFailures, disconnect };
+  return { connect, restoreState, reserveUsage, releaseUsage, mirrorFailure, mirrorFailures, disconnect };
 }
 
 function selectCandidates(providers, intentRouting, request) {
@@ -303,11 +361,19 @@ function isModelAvailable(state, key, model, request) {
 function reserveUsage(state, key, request) {
   const modelState = state.models[key] || createModelState();
   const now = Date.now();
+  const tokens = estimatedTokens(request);
   modelState.rpmWindow = modelState.rpmWindow.filter(ts => now - ts < RPM_WINDOW_MS);
   modelState.rpmWindow.push(now);
   modelState.rpdUsed += 1;
-  modelState.tpdUsed += estimatedTokens(request);
+  modelState.tpdUsed += tokens;
   state.models[key] = modelState;
+  /* Undo, for a call the breaker refused before it left. */
+  return () => {
+    const index = modelState.rpmWindow.lastIndexOf(now);
+    if (index !== -1) modelState.rpmWindow.splice(index, 1);
+    modelState.rpdUsed = Math.max(0, modelState.rpdUsed - 1);
+    modelState.tpdUsed = Math.max(0, modelState.tpdUsed - tokens);
+  };
 }
 
 function estimatedTokens(request) {

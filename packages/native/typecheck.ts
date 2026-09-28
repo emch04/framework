@@ -258,3 +258,18 @@ async function exerciseOffline(): Promise<void> {
 }
 
 void exerciseOffline;
+
+import { createPictureFiles, createPictureSources, isSameOrigin, PictureSourceError, pictureFileName, sniffPictureType } from './src';
+import type { PictureFileSystemLike, PictureKind, PictureSource } from './src';
+
+const pictures = createPictureSources({ appUrl: 'https://api.example.com', getToken: async () => 'token' });
+const kind: PictureKind = pictures.classify('/images/a');
+if (kind.kind === 'refused') void kind.reason.toUpperCase();
+void pictures.resolve('/images/a', { query: { original: 1 } }).then((source: PictureSource | null) => source?.headers?.Authorization);
+void pictures.cacheKey('/images/a', { variant: 'original' });
+void isSameOrigin('https://a.example.com', 'https://a.example.com:443');
+void sniffPictureType(new Uint8Array(12))?.extension;
+void pictureFileName('A title', { fallback: 'Picture' }).length;
+declare const pictureFs: PictureFileSystemLike;
+void createPictureFiles({ sources: pictures, fs: pictureFs, directory: 'file:///cache/pictures/' }).named('/images/a', 'Title');
+void new PictureSourceError('http', undefined, 500).status;

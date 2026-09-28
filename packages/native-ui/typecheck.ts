@@ -55,3 +55,24 @@ createElement(FloatingPagination, {
 });
 createElement(CollapsibleScreen, { title: 'Settings', largeTitle: 'Settings', topInset: 47 });
 createElement(MarkdownView, { content: '**hi**', onCopyCode: async () => undefined });
+
+import { AutoRatioImage, ImageShimmer, ImageViewer, naturalRatio, reducePicturesArriving, PICTURES_ARRIVING_EMPTY } from './src';
+import type { ViewerPicture } from './src';
+
+interface Drawn extends ViewerPicture {
+  url: string;
+}
+const drawn: Drawn[] = [{ key: 'a', url: '/images/a', title: 'A' }];
+createElement(ImageViewer<Drawn>, {
+  pictures: drawn,
+  start: 0,
+  onClose: () => undefined,
+  resolveSource: async (picture) => ({ uri: picture.url }),
+  labels: { close: 'Close', counter: (position, count) => `${position}/${count}` },
+  icons: { close: null },
+  actions: [{ key: 'save', label: 'Save', icon: null, onPress: async (picture) => picture.url }]
+});
+createElement(AutoRatioImage, { load: async () => ({ uri: 'x' }), sourceKey: 'x', renderError: ({ retry }) => void retry() });
+createElement(ImageShimmer, { ratio: 1, accessibilityLabel: 'Loading' });
+void naturalRatio({ width: 1, height: 2 }).toFixed();
+void reducePicturesArriving(PICTURES_ARRIVING_EMPTY, { type: 'started', id: 'a' }).slots.length;

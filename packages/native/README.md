@@ -2,7 +2,7 @@
 
 La plomberie mobile, sans le moteur mobile : **session sécurisée, verrou
 biométrique, notifications natives, retour de paiement, état du réseau, mises à
-jour à distance, cache de médias**.
+jour à distance, cache de médias, sources d'images**.
 
 Le package ne charge ni `expo-secure-store`, ni `expo-local-authentication`,
 ni `expo-web-browser`, ni NetInfo, ni `expo-updates`, ni `expo-file-system`. Il les **reçoit**. Même règle que `@astratra/notify`
@@ -359,3 +359,95 @@ extensions déclarées est traité comme un temporaire abandonné.
 L'API historique d'Expo ne sait pas toucher la date d'un fichier sans le
 réécrire : l'éviction suit donc l'ordre de téléchargement, pas celui de
 lecture. Un fichier très relu finit par partir, puis revient au prochain appui.
+
+# Images
+
+```js
+import * as FileSystem from 'expo-file-system/legacy';
+import * as Sharing from 'expo-sharing';
+import { createPictureSources, createPictureFiles, pictureUti } from '@astratra/native';
+
+const pictures = createPictureSources({
+  appUrl: API_BASE_URL,                   // 'https://api.example.com' ou '…/api'
+  getToken: () => session.getAccessToken()
+});
+
+// Pour <Image> (React Native ou expo-image) : le jeton seulement chez soi.
+const source = await pictures.resolve('/images/abc');
+// { uri: 'https://api.example.com/images/abc', headers: { Authorization: 'Bearer …' } }
+await pictures.resolve('https://cdn.example.org/fig.jpg'); // { uri } — jamais d'en-tête
+await pictures.resolve('https://api.example.com@evil.com/x'); // null — refusée
+
+// L'original en fichier, pour Photos ou la feuille de partage.
+const files = createPictureFiles({
+  sources: pictures,
+  fs: FileSystem,
+  directory: `${FileSystem.cacheDirectory}pictures/`
+});
+const uri = await files.named('/images/abc', title, { fallback: t('picture'), query: { original: 1 } });
+await Sharing.shareAsync(uri, { dialogTitle: title, UTI: pictureUti(uri) ?? undefined });
+```
+
+Une application montre trois sortes d'images : **les siennes**, servies par son
+API derrière le jeton de la personne (`/images/abc`, ou la même adresse écrite
+en entier) ; celles **du dehors** (une publication, un CDN), chargées telles
+quelles ; celles **intégrées** (`data:image/…`) dans un document.
+
+**Le jeton ne part que vers l'origine de l'application.** La première version
+de cette règle était un test de préfixe (`https://` = dehors) et collait le
+chemin après l'URL de base de l'API. Deux adresses qu'on n'a pas écrites
+soi-même suffisaient à envoyer le jeton ailleurs :
+
+| Adresse reçue | Collée après `https://api.example.com` | Part vers |
+| --- | --- | --- |
+| `.evil.com/x` | `https://api.example.com.evil.com/x` | evil.com, **avec le jeton** |
+| `@evil.com/x` | `https://api.example.com@evil.com/x` | evil.com, **avec le jeton** |
+
+Ici l'adresse est **analysée**, son origine comparée **en entier** (schéma, hôte,
+port — jamais une sous-chaîne ni un préfixe), et ce qui ne s'analyse pas
+proprement est **refusé** au lieu d'être deviné : identifiants dans l'autorité
+(`app.example.com@evil.com`), barre oblique inverse, caractère de contrôle ou
+espace (l'analyseur WHATWG supprime tabulations et retours à la ligne en
+silence), hôte encodé en `%` ou non ASCII, port hors plage, `//hôte` relatif au
+schéma, chemin sans `/` initial. `app.example.com.evil.com`,
+`evil.com/?u=app.example.com`, `cdn.app.example.com`, un autre port ou `http`
+au lieu de `https` sont **d'autres origines** : chargées sans jeton. L'en-tête
+est décidé au dernier moment, sur l'adresse finale (`headersFor`).
+
+Pourquoi pas `new URL()` : le polyfill de React Native n'implémente pas
+`hostname` sur toutes les versions, et l'analyseur WHATWG est tolérant
+exactement là où un attaquant s'en sert. Un analyseur strict qui refuse vaut
+mieux qu'un analyseur tolérant qui répare.
+
+**Le dehors en `https` seulement** (`allowHttpOutside` pour l'autoriser) : iOS
+bloque `http` de toute façon, et une page qui en charge trahit ce qu'on lit.
+L'origine de l'application elle-même peut être en `http` (développement local).
+
+**Les images intégrées** sont jugées sur leur **longueur** avant tout balayage
+(10 Mo décodés par défaut, `maxDataBytes`) : une adresse de 200 Mo est refusée en
+temps constant. Seul l'en-tête est examiné pour sa forme (256 premiers
+caractères). SVG n'est pas accepté par défaut (c'est un document, pas une
+image) ; `dataTypes` pour l'ajouter.
+
+**La clé de cache** (`cacheKey`) : l'adresse normalisée — un chemin et la même
+adresse écrite en entier la partagent — **jamais le jeton** ; 106 bits
+(`contentKey`), là où l'ancienne empreinte de 32 bits pouvait faire partager un
+fichier à deux images. `variant` et `version` séparent deux rendus et retirent
+une ancienne règle.
+
+**Les fichiers** (`createPictureFiles`) : l'original est téléchargé sous un nom
+temporaire puis déplacé **une fois complet et reconnu**. L'ancienne version
+servait n'importe quel fichier trouvé dans le dossier — un téléchargement coupé
+à mi-chemin devenait l'image, pour toujours. Le type vient des **octets**
+(`sniffPictureType` : PNG, JPEG, GIF, WebP, HEIC, AVIF, BMP), jamais du nom : une
+page d'erreur HTML servie en 200 est refusée (`not_a_picture`) au lieu d'être
+enregistrée dans Photos comme JPEG. Un statut hors 2xx est une erreur `http`.
+Deux appels simultanés partagent un seul téléchargement. Le dossier est borné
+par `createMediaCache`. `named()` en fait une copie au titre de l'image
+(`pictureFileName` : caractères réservés retirés, pas de fichier caché, coupé en
+caractères et non en octets) ; seule la dernière copie nommée est gardée.
+
+Les erreurs sont des **codes** (`PictureSourceError`: `refused` + raison,
+`http` + statut, `not_a_picture`), jamais des phrases. La permission de Photos
+(`expo-media-library`) reste à l'application.
+

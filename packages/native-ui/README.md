@@ -3,7 +3,8 @@
 Le kit d'interface mobile : **le verre liquide d'Apple sur iOS, une surface
 visible sur Android**, des boutons en verre, des cartes pâles, des barres qui se
 replient au défilement, une barre d'onglets façon Instagram, un en-tête
-repliable, et le rendu propre des réponses d'une IA.
+repliable, le rendu propre des réponses d'une IA, et les images : à leurs
+propres proportions, une place qui attend, une visionneuse plein écran.
 
 Pour React Native / Expo. Pas d'étape de build, pas de JSX : le source est du
 CommonJS écrit avec `createElement`, comme `@astratra/react`, et Metro le prend
@@ -349,6 +350,141 @@ listRef.current.scrollToOffset({ offset: anchorOffset(anchorY) });
 Avec cette réserve, le défilement maximal vaut exactement la position de la
 question, que la réponse s'allonge ou raccourcisse ; elle tombe à zéro dès que la
 réponse remplit l'écran.
+
+# Les images
+
+Trois composants et leurs règles pures (`logic/picture.js`). Aucun ne construit
+d'adresse ni n'ajoute d'en-tête : la source vient de l'application, en général
+de `createPictureSources().resolve` de `@astratra/native`, **seul** à décider si
+le jeton de la personne part avec (jamais vers une autre origine).
+
+## AutoRatioImage
+
+```js
+import { Image } from 'expo-image';
+import { AutoRatioImage } from '@astratra/native-ui';
+
+h(AutoRatioImage, {
+  load: () => pictures.resolve(card.url),   // ou `source` déjà prête
+  sourceKey: card.url,
+  ImageComponent: Image,                     // Image de React Native par défaut
+  imageProps: { cachePolicy: 'disk' },
+  accessibilityLabel: title,
+  accessibilityHint: t('viewer.openHint'),
+  loadingLabel: t('picture.loading'),
+  renderError: ({ retry }) => h(GlassButton, { onPress: retry, accessibilityLabel: t('retry') }, icon),
+  onPress: () => setViewing(0)
+});
+```
+
+**Libre sur la page** : pas de cadre, coins arrondis, rien de coupé. Un carré
+(ou `initialRatio`) tant que l'image n'est pas connue, puis **ses propres
+proportions** — bornées entre 1/5 et 5 (`minRatio`, `maxRatio`) : une bande de
+1 × 10 000 ne fait pas une vue de dix mille points de haut, elle est montrée
+entière dans la boîte bornée.
+
+**Elle monte doucement** une fois là — d'un rien plus petite et transparente
+à sa place, 700 ms, sortie en douceur — au lieu d'apparaître d'un coup.
+**Réduire les animations** : d'un coup. En attendant, la place tenue porte le
+reflet d'`ImageShimmer` (`placeholder` pour en mettre une autre, `null` pour
+aucune).
+
+**Un échec n'est jamais un indicateur qui tourne pour toujours.** Une source
+qui échoue ou ne résout rien, une image qui ne se décode pas : l'emplacement
+d'erreur de l'application (`renderError({ retry })`). L'ancienne version
+laissait une promesse rejetée sans suite — la roue tournait indéfiniment.
+**Une nouvelle image repart de zéro** : l'ancienne gardait la forme et l'échec
+de la précédente quand l'adresse changeait.
+
+**Touchable** (`onPress`) : un bouton-image, désactivé tant que l'image n'est
+pas là, qui s'enfonce sur un ressort comme `GlassButton` (Réduire les
+animations : il s'assombrit seulement). Sans `onPress`, une simple image
+annoncée comme telle. Les deux événements de chargement sont lus (expo-image
+et React Native) ; `fit` devient `contentFit` ou `resizeMode` selon le
+composant.
+
+## ImageShimmer
+
+La place d'une image qu'on prépare : la forme aux proportions attendues, plate,
+sans contour, où passe une lumière douce de gauche à droite (1,6 s). Un seul
+élément pour le lecteur d'écran, une barre de progression avec les mots de
+l'application (`accessibilityLabel`), et une légende discrète facultative
+(`caption`). **Réduire les animations** : la lumière ne bouge pas. Elle
+s'arrête quand la place disparaît.
+
+### Les images en route
+
+```js
+import { reducePicturesArriving, picturesArrivingCount, PICTURES_ARRIVING_EMPTY } from '@astratra/native-ui/logic';
+
+const [arriving, dispatch] = useReducer(reducePicturesArriving, PICTURES_ARRIVING_EMPTY);
+// step 'draw' commencé   → dispatch({ type: 'started', id })
+// step terminé           → dispatch({ type: 'finished', id, ok })
+// l'image est arrivée    → dispatch({ type: 'arrived', id? })
+// fin du flux            → dispatch({ type: 'ended' })
+Array.from({ length: picturesArrivingCount(arriving) }, (_, i) => h(ImageShimmer, { key: i, … }));
+```
+
+La première version comptait les étapes « dessiner » en cours : le compte
+tombait à zéro dès la fin de l'étape, alors que l'image arrivait dans un
+événement suivant — la place disparaissait, le texte remontait, puis l'image le
+repoussait. Ici une tâche finie **garde sa place jusqu'à l'arrivée de l'image** ;
+seuls un échec ou la fin du flux la rendent. Un événement qui ne change rien
+rend **le même objet** (React ne redessine pas). `countRunningSteps(steps, tool)`
+donne l'ancien compte pour une application qui garde des étapes.
+
+## ImageViewer
+
+```js
+h(ImageViewer, {
+  pictures,                        // [{ key, title?, accessibilityLabel?, … }]
+  start: viewing,                  // null : fermée
+  onClose: () => setViewing(null),
+  resolveSource: (picture) => pictures.resolve(picture.url),
+  ImageComponent: Image,
+  labels: { close: t('close'), share: t('share'), details: t('details'),
+            counter: (n, total) => t('counter', { n, total }), zoomHint: t('zoomHint') },
+  icons: { close: xmark, share: shareIcon, details: info, detailsActive: infoFill, failed: photo, notice: check },
+  onShare: (picture) => sharePicture(picture),
+  actions: [{ key: 'save', label: t('save'), icon: download, onPress: async (p) => (await save(p), t('saved')) }],
+  onActionError: (error, key) => Alert.alert(t('failed')),
+  renderDetails: (picture) => h(Details, { picture }),
+  insets: useSafeAreaInsets(),
+  onHaptic: (kind) => haptics[kind]()
+});
+```
+
+Comme Photos : du noir autour, des commandes rondes en verre qu'un appui cache
+et remontre (la barre d'état avec, et le lecteur d'écran ne les atteint plus
+tant qu'elles sont cachées).
+
+- **Glisser de côté** passe d'une image à l'autre ; le compteur (« 3 sur 12 »,
+  les mots de l'application) suit, `onIndexChange` est appelé.
+- **Pincer ou toucher deux fois** zoome là où l'on touche, au plus ×4 ; deux
+  fois encore pour revenir. Zoomé, le doigt déplace l'image et les pages ne
+  tournent plus. Sur **iOS** le zoom est natif (ScrollView qui zoome, son rebond,
+  sa décélération). La ScrollView d'**Android** ne zoome pas — l'ancienne
+  version n'y avait tout simplement pas de pincement — : Android reçoit le sien,
+  deux doigts autour du point entre eux, un doigt pour se déplacer, et au
+  relâcher l'image revient dans ses bornes. Un toucher unique attend 260 ms
+  pour ne pas être le premier d'un double.
+- **Tirer vers le bas** ferme : le noir s'efface sur une demi-hauteur, l'image
+  rétrécit jusqu'à 80 %. Au-delà de 120 points ou assez vite, elle part ;
+  sinon elle revient sur un ressort. Deux doigts ne tirent jamais.
+- **En haut** : fermer, le compteur, les détails si l'application en donne
+  (`renderDetails`, qui remplace alors le titre). **En bas** : le titre, puis
+  partager (`onShare`) et les actions de l'application. Une action peut rendre
+  un court message (« Enregistrée ») montré un instant et annoncé au lecteur
+  d'écran ; un échec va à `onActionError` avec sa clé et l'image. Pendant
+  qu'une action tourne, les autres attendent.
+- **Réduire les animations** : pas de fondu, pas de ressort, pas de
+  rétrécissement ; la visionneuse s'ouvre et se ferme d'un coup, le zoom par
+  double toucher n'est pas animé.
+- Une **rotation** remet la liste sur la même image ; la dernière image retirée
+  ferme la visionneuse ; le retour Android et le geste d'échappement de
+  VoiceOver ferment aussi.
+
+Aucun texte, aucune icône, aucun chargement en dur : tout vient des props.
 
 ---
 

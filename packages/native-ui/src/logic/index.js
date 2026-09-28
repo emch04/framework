@@ -12,5 +12,6 @@ module.exports = {
   ...require('./collapsibleHeader'),
   ...require('./markdown'),
   ...require('./tableColumns'),
-  ...require('./anchorQuestion')
+  ...require('./anchorQuestion'),
+  ...require('./picture')
 };

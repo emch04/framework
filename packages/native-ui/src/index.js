@@ -16,5 +16,8 @@ module.exports = {
   ...require('./components/TabBar'),
   ...require('./components/CollapsibleHeader'),
   ...require('./components/MarkdownView'),
+  ...require('./components/ImageShimmer'),
+  ...require('./components/AutoRatioImage'),
+  ...require('./components/ImageViewer'),
   getGlassMode: require('./components/runtime').getGlassMode
 };

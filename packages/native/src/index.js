@@ -11,5 +11,6 @@ module.exports = {
   ...require('./api'),
   ...require('./connectivity'),
   ...require('./updates'),
-  ...require('./mediaCache')
+  ...require('./mediaCache'),
+  ...require('./pictureSource')
 };

@@ -466,3 +466,124 @@ export function createMediaCache(options: {
   abandonedAfterMs?: number;
   now?: () => number;
 }): MediaCache;
+
+/* ─────────────────────────────── Pictures ────────────────────────────── */
+
+export const PICTURE_ADDRESS_MAX_LENGTH: number;
+/** Largest inline picture accepted by default, decoded (10 MB). */
+export const PICTURE_DATA_MAX_BYTES: number;
+/** Inline types accepted by default (no SVG). */
+export const PICTURE_DATA_TYPES: readonly string[];
+export const PICTURE_EXTENSIONS: Readonly<Record<string, string>>;
+export const PICTURE_FILE_EXTENSIONS: readonly string[];
+
+export type PictureRefusal =
+  | 'empty'
+  | 'too_long'
+  | 'unsafe_characters'
+  | 'relative'
+  | 'scheme'
+  | 'userinfo'
+  | 'host'
+  | 'insecure'
+  | 'data_malformed'
+  | 'data_type'
+  | 'data_too_large';
+
+export class PictureSourceError extends Error {
+  readonly code: 'refused' | 'http' | 'not_a_picture';
+  readonly reason: string | null;
+  readonly status: number | null;
+  constructor(code: 'refused' | 'http' | 'not_a_picture', reason?: string, status?: number);
+}
+
+export interface HttpAddress {
+  scheme: 'http' | 'https';
+  host: string;
+  /** null for the scheme's default port. */
+  port: number | null;
+  origin: string;
+  /** Path, query and fragment; '' when none. */
+  path: string;
+}
+
+/** Strict: no credentials, no backslash, no control character, ASCII host. */
+export function parseHttpAddress(address: string): HttpAddress | null;
+export function originOf(address: string): string | null;
+/** Scheme, host and port compared whole — never a prefix or substring test. */
+export function isSameOrigin(a: string, b: string): boolean;
+
+export type DataAddressRead =
+  | { ok: true; mimeType: string; base64: boolean; payloadStart: number; bytes: number }
+  | { ok: false; reason: 'data_malformed' | 'data_type' | 'data_too_large' };
+export function readDataAddress(address: string, options?: { types?: readonly string[]; maxBytes?: number }): DataAddressRead;
+export function dataPayloadBase64(address: string, read: { base64: boolean; payloadStart: number }): string;
+export function decodeBase64(text: string): Uint8Array;
+export function encodeBase64(bytes: Uint8Array | ArrayLike<number>): string;
+/** From the first bytes, never the name: PNG, JPEG, GIF, WebP, HEIC, AVIF, BMP. */
+export function sniffPictureType(head: Uint8Array | ArrayLike<number>): { mimeType: string; extension: string } | null;
+/** '' when neither the title nor the fallback leaves anything. */
+export function pictureFileName(title: string, options?: { fallback?: string; maxLength?: number }): string;
+/** expo-sharing's `UTI` for a picture file, from its extension; null when unknown. */
+export function pictureUti(uri: string): string | null;
+
+export type PictureKind =
+  | { kind: 'app'; url: string }
+  | { kind: 'outside'; url: string }
+  | { kind: 'data'; url: string; mimeType: string; bytes: number }
+  | { kind: 'refused'; reason: PictureRefusal };
+
+/** What an image component takes: the token only on the app's own origin. */
+export interface PictureSource {
+  uri: string;
+  headers?: Record<string, string>;
+}
+
+export type PictureQuery = Record<string, string | number | boolean | null | undefined>;
+
+export interface PictureSources {
+  readonly appOrigin: string;
+  classify(address: string): PictureKind;
+  /** null for a refused address. */
+  resolve(address: string, options?: { query?: PictureQuery }): Promise<PictureSource | null>;
+  headersFor(url: string): Promise<Record<string, string>>;
+  /** null for a refused address; never contains the token. */
+  cacheKey(address: string, options?: { variant?: string; version?: string | number }): string | null;
+}
+
+export function createPictureSources(options: {
+  appUrl: string;
+  getToken?: () => string | null | undefined | Promise<string | null | undefined>;
+  authorize?: (token: string) => Record<string, string>;
+  allowHttpOutside?: boolean;
+  dataTypes?: readonly string[];
+  maxDataBytes?: number;
+}): PictureSources;
+
+/** expo-file-system/legacy's shape, as the picture files use it. */
+export interface PictureFileSystemLike extends FileSystemLike {
+  copyAsync(options: { from: string; to: string }): Promise<void>;
+  downloadAsync(uri: string, fileUri: string, options?: { headers?: Record<string, string> }): Promise<{ status: number }>;
+  readAsStringAsync(uri: string, options: { encoding: 'base64'; position?: number; length?: number }): Promise<string>;
+  writeAsStringAsync(uri: string, contents: string, options: { encoding: 'base64' }): Promise<void>;
+}
+
+export interface PictureFiles {
+  readonly directory: string;
+  original(address: string, options?: { query?: PictureQuery; version?: string | number }): Promise<string>;
+  named(
+    address: string,
+    title: string,
+    options?: { fallback?: string; query?: PictureQuery; version?: string | number }
+  ): Promise<string>;
+  tidy(): Promise<string[]>;
+}
+
+export function createPictureFiles(options: {
+  sources: PictureSources;
+  fs: PictureFileSystemLike;
+  directory: string;
+  maxFiles?: number;
+  maxBytes?: number;
+  now?: () => number;
+}): PictureFiles;

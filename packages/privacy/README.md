@@ -254,6 +254,109 @@ contenant une accolade corrompt le document qu'il devait nettoyer.
 Les structures cycliques et absurdement profondes sont bornées — journaliser est
 exactement l'endroit où l'on rencontre les deux.
 
+## Le consentement avant l'IA et le web
+
+Les magasins d'applications, et la loi à bien des endroits, demandent qu'une
+personne soit informée — et dise oui — **avant** que ses questions, fichiers,
+voix ou dossiers partent chez une IA tierce.
+
+```js
+const { createConsent, createMemoryConsentStore } = require('@astratra/privacy');
+
+const consentement = createConsent({
+  store,                                     // voir le contrat ci-dessous
+  scopes: {
+    ai:    { version: 2 },                   // l'assistant
+    web:   { version: 1, requires: ['ai'] }, // la recherche web
+    voice: { version: 1, requires: ['ai'] }, // l'appel vocal en direct
+  },
+});
+
+await consentement.grant(userId, 'ai', { version: corps.version }); // le texte montré
+await consentement.revoke(userId, 'ai');                            // refus ou retrait
+await consentement.check(userId, 'ai');   // { state: 'granted' | 'refused' | 'required', … }
+
+// LA garde, juste avant tout envoi : un code, jamais du texte.
+const verdict = await consentement.guard(userId, 'web');
+if (!verdict.allowed) return res.status(403).json({ code: verdict.code }); // CONSENT_REQUIRED | CONSENT_REFUSED
+
+// Ou l'action enveloppée, qui ne s'exécute jamais sans accord :
+const envoyer = consentement.guarded('ai', (req) => req.user.id, (req) => oracle.ask(req.body));
+```
+
+Ce que les tests fixent :
+
+**Le silence ne vaut jamais accord.** Sans décision, l'état est `required`.
+
+**Un oui couvre le texte montré.** Relever la `version` d'un scope redemande à
+tous ceux qui avaient dit oui ; un refus reste un refus, quelle que soit la
+version — on ne harcèle pas celui qui a dit non.
+
+**C'est le serveur qui date la version.** Un client annonce le texte qu'il a
+montré ; une version supérieure à l'actuelle est refusée
+(`CONSENT_INVALID_VERSION`) — sinon un client dirait « 1000 » une fois et
+couvrirait d'avance tous les textes futurs. Une version plus ancienne (une
+application pas encore mise à jour) est gardée telle quelle, et redemandée.
+
+**Jamais décidé n'est pas refusé.** Refus et retraits s'écrivent aussi : un
+retrait fait sur un appareil doit se voir sur les autres.
+
+**Les scopes sont séparés**, et `requires` est vérifié jusqu'au bout : retirer
+l'accord à l'assistant bloque aussi la recherche web.
+
+**Un compte ne profite jamais de l'accord d'un autre.**
+
+`overview(subject)` pour l'écran des réglages, `exportFor(subject)` pour le
+droit d'accès, `forget(subject)` pour l'effacement.
+
+### Sur l'appareil : mémoire, synchronisation, garde
+
+```js
+const { createConsentClient } = require('@astratra/privacy');
+
+const accord = createConsentClient({
+  version: 2,                                  // le texte que CE client montre
+  local:  { get: (k) => AsyncStorage.getItem(k), set: (k, v) => AsyncStorage.setItem(k, v) },
+  remote: { get: () => api.get('/account/ai-consent'), put: (b) => api.put('/account/ai-consent', b) },
+  currentSubject: () => session.userId,
+});
+
+await accord.require();          // juste avant chaque envoi — lève CONSENT_REQUIRED / CONSENT_REFUSED
+await accord.decide(userId, true);
+```
+
+La décision vit sur le **compte**, avec une copie sur l'appareil pour le hors
+ligne et pour un serveur trop ancien pour connaître la route. La plus
+**récente** l'emporte : un retrait fait ailleurs vaut ici, un retrait fait ici
+hors ligne n'est pas effacé par l'ancien oui du serveur — il lui est poussé.
+Un chargement parti **avant** une décision ne l'écrase pas en revenant ; deux
+chargements partagent une requête.
+
+### Les mots
+
+Aucun texte n'est dans le paquet. `consentCopyKeys('ai', consentAudience(role,
+{ simple: ['student'] }))` rend les **clés de catalogue** du dialogue
+(`consent.ai.simple.title`, `consent.accept`…), et `consentDialogActions(state)`
+dit que, après un refus, le second bouton referme (« garder désactivé ») au lieu
+d'écrire le même refus.
+
+### Le contrat du store
+
+```
+get(subject, scope) -> record | null
+put(record)                         (remplace : une ligne par sujet et scope)
+list(subject)       -> records
+remove(subject, scope?) -> nombre supprimé
+```
+
+`createMemoryConsentStore()` sert aux tests. Un adaptateur réel prouve qu'il
+se comporte pareil :
+
+```js
+const { runConsentStoreContract } = require('@astratra/privacy');
+runConsentStoreContract(async () => createMongoConsentStore(await collectionNeuve()));
+```
+
 ## Ce que ce package ne fait pas
 
 - Il ne **supprime** rien : il anonymise, via ce que tu branches.

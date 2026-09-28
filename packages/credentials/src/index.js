@@ -8,5 +8,6 @@ module.exports = {
   ...require('./unlockChallenge'),
   ...require('./routes'),
   ...require('./utils'),
-  ...require('./screenState')
+  ...require('./screenState'),
+  ...require('./balance')
 };

@@ -4,5 +4,8 @@ module.exports = {
   ...require('./anonymizer'),
   ...require('./erasure'),
   ...require('./accountDeletion'),
-  ...require('./stores')
+  ...require('./stores'),
+  ...require('./consent'),
+  ...require('./consentClient'),
+  ...require('./testing/consentStoreContract')
 };

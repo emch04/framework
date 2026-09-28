@@ -145,3 +145,58 @@ async function exerciseDeletion(): Promise<void> {
 void exercise;
 void exerciseDeletion;
 void checks;
+
+import {
+  CONSENT_CODES,
+  ConsentError,
+  consentAudience,
+  consentCopyKeys,
+  consentDialogActions,
+  consentRecord,
+  consentState,
+  createConsent,
+  createConsentClient,
+  createMemoryConsentStore,
+  mergeDecisions,
+  newDecision,
+  readConsentInput,
+  readDecision,
+  runConsentStoreContract
+} from './src';
+import type { Consent, ConsentClient, ConsentDecision, ConsentStore, ConsentVerdict } from './src';
+
+const consentStore: ConsentStore = createMemoryConsentStore();
+const consent: Consent = createConsent({
+  store: consentStore,
+  scopes: { ai: { version: 2 }, web: { version: 1, requires: ['ai'] } },
+  now: () => new Date(),
+  onChange: ({ subject, scope, granted, version }) => void [subject, scope, granted, version]
+});
+
+const consentClient: ConsentClient = createConsentClient({
+  version: 2,
+  local: { get: async () => null, set: async () => {} },
+  remote: { get: async () => null, put: async (body) => body },
+  currentSubject: () => 'user-1',
+  onError: (where) => void where
+});
+
+async function exerciseConsent(): Promise<void> {
+  const granted: ConsentDecision = await consent.grant('user-1', 'ai', { version: 2 });
+  await consent.revoke('user-1', 'web');
+  const verdict: ConsentVerdict = await consent.guard('user-1', ['web']);
+  if (!verdict.allowed) void [verdict.code, verdict.scope];
+  await consent.assert('user-1', 'ai').catch((error: unknown) => { if (error instanceof ConsentError) void error.statusCode; });
+  const send = consent.guarded('ai', (id: string) => id, async (_id: string) => 'sent');
+  const sent = await send('user-1');
+  const overview = await consent.overview('user-1');
+  await consent.forget('user-1');
+  await consentClient.require();
+  const ok: boolean = await consentClient.isGranted('user-1');
+  const merged = mergeDecisions(readDecision(granted), 'unavailable');
+  void [sent, overview.length, ok, merged.push, consentClient.stateOf(), CONSENT_CODES.REQUIRED,
+    consentState(granted, 2), newDecision(true, 2), readConsentInput({}), consentAudience('student', { simple: ['student'] }),
+    consentCopyKeys('ai', 'simple').title, consentDialogActions('refused').secondary, consentRecord({ scope: 'web' }), consent.versionOf('ai')];
+}
+void exerciseConsent;
+void runConsentStoreContract;

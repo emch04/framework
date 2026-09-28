@@ -118,4 +118,50 @@ function createMemoryDeletionStore() {
   };
 }
 
-module.exports = { createMemoryErasureStore, createMemoryDeletionStore };
+/**
+ * The consent store contract, in memory.
+ *
+ *   get(subject, scope)      -> record | null
+ *   put(record)              -> void   (upsert on subject + scope)
+ *   list(subject)            -> records of that subject only
+ *   remove(subject, scope?)  -> number removed (every scope when omitted)
+ *
+ * A record is { subject, scope, granted, version, decidedAt }. One row per
+ * subject and scope: a new decision REPLACES the previous one — the latest
+ * decision is the one that counts, and keeping an older yes next to a newer no
+ * is how a withdrawal gets lost. In MongoDB: a unique index on
+ * { subject, scope } and updateOne(..., { upsert: true }).
+ *
+ * Not persistent: a consent that vanishes on restart asks everyone again, or —
+ * worse, with a cache in front — lets an old yes stand.
+ */
+function createMemoryConsentStore() {
+  const rows = new Map();
+  const keyOf = (subject, scope) => `${String(subject)}\u0000${String(scope)}`;
+  const copy = (row) => (row ? { ...row } : null);
+
+  return {
+    async get(subject, scope) {
+      return copy(rows.get(keyOf(subject, scope))) || null;
+    },
+    async put(record) {
+      rows.set(keyOf(record.subject, record.scope), { ...record, subject: String(record.subject) });
+    },
+    async list(subject) {
+      return [...rows.values()].filter((row) => row.subject === String(subject)).map(copy);
+    },
+    async remove(subject, scope) {
+      let removed = 0;
+      for (const [key, row] of rows) {
+        if (row.subject === String(subject) && (scope === undefined || row.scope === scope)) {
+          rows.delete(key);
+          removed += 1;
+        }
+      }
+      return removed;
+    },
+    size: () => rows.size
+  };
+}
+
+module.exports = { createMemoryErasureStore, createMemoryDeletionStore, createMemoryConsentStore };

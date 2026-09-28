@@ -31,6 +31,9 @@ const unlockValidation = [
  *   no second factor stands between an admin session and a payment key.
  * @param {Function} [options.subjectOf] (req) => id. Defaults to req.user.id.
  * @param {object} [options.logger]   { info } — records who changed what, never the value.
+ * @param {object} [options.balances] from createBalanceProbe(). The status then
+ *   carries, next to each configured key that has a probe, what is left on the
+ *   provider account — the number, never the key.
  */
 function createCredentialsRoutes(options = {}) {
   const vault = options.vault;
@@ -46,6 +49,24 @@ function createCredentialsRoutes(options = {}) {
   const challenge = options.challenge || null;
   const subjectOf = options.subjectOf || ((req) => req.user && req.user.id);
   const logger = options.logger || NOOP_LOGGER;
+  const balances = options.balances || null;
+  if (balances && (typeof balances.check !== 'function' || typeof balances.has !== 'function')) {
+    throw new Error('createCredentialsRoutes requires options.balances from createBalanceProbe().');
+  }
+
+  /* Only a key that is in place has a balance to read. A probe that fails says
+     so in the entry; it never fails the whole screen. */
+  async function withBalances(state) {
+    if (!balances) return state;
+    const spaces = await Promise.all(state.spaces.map(async (space) => ({
+      ...space,
+      keys: await Promise.all(space.keys.map(async (entry) => {
+        if (!entry.configured || !balances.has(entry.key)) return entry;
+        return { ...entry, balance: await balances.check(entry.key) };
+      }))
+    })));
+    return { ...state, spaces };
+  }
 
   const requireUnlocked = async (req) => {
     if (challenge) await challenge.assertUnlocked(subjectOf(req));
@@ -56,7 +77,7 @@ function createCredentialsRoutes(options = {}) {
 
   /** The state of every managed key. */
   router.get('/', asyncHandler(async (req, res) => {
-    const state = await vault.status();
+    const state = await withBalances(await vault.status());
     /* The screen needs to know whether the window is open: otherwise it offers
        "Edit" only to hit a refusal once the key has been typed. */
     const unlockedUntil = challenge ? await challenge.unlockedUntil(subjectOf(req)) : null;
@@ -77,12 +98,21 @@ function createCredentialsRoutes(options = {}) {
     return apiResponse(res, 200, 'Keys can be changed for the next few minutes.', result);
   }));
 
+  /** Read one balance again, now — "refresh" on the screen. Bounded by the probe's minRefreshMs. */
+  router.get('/:key/balance', asyncHandler(async (req, res) => {
+    if (!balances || !balances.has(req.params.key)) return apiResponse(res, 404, 'No balance is read for this key.');
+    const balance = await balances.check(req.params.key, { refresh: true });
+    return apiResponse(res, 200, 'Balance', balance);
+  }));
+
   /** Store a key. */
   router.put('/:key', validateMiddleware(setValidation), asyncHandler(async (req, res) => {
     /* Knowing the account password is not enough: replacing a payment key with
        your own breaks nothing visible, the money simply goes elsewhere. */
     await requireUnlocked(req);
     await vault.set(req.params.key, req.body.value, { updatedBy: subjectOf(req) });
+    /* The reading described the previous key. */
+    if (balances && typeof balances.forget === 'function') balances.forget(req.params.key);
     logger.info(`[credentials] ${req.params.key} stored by ${subjectOf(req)}`);
     return apiResponse(res, 200, 'Key stored.', { key: req.params.key });
   }));
@@ -92,6 +122,7 @@ function createCredentialsRoutes(options = {}) {
     /* Unplugging a service is as consequential as plugging one in. */
     await requireUnlocked(req);
     await vault.disconnect(req.params.key, { updatedBy: subjectOf(req) });
+    if (balances && typeof balances.forget === 'function') balances.forget(req.params.key);
     logger.info(`[credentials] ${req.params.key} disconnected by ${subjectOf(req)}`);
     return apiResponse(res, 200, 'Key disconnected.', { key: req.params.key });
   }));

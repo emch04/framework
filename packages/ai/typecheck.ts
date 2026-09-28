@@ -125,3 +125,64 @@ const format: FormatInstructions = createFormatInstructions({
 });
 const rules: string = format.build('mobile', 'en');
 void [cleaned, prose, rules, format.normalizeSurface(null)];
+
+import {
+  buildPassagesContext,
+  createAskLimit,
+  createBreakerPool,
+  createLanguageDetector,
+  createOpenAICompatibleProvider,
+  createReversibleMasker,
+  createSourceLedger,
+  findContradiction,
+  isProviderOutage,
+  markForeignPassages,
+  passageSource,
+  plainText,
+  rerankResults,
+  tidyMarkdown,
+  usedSources,
+  verifyQuotations,
+  withOutboundMasking
+} from '@astratra/ai';
+import type { BreakerLike, BreakerPool, ReversibleMasker } from '@astratra/ai';
+
+const fakeBreaker = (): BreakerLike => ({ call: async (fn) => fn(), status: () => ({ state: 'closed' }) });
+const pool: BreakerPool = createBreakerPool({ create: () => fakeBreaker() });
+const masker: ReversibleMasker = createReversibleMasker({
+  names: ['Kevin'],
+  patterns: [{ type: 'EMAIL', pattern: /@/g }],
+  detect: async () => [{ text: 'Grace', type: 'person', score: 0.9 }],
+  minScore: 0.6
+});
+const guardedRouter = createProviderRouter({
+  breakers: (id: string) => { void id; return fakeBreaker(); },
+  providers: [createOpenAICompatibleProvider({
+    id: 'groq', url: 'https://api.test', getKey: () => 'k', models: [{ id: 'm' }],
+    fetch: async () => ({ ok: true, status: 200, json: async () => ({}) }), external: true
+  })]
+});
+guardedRouter.ask('hello', {}, { masker });
+const circuit: string | null = guardedRouter.getStats()['groq:m']?.circuit ?? null;
+guardedRouter.stop();
+
+async function exerciseNew(): Promise<void> {
+  const search = withOutboundMasking(masker, async (query: string) => ({ query }));
+  await search('Kevin');
+  const context: string[] = buildPassagesContext({ passages: [{ title: 'T', text: 'x', lang: 'fr' }], lang: 'en', texts: { foreign: 'Translate {languages}.' } });
+  const marked = markForeignPassages([], { lang: 'en' });
+  const ledger = createSourceLedger<{ url?: string; title?: string }>();
+  ledger.keep([{ url: 'https://a.test' }], 'data');
+  const kept = usedSources('answer', ledger.sources(), ledger.evidence(), { commonWords: ['because'] });
+  const verdict = await findContradiction('answer', ['source'], { compare: async () => null });
+  const reranked = await rerankResults('q', { results: [{ title: 'a' }], sources: [{ url: 'u' }] }, { score: async () => [1] });
+  const verified: string = await verifyQuotations('« x » (Loi 1)', { findReferences: () => [], resolve: async () => null });
+  const detector = createLanguageDetector({ words: { fr: ['le'], en: ['the'] }, identify: async () => ({ language: 'fr', confidence: 1 }) });
+  const language: string = await detector.reply('le', 'en');
+  const limit = createAskLimit({ max: 5, windowMs: 60_000, code: 'CHAT_RATE_LIMITED' });
+  const verdictLimit = limit.take('u1');
+  await runAgentLoop({ prompt: 'x', registry, router: { ask: async () => 'final' }, userRole: 'owner', masker, reportToolErrors: true, toolTimeoutMs: 1000, maxMs: 60_000, finalInstruction: 'Answer now.' });
+  void [context, marked.languages, kept, verdict, reranked.results, verified, language, verdictLimit.remaining, circuit,
+    pool.stateOf('x'), isProviderOutage(null), passageSource({ text: 'x' }).excerpt, plainText('x'), tidyMarkdown('x', { removeEmoji: true })];
+}
+void exerciseNew;

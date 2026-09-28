@@ -103,6 +103,139 @@ Fonctionnalité non triviale dont une boucle d'agent de production a besoin,
 mais dont le portage fidèle reste jugé trop ambitieux pour ce package. À
 construire dans votre propre boucle, ou à couvrir dans un futur spec.
 
+## Un disjoncteur par fournisseur, jamais un pour tous
+
+Un seul disjoncteur partagé par toutes les dépendances extérieures a l'air
+propre et c'est un piège : un reclasseur lent l'ouvrait, et le détecteur de
+noms derrière le masquage s'éteignait avec lui pendant une minute. Ce qui
+tombe doit être seul à s'arrêter.
+
+Le paquet n'a pas de disjoncteur à lui : celui de `@astratra/resilience` (une
+seule sonde en demi-ouverture) s'injecte.
+
+```js
+const { createCircuitBreaker } = require('@astratra/resilience');
+const { createProviderRouter, isProviderOutage } = require('@astratra/ai');
+
+const router = createProviderRouter({
+  providers,
+  breakers: (id) => createCircuitBreaker({ name: id, failureThreshold: 3, recoveryMs: 60_000, isFailure: isProviderOutage })
+});
+router.getStats()['groq:llama'].circuit; // 'closed' | 'open' | 'half-open'
+```
+
+`isProviderOutage` : délais, erreurs réseau, 408 et 5xx sont des pannes ; un
+429 ne l'est pas (le refroidissement du routeur s'en charge), ni un 400/401/404
+(c'est la requête ou la clé, pas le fournisseur). Un appel refusé par le
+disjoncteur ne consomme aucun quota et ne compte pas comme échec du modèle.
+`createBreakerPool` sert pour tout le reste (routes d'un service local de
+modèles…) et **refuse une fabrique qui rendrait le même disjoncteur pour deux
+clés** — c'est exactement le disjoncteur partagé.
+
+## Masquer ce qui sort, démasquer ce qui revient
+
+La question était masquée ; la recherche web ne l'était pas. Le modèle écrivait
+la requête à partir de la question masquée, la boucle démasquait les paramètres
+pour les outils qui ont besoin des vrais noms — et le nom de l'enfant partait
+en clair chez le moteur de recherche. La règle porte donc sur la **direction** :
+ce qui quitte la machine est masqué au moment où il la quitte.
+
+```js
+const { createReversibleMasker } = require('@astratra/ai');
+
+const masker = createReversibleMasker({
+  names: registreDeLEcole,                                // sensible à la casse
+  patterns: [{ type: 'EMAIL', pattern: /[\w.+-]+@[\w-]+\.[\w.]+/g }],
+  detect: (texte) => serviceLocal.entites(texte),         // NER local, jamais distant
+});
+
+// Routeur : un fournisseur externe reçoit le texte masqué, la réponse revient démasquée
+// (y compris en flux). Un fournisseur `external: false` (sur la machine) reçoit le clair.
+await router.ask(question, { complexity: 'simple' }, { masker });
+
+// Boucle d'agent : un outil `external: true` reçoit des paramètres MASQUÉS.
+registry.register({ name: 'web_search', external: true, /* … */ });
+await runAgentLoop({ prompt, registry, router, userRole, masker });
+```
+
+Un masqueur par conversation ; il **apprend** : un nom trouvé une fois est
+masqué partout ensuite, avec le même jeton. Le registre est comparé en
+respectant la casse et sur des mots entiers (« Grace » masqué, « grâce à »
+intact), un nom de moins de trois lettres n'est jamais masqué, un nom absent du
+texte ne crée aucun jeton, les détections sous 0,6 sont ignorées et le
+détecteur ne reçoit que 1 500 caractères coupés sur un blanc. Au démasquage, un
+modèle qui a perdu le `#` du jeton récupère quand même le nom, et
+`#PERSON_0001` ne mange jamais le début de `#PERSON_00012`.
+
+## Des passages dans une autre langue
+
+Une question en anglais peut trouver sa meilleure réponse dans un texte qui
+n'existe qu'en français. Chaque passage dit sa langue (`[fr]`) et une consigne
+— la tienne, par langue — demande de traduire ce qui sert **en gardant la
+référence d'origine**.
+
+```js
+const lignes = buildPassagesContext({
+  passages,            // null = la recherche a échoué : on ne dit rien de la bibliothèque
+  lang: 'en',
+  texts: { header, footer, empty, foreign: 'A passage marked {languages} … keep its original reference.' }
+});
+```
+
+`fr-FR` et `fr` sont la même langue (sous-étiquette principale). Un passage
+étranger sans consigne est refusé plutôt que laissé à deviner au modèle.
+
+## Les sources : lues, utilisées, contredites
+
+- `createSourceLedger()` collecte les sources rendues par les outils ; un outil
+  qui en rend plusieurs ne rattache pas toute sa sortie à chacune.
+- `usedSources(réponse, sources, preuves, options)` ne garde que celles sur
+  lesquelles la réponse s'appuie (son lien, une référence nommée des deux
+  côtés, assez de mots distinctifs communs). Rien n'est jamais ajouté.
+- `findContradiction(réponse, extraits, { compare })` confronte chaque phrase
+  factuelle à l'extrait le plus proche via un modèle d'inférence local ; seule
+  une contradiction franche compte, un doute, une panne ou un délai dépassé ne
+  disent rien (`null`).
+- `rerankResults(question, trouvés, { score })` range les résultats par
+  pertinence et les sources suivent ; sans score, l'ordre du moteur reste.
+
+## Le texte de la réponse
+
+`tidyMarkdown` ramène la réponse au Markdown qu'un téléphone dessine,
+`plainText` l'enlève pour une voix, et `verifyQuotations(texte, { findReferences,
+resolve })` remplace une citation infidèle suivie de sa référence par le vrai
+texte — ce qu'est une référence et où vit son texte t'appartient.
+
+## La langue de la réponse, la cadence, les points compatibles OpenAI
+
+- `createLanguageDetector({ words, identify })` : les petits mots d'abord (un
+  « merci » ne se devine pas autrement), puis un identifiant injecté, cru
+  seulement au-dessus d'un seuil — bien plus haut pour deux mots.
+- `createAskLimit({ max, windowMs, code })` : fenêtre glissante par personne ;
+  le refus porte un code et l'attente, jamais une phrase ; les comptes qui
+  n'écrivent plus sont oubliés.
+- `createOpenAICompatibleProvider({ id, url, getKey, models, fetch })` : un
+  fournisseur pour le routeur. La clé est relue à chaque appel, une erreur porte
+  le statut HTTP (429 → refroidissement) et jamais la clé, des arguments d'outil
+  mal formés sont signalés (`invalid: true`) au lieu de faire tomber le tour, les
+  balises de réflexion ne sont jamais montrées.
+
+## La boucle d'agent : outils en panne, budget de temps, dernier tour
+
+```js
+await runAgentLoop({
+  prompt, registry, router, userRole,
+  reportToolErrors: true,   // un outil qui lève devient { error: 'tool_failed' } pour le modèle
+  toolTimeoutMs: 20_000,    // … ou { error: 'tool_timeout' }
+  maxMs: 60_000,            // budget total
+  finalInstruction: 'Réponds maintenant avec ce que tu as lu, sans outil.'
+});
+```
+
+Le modèle lit un code, jamais le message d'erreur. À court de tours ou de
+temps, un dernier tour sans outils répond avec ce qui a été lu, plutôt qu'une
+erreur.
+
 ## Tests
 
 ```bash

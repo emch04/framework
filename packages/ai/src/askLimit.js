@@ -17,6 +17,8 @@ const { AppError } = require('@astratra/core');
  * @param {number} options.windowMs
  * @param {string} [options.code]    Default 'AI_RATE_LIMITED'.
  * @param {number} [options.sweepEvery] asks between two clean-ups. Default 500.
+ *   Une fenêtre passée depuis le dernier nettoyage en déclenche un aussi : un
+ *   serveur peu sollicité oublie ses comptes inactifs sans attendre 500 demandes.
  */
 function createAskLimit(options = {}) {
   const { max, windowMs } = options;
@@ -26,6 +28,7 @@ function createAskLimit(options = {}) {
   const sweepEvery = options.sweepEvery || 500;
   const asks = new Map();
   let sinceSweep = 0;
+  let sweptAt = -Infinity;
 
   function sweep(now) {
     for (const [id, times] of asks) {
@@ -33,6 +36,7 @@ function createAskLimit(options = {}) {
       if (recent.length) asks.set(id, recent);
       else asks.delete(id);
     }
+    sweptAt = now;
   }
 
   /** What `take` would answer, without counting an ask. */
@@ -46,7 +50,7 @@ function createAskLimit(options = {}) {
   function take(subject, now = Date.now()) {
     const id = String(subject);
     sinceSweep += 1;
-    if (sinceSweep >= sweepEvery) {
+    if (sinceSweep >= sweepEvery || now - sweptAt >= windowMs) {
       sinceSweep = 0;
       sweep(now);
     }

@@ -39,6 +39,8 @@ export interface MemoryRecord {
   updatedAt: Date;
   /** Set by search() only. */
   score?: number;
+  /** Set by a store that left the vector out (list with `withVector: false`): whether there is one. */
+  hasVector?: boolean;
 }
 
 /** What leaves the package: clear text, never the vector. */
@@ -70,6 +72,8 @@ export interface MemoryListFilter {
   createdAfter?: Date | null;
   createdBefore?: Date | null;
   limit?: number;
+  /** Default true. false: the caller does not read vectors, so the store may leave them out (`vector: null`, `hasVector` set): a database saves shipping every 768 numbers of every memory. */
+  withVector?: boolean;
 }
 
 export interface MemorySearchInput {
@@ -185,6 +189,8 @@ export interface MemoryOptions {
   knownTextMax?: number;
   /** Characters of transcript sent. Default 40000. */
   transcriptMax?: number;
+  /** Which part of a transcript over transcriptMax is kept: its 'start' (default) or its 'end' (what is new). */
+  transcriptKeep?: 'start' | 'end';
 }
 
 export type Refusal = { ok: false; reason: string };
@@ -223,8 +229,17 @@ export interface ConsolidateResult {
   status: 'done' | 'already' | 'paused' | 'empty' | 'unavailable' | 'failed';
   added: number;
   corrected: number;
+  /** Facts and corrections a rule (or the checks) refused. */
   refused: number;
+  /** Writes that threw: the others were kept all the same. */
+  failed: number;
+  /** Facts and corrections read in the model's answer. */
+  proposed: number;
   summary: string | null;
+  /** With status 'failed': why. */
+  reason?: 'invalid_where' | 'model' | 'unreadable' | 'store' | 'error';
+  /** With status 'failed': the error behind it (the model's, the store's), for the host to log a cause without the person's words. */
+  error?: unknown;
 }
 
 export interface MemoryService {
@@ -234,7 +249,7 @@ export interface MemoryService {
     where: MemoryWhere,
     id: string,
     changes: { text?: string; kind?: string; importance?: number | string },
-    options?: { personName?: string; explicit?: boolean; source?: Record<string, unknown>; ctx?: unknown }
+    options?: { personName?: string; explicit?: boolean; source?: Record<string, unknown>; ctx?: unknown; inPlace?: boolean }
   ): Promise<{ ok: true; memory: Memory; supersededId: string | null; unchanged?: boolean } | Refusal>;
   undo(where: MemoryWhere, id: string): Promise<boolean>;
   forget(where: MemoryWhere, id: string): Promise<boolean>;
@@ -254,6 +269,9 @@ export interface MemoryService {
 }
 
 export function createMemory(options: MemoryOptions): MemoryService;
+
+/** One queue per place in this process; compose it with a lock shared between processes for `withLock`. */
+export function createLocalLock(): <T>(where: MemoryPlace, fn: () => Promise<T>) => Promise<T>;
 
 export class MemoryError extends Error {
   constructor(code: string, message?: string);
@@ -308,6 +326,8 @@ export interface PortraitOptions {
   /** Default 4. */
   minImportance?: number;
   format?: (memory: { text: string; importance: number }) => string;
+  /** false (default): stop at the first memory that no longer fits. true: leave it out, and let the shorter ones after it in. */
+  fill?: boolean;
 }
 
 export function cosine(a: number[], b: number[]): number;
@@ -319,6 +339,13 @@ export function buildPortrait(
 ): string;
 
 export function parseModelJson(value: unknown): Record<string, unknown>;
+export interface Extraction {
+  facts: Array<{ text: string; kind: unknown; importance: unknown }>;
+  corrections: Array<{ id: string; text: string; kind: unknown; importance: unknown }>;
+  summary: string | null;
+}
+/** What a model's answer holds, read as leniently as models need; throws when nothing can be read. */
+export function readExtraction(value: unknown): Extraction;
 export function defaultConsolidationPrompt(input: {
   kinds: string[];
   known: Array<{ id: string; text: string }>;
@@ -391,7 +418,10 @@ export function worksWithoutAi(operation: string): boolean;
 export interface ContractRunner {
   describe?: (name: string, fn: () => void) => void;
   test?: (name: string, fn: () => Promise<void> | void) => void;
+  /** Default: the global one (jest, vitest), else a small built-in that covers what the suite uses. */
   expect?: (value: unknown) => any;
+  /** Makes every id the suite uses (missing ones included), for a store whose ids have a shape, a UUID for instance. */
+  newId?: () => string;
 }
 
 export function runStoreContract(makeStore: () => Awaitable<MemoryStore>, runner?: ContractRunner): void;

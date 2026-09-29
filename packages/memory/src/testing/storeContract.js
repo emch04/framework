@@ -5,19 +5,26 @@
  *   const { runStoreContract } = require('@astratra/memory');
  *   runStoreContract(async () => createPostgresMemoryStore(await freshPool()));
  *
- * It uses the test runner's describe/test/expect (jest or a compatible one);
- * pass them explicitly when they are not globals. Optional methods (search,
- * claimRef/releaseRef, listNeedingVector) are checked only when the store has
- * them.
+ * It uses the test runner's describe/test (jest's globals, or pass them:
+ * `import { describe, test } from 'node:test'`) and expect (jest's global, or
+ * the small one of ./miniExpect, which covers what the suite uses). Optional
+ * methods (search, claimRef/releaseRef, listNeedingVector) are checked only
+ * when the store has them.
+ *
+ * Ids: a store whose ids have a shape (a UUID column) passes `newId`, which
+ * makes every id the suite uses, the missing ones included. A store must answer
+ * "not found" — never throw — for an id of another shape.
  */
+const { miniExpect } = require('./miniExpect');
 
 let sequence = 0;
+let newId = () => `contract-${sequence}-${Math.random().toString(36).slice(2, 8)}`;
 
 function record(overrides = {}) {
   sequence += 1;
   const at = overrides.createdAt || new Date(Date.UTC(2026, 0, 1, 0, 0, sequence));
   return {
-    id: `contract-${sequence}-${Math.random().toString(36).slice(2, 8)}`,
+    id: newId(),
     ownerId: 'owner-a',
     scope: 'scope-1',
     role: 'member',
@@ -39,10 +46,11 @@ function record(overrides = {}) {
 function runStoreContract(makeStore, runner = {}) {
   const describe = runner.describe || globalThis.describe;
   const test = runner.test || globalThis.test;
-  const expect = runner.expect || globalThis.expect;
-  if (typeof describe !== 'function' || typeof test !== 'function' || typeof expect !== 'function') {
-    throw new Error('runStoreContract needs describe, test and expect (pass them, or run it inside jest).');
+  const expect = runner.expect || globalThis.expect || miniExpect;
+  if (typeof describe !== 'function' || typeof test !== 'function') {
+    throw new Error('runStoreContract needs describe and test (pass them, or run it inside jest).');
   }
+  if (runner.newId) newId = runner.newId;
 
   const A1 = { ownerId: 'owner-a', scope: 'scope-1' };
   const A2 = { ownerId: 'owner-a', scope: 'scope-2' };
@@ -96,16 +104,32 @@ function runStoreContract(makeStore, runner = {}) {
       expect((await store.list(A1, { limit: 2 })).map((row) => row.id)).toEqual([recent.id, mid.id]);
     });
 
+    test('list with withVector: false leaves the vector out, and hasVector says whether there was one', async () => {
+      const store = await makeStore();
+      const printed = record({ vector: [0.5, 0.5], vectorSource: 'm1' });
+      const bare = record();
+      await store.insert(printed);
+      await store.insert(bare);
+      const light = await store.list(A1, { withVector: false });
+      expect(light.length).toBe(2);
+      const byId = Object.fromEntries(light.map((row) => [row.id, row]));
+      expect(byId[printed.id].vector === null || byId[printed.id].vector === undefined).toBe(true);
+      expect(byId[printed.id].hasVector).toBe(true);
+      expect(byId[bare.id].hasVector === true).toBe(false);
+      expect((await store.list(A1)).find((row) => row.id === printed.id).vector).toEqual([0.5, 0.5]);
+    });
+
     test('update patches in place, never moves a record, and onlyActive refuses a superseded one', async () => {
       const store = await makeStore();
       const row = record();
       await store.insert(row);
       const updated = await store.update(A1, row.id, { importance: 5, ownerId: 'owner-b', scope: 'scope-2' });
       expect(updated).toMatchObject({ id: row.id, importance: 5, ownerId: 'owner-a', scope: 'scope-1' });
-      expect(await store.update(A1, row.id, { supersededBy: 'next' }, { onlyActive: true })).not.toBeNull();
+      expect(await store.update(A1, row.id, { supersededBy: newId() }, { onlyActive: true })).not.toBeNull();
       expect(await store.update(A1, row.id, { importance: 1 }, { onlyActive: true })).toBeNull();
       expect((await store.get(A1, row.id)).importance).toBe(5);
-      expect(await store.update(A1, 'missing-id', { importance: 1 })).toBeNull();
+      expect(await store.update(A1, newId(), { importance: 1 })).toBeNull();
+      expect(await store.get(A1, 'not-an-id-at-all')).toBeNull();
     });
 
     test('remove and removeAll count what they erased, in their place only', async () => {
@@ -114,7 +138,7 @@ function runStoreContract(makeStore, runner = {}) {
       const b = record();
       const other = record({ scope: 'scope-2' });
       for (const row of [a, b, other]) await store.insert(row);
-      expect(await store.remove(A1, [a.id, 'missing-id'])).toBe(1);
+      expect(await store.remove(A1, [a.id, newId()])).toBe(1);
       expect(await store.removeAll(A1)).toBe(1);
       expect(await store.list(A1, { state: 'all' })).toEqual([]);
       expect((await store.list(A2)).map((row) => row.id)).toEqual([other.id]);

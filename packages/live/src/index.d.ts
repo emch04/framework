@@ -299,12 +299,19 @@ export declare function geminiSetup(options: {
   mode?: string;
 }): unknown;
 export declare function geminiEvents(message: Record<string, unknown>): CallMessage[];
+export interface LiveCandidate {
+  model: string;
+  key: string;
+}
+export interface HandoverTurn {
+  who: string;
+  text: string;
+  [key: string]: unknown;
+}
 export declare function createGeminiLiveAdapter(options: {
   websocketFactory(url: string): unknown;
-  candidates: Array<{
-    model: string;
-    key: string;
-  }>;
+  /** Ordered {model, key} pairs, or a function giving them: asked again at every change of line (keys that are reloaded while the server runs). */
+  candidates: LiveCandidate[] | (() => LiveCandidate[]);
   endpoint?: string;
   voice?: string;
   clock: Clock;
@@ -312,7 +319,15 @@ export declare function createGeminiLiveAdapter(options: {
   cooldownMs?: number;
   maxHeld?: number;
   maxImageBytes?: number;
+  /** The most characters of a base64 image (default: what maxImageBytes gives). */
+  maxImageChars?: number;
   imageEveryMs?: number;
+  /** Whether a session was refused or cut for its key or its quota: the key rests and the next one takes over. */
+  gaveOut?(closed: { code?: number; reason?: string }): boolean;
+  /** What a session that knows nothing is told: `resume` at the first line of a call that goes on with a conversation, `switch` on another line of the same call. */
+  handover?(input: { kind: 'resume' | 'switch'; turns: HandoverTurn[] }): { text: string; turnComplete?: boolean };
+  /** The response given to the provider when a tool throws (default: { result: { code: 'TOOL_FAILED' } }). */
+  toolError?(error: unknown): Record<string, unknown>;
   logger?: unknown;
 }): ProviderAdapter;
 export declare function parseSse(stream: AsyncIterable<Uint8Array>): AsyncIterable<unknown>;
@@ -449,22 +464,78 @@ export declare const CLOSE: Readonly<{
   UNAVAILABLE: number;
   NORMAL: number;
 }>;
+export interface LiveTools {
+  declarations: unknown[];
+  call(request: { id?: string; name: string; args?: Record<string, unknown> }): Promise<unknown>;
+  confirmByClient?(actionId: string): Promise<{ code?: string }>;
+  cancelByClient?(actionId: string): Promise<{ code?: string }>;
+}
+export interface MicrophoneGate {
+  push(base64: string): Promise<string>;
+  playbackSent(bytes: number, sampleRate: number): void;
+  playbackInterrupted(): void;
+}
+export interface MicrophoneFilters {
+  vad?: unknown;
+  echo?: unknown;
+  outputRate?: number;
+}
+export interface LocalTranscriber {
+  push(base64: string): Promise<Array<{ text: string; confidence?: number | null; audio?: string }>>;
+  finish(): Promise<Array<{ text: string; confidence?: number | null; audio?: string }>>;
+}
+export interface LiveWire {
+  /** What goes to the client: a string, or null for a message that client never knew. */
+  encode?(message: CallMessage): string | null;
+  /** What the client sent, as a message, or null. */
+  decode?(raw: unknown): CallMessage | null;
+}
+export declare function createTranscribedRelay(options: {
+  transcriber: LocalTranscriber;
+  decision: unknown;
+  send(message: CallMessage): void;
+  onHeard(text: string): void;
+  onSentence(text: string): void;
+  onFallback(reason: string, audio?: string): Awaitable<void>;
+  onUnavailable(): Awaitable<void>;
+  minConfidence?: number;
+}): {
+  push(base64: string): Promise<void>;
+  finish(): Promise<void>;
+};
 export declare function createLiveSession(options: {
   socket: Socket;
   context: CallContext;
   provider?: ProviderAdapter;
-  local?: unknown;
+  /**
+   * What the confidential path runs on, here: `{ transcribe, thinker | textModel, reader | readers }` (the whole
+   * local pipeline), or `{ transcriber, minConfidence? }` (only the transcription is local: the provider answers,
+   * given text). A function is asked once, when a confidential call starts; one that throws (a model that will
+   * not load) is a local path that is not there.
+   */
+  local?: unknown | ((context: CallContext) => Awaitable<unknown>);
   policy?: unknown;
   registry?: unknown;
   actions?: unknown;
   quota?: unknown;
   lease?: ReturnType<typeof createCallLease>;
+  /** `create` is also given `first`, the first thing the person said (a host titles the conversation after it). */
   transcripts?: unknown;
   memory?: unknown;
   clock: Clock;
   logger?: unknown;
   catalog?: Record<string, unknown>;
   persona?: string;
+  /** The host's own instructions (the whole text), or a function making them when the call starts. */
+  instructions?: string | ((input: { context: CallContext; mode: string | null; now: number }) => Awaitable<string>);
+  /** The host's own tools (replacing registry and actions), or a function making them when the call starts. */
+  tools?: LiveTools | ((context: CallContext) => Awaitable<LiveTools>);
+  /** The shapes the client speaks, when they are not this package's. */
+  wire?: LiveWire;
+  /** Every message the session sends, as the session writes it (before the wire changes it). A host that throws here changes nothing. */
+  observe?(message: CallMessage): void;
+  /** Called once, after the client is let go, with how the call ended. */
+  onEnd?(info: { reason: string; code: number; startedAt: number; endedAt: number; turns: unknown[]; conversationId: string | null }): Awaitable<void>;
   resumeWindowMs?: number;
   resumeTurns?: number;
   transcriptCompleteOnly?: boolean;
@@ -474,11 +545,16 @@ export declare function createLiveSession(options: {
   maxCallMs?: number;
   shield?: unknown;
   annotateToolResult?(name: string, result: unknown): unknown;
-  directAudio?: {
-    vad?: unknown;
-    echo?: unknown;
-    outputRate?: number;
-  } | null;
+  /**
+   * What the microphone is sorted with before it reaches the provider or the local transcription: options for
+   * createMicrophoneGate (`{ vad, echo }` of @astratra/voice), a gate, or a function making either when the call
+   * starts (null: no filter; one that throws: no filter either).
+   */
+  microphone?: MicrophoneFilters | MicrophoneGate | ((context: CallContext) => Awaitable<MicrophoneFilters | MicrophoneGate | null>) | null;
+  /** The name the filters had before they served both modes. */
+  directAudio?: MicrophoneFilters | MicrophoneGate | ((context: CallContext) => Awaitable<MicrophoneFilters | MicrophoneGate | null>) | null;
+  /** Whether a client's `interrupt` goes to the provider when the sound goes to it as it is (default true). */
+  directInterrupt?: boolean;
 }): {
   start(): Promise<void>;
   receive(raw: unknown): Promise<void>;
@@ -487,6 +563,8 @@ export declare function createLiveSession(options: {
   readonly mode: string | null;
   readonly ended: boolean;
   readonly turns: unknown[];
+  /** The turns of the conversation this call goes on with. */
+  readonly history: unknown[];
 };
 export declare function attachLive(options: {
   httpServer: {
@@ -513,6 +591,8 @@ export declare function attachLive(options: {
   languages?: string[];
   modes?: string[];
   conversationIdPattern?: RegExp;
+  /** How the messages the server sends by itself (a refused call) are written for the client. */
+  encode?(message: CallMessage): string | null;
 }): {
   readonly size: number;
   close(): void;

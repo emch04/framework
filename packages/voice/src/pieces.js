@@ -4,7 +4,8 @@ function splitSpeechPieces(text, { maxChars = 600 } = {}) {
   if (!Number.isInteger(maxChars) || maxChars < 1) throw new RangeError('INVALID_PIECE_SIZE');
   const input = String(text ?? '').trim().replace(/\s+/gu, ' ');
   if (!input) return [];
-  const sentences = input.match(/[^.!?…]+[.!?…]*|[.!?…]+/gu) || [];
+  /* A closing quote or bracket right after the end mark stays with its sentence. */
+  const sentences = input.match(/[^.!?…]+[.!?…]*["»”)]*|[.!?…]+["»”)]*/gu) || [];
   const pieces = [];
   let current = '';
   const release = () => { if (current) pieces.push(current); current = ''; };

@@ -181,3 +181,90 @@ test('chained guards forward playback events to all members', () => {
   chain.playbackSent(320, 16000); chain.playbackInterrupted();
   expect(calls).toEqual(['one', 'two', 'stop-one', 'stop-two']);
 });
+
+describe('echo guard as a stream that keeps its timing', () => {
+  const chunk = (n, size = 8) => new Float32Array(size).fill(n / 100);
+  const collect = async (guard, chunks) => {
+    const out = [];
+    for (const one of chunks) out.push(...((await guard.push(one)).segment ?? []));
+    return out;
+  };
+
+  test('dropped audio can come back as silence of the same length', async () => {
+    const guard = createEchoGuard({ compare: () => 1, windowSamples: 16, minSamples: 8, dropAs: 'silence' });
+    guard.setPlaying(true);
+    const out = await collect(guard, [chunk(1), chunk(2)]);
+    expect(out).toHaveLength(16);
+    expect(out.every((sample) => sample === 0)).toBe(true);
+  });
+  test('a silence that closes a held window follows the window, itself silenced', async () => {
+    const guard = createEchoGuard({ compare: () => 1, windowSamples: 32, minSamples: 8, dropAs: 'silence' });
+    guard.setPlaying(true);
+    await guard.push(chunk(1));
+    const closed = await guard.push(new Float32Array(4));
+    expect(closed.reason).toBe('ECHO_DROPPED');
+    expect(closed.segment).toHaveLength(12);
+    expect(closed.segment.every((sample) => sample === 0)).toBe(true);
+  });
+  test('too little sound to judge is dropped as silence too', async () => {
+    const guard = createEchoGuard({ compare: () => 0, windowSamples: 32, minSamples: 16, dropAs: 'silence' });
+    guard.setPlaying(true);
+    await guard.push(chunk(1));
+    const closed = await guard.push(new Float32Array(8));
+    expect(closed.reason).toBe('TOO_SHORT_TO_COMPARE');
+    expect(closed.segment).toHaveLength(16);
+    expect([...closed.segment].every((sample) => sample === 0)).toBe(true);
+  });
+  test('the window fills with sound only: silences between chunks do not count, and only runs of silence at least silentRun long are left out of the comparison', async () => {
+    let compared;
+    const guard = createEchoGuard({ compare: (samples) => { compared = samples; return 0; }, windowSamples: 8, minSamples: 4, silentRun: 4 });
+    guard.setPlaying(true);
+    const mixed = Float32Array.from([0.5, 0.5, 0, 0.5, 0, 0, 0, 0, 0.5, 0.5]);
+    expect((await guard.push(mixed)).reason).toBe('HELD_FOR_COMPARISON');
+    const verdict = await guard.push(Float32Array.from([0.4, 0.4]));
+    expect(verdict.reason).toBe('SPEAKER_PASSED');
+    expect(verdict.segment).toHaveLength(12);
+    expect(Array.from(compared)).toEqual([0.5, 0.5, 0, 0.5, 0.5, 0.5, 0.4, 0.4].map(Math.fround));
+  });
+  test('a voice let through goes on being let through while its chunks come without a long pause, however long it talks', async () => {
+    let now = 0; let calls = 0;
+    const guard = createEchoGuard({ now: () => now, compare: () => { calls++; return 0; }, windowSamples: 8, passGapMs: 300 });
+    guard.setPlaying(true);
+    await guard.push(chunk(1)); await guard.push(chunk(1));
+    expect(calls).toBe(1);
+    for (let i = 0; i < 30; i += 1) {
+      now += 100;
+      expect((await guard.push(chunk(2))).reason).toBe('SPEAKER_CONTINUES');
+    }
+    expect(calls).toBe(1);
+    now += 301;
+    expect((await guard.push(chunk(3))).reason).toBe('SPEAKER_PASSED');
+    expect(calls).toBe(2);
+  });
+  test('a comparator that fails once switches the guard off for good, and what was held goes out as it came', async () => {
+    let calls = 0; const failures = [];
+    const guard = createEchoGuard({ compare: () => { calls++; throw new Error('model gone'); }, windowSamples: 16, onFailure: (error) => failures.push(error.message) });
+    guard.setPlaying(true);
+    const out = await collect(guard, [chunk(1), chunk(2)]);
+    expect(out).toHaveLength(16);
+    expect(out.some((sample) => sample !== 0)).toBe(true);
+    const later = await guard.push(chunk(3));
+    expect(later).toEqual({ segment: chunk(3), reason: 'COMPARATOR_UNAVAILABLE' });
+    expect((await guard.inspect(chunk(4))).reason).toBe('COMPARATOR_UNAVAILABLE');
+    expect(calls).toBe(1);
+    expect(failures).toEqual(['model gone']);
+  });
+  test('latching can be turned off: the comparator is asked again', async () => {
+    let calls = 0;
+    const guard = createEchoGuard({ compare: () => { calls++; throw new Error(); }, latchOnFailure: false });
+    guard.setPlaying(true);
+    await guard.inspect(chunk(1)); await guard.inspect(chunk(1));
+    expect(calls).toBe(2);
+  });
+  test('while playback is quiet, audio goes through at once and nothing is compared', async () => {
+    let calls = 0;
+    const guard = createEchoGuard({ compare: () => { calls++; return 1; }, windowSamples: 16, dropAs: 'silence' });
+    for (let i = 0; i < 5; i += 1) expect(await guard.push(chunk(i + 1))).toEqual({ segment: chunk(i + 1), reason: 'NO_PLAYBACK' });
+    expect(calls).toBe(0);
+  });
+});

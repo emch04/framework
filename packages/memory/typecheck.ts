@@ -4,6 +4,8 @@ import {
   createMemoryStore,
   createMemoryTools,
   patternRule,
+  readExtraction,
+  createLocalLock,
   runStoreContract,
   worksWithoutAi,
   DEFAULT_KINDS,
@@ -29,7 +31,8 @@ const memory: MemoryService = createMemory({
   logger: { warn: () => undefined },
   maxActive: 300,
   duplicateThreshold: 0.92,
-  minSimilarity: null
+  minSimilarity: null,
+  transcriptKeep: 'end'
 });
 
 const where: MemoryWhere = { ownerId: 'u1', scope: 'tenant-1' };
@@ -38,15 +41,16 @@ async function usage(): Promise<void> {
   const kept = await memory.remember(where, { text: 'Likes tea', kind: 'preference', importance: '4', explicit: true });
   if (kept.ok) {
     const id: string = kept.memory.id;
-    const fixed = await memory.update(where, id, { text: 'Likes green tea' }, { personName: 'Me' });
+    const fixed = await memory.update(where, id, { text: 'Likes green tea' }, { personName: 'Me', inPlace: true });
     if (!fixed.ok) void (fixed.reason === REASONS.OTHER_PERSON);
     await memory.undo(where, id);
   }
   const found: Memory[] = await memory.recall(where, { query: 'tea', kinds: ['preference'], limit: 5 });
-  const portrait: string = await memory.portrait(where, { maxLength: 1200, masked: true });
+  const portrait: string = await memory.portrait(where, { maxLength: 1200, masked: true, fill: true });
   const result: ConsolidateResult = await memory.consolidate(where, { transcript: [{ role: 'user', text: 'hi' }], ref: 'c1' });
   const purged = await memory.purgeOwner('u1');
-  void [found, portrait, result.status, purged.memories];
+  if (result.status === 'failed') void [result.reason, result.error, result.failed, result.proposed];
+  void [found, portrait, result.status, purged.memories, readExtraction('{}').facts.length, createLocalLock()];
 
   const tools: MemoryToolDefinition[] = createMemoryTools({
     memory,
@@ -64,3 +68,4 @@ async function usage(): Promise<void> {
 
 void usage;
 void runStoreContract;
+void ((): void => runStoreContract(() => store, { newId: () => 'id' }));

@@ -100,11 +100,12 @@ function createTranscriptionProviderChain({ providers = [], supportedLanguages =
         if (!provider || typeof provider.transcribe !== 'function') continue;
         const providerId = provider.id || `provider_${index}`;
         try {
-          let decoded = await provider.transcribe({ ...options, audio, language: null });
+          /* `requestedLanguage` tells a provider that cannot listen freely (or hears no language) what the caller asked for. */
+          let decoded = await provider.transcribe({ ...options, audio, language: null, requestedLanguage: options.language ?? null });
           if (typeof decoded === 'string') decoded = { text: decoded };
           const heard = decoded?.heardLanguage ?? null;
           if (options.language && (!heard || (supportedLanguages.length && !supportedLanguages.includes(heard)))) {
-            decoded = await provider.transcribe({ ...options, audio, language: options.language });
+            decoded = await provider.transcribe({ ...options, audio, language: options.language, requestedLanguage: options.language });
             if (typeof decoded === 'string') decoded = { text: decoded };
           }
           const text = String(decoded?.text ?? '').trim();

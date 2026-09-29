@@ -64,7 +64,15 @@ function createMemoryStore() {
       const rows = [...records.values()]
         .filter((record) => inPlace(where, record) && matches(record, filter))
         .sort(newestFirst);
-      return (filter.limit ? rows.slice(0, filter.limit) : rows).map(clone);
+      const out = (filter.limit ? rows.slice(0, filter.limit) : rows).map(clone);
+      /* The vector left out when the caller does not need it: hasVector says whether there is one. */
+      if (filter.withVector === false) {
+        for (const record of out) {
+          record.hasVector = Array.isArray(record.vector) && record.vector.length > 0;
+          record.vector = null;
+        }
+      }
+      return out;
     },
 
     async update(where, id, patch, options = {}) {
@@ -147,7 +155,7 @@ function createMemoryStore() {
       const rows = [...records.values()].filter((record) => inPlace(where, record)
         && matches(record, { kinds, createdAfter, createdBefore }));
       const semantic = Array.isArray(vector)
-        ? rows.filter((record) => Array.isArray(record.vector) && record.vectorSource === vectorSource)
+        ? rows.filter((record) => Array.isArray(record.vector) && record.vectorSource === vectorSource && record.vector.length === vector.length)
           .map((record) => ({ record, score: cosine(vector, record.vector) }))
           .sort((a, b) => b.score - a.score)
           .slice(0, limit)

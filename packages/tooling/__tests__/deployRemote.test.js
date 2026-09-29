@@ -39,7 +39,7 @@ function gitWorld({ status = '', branch = 'main', files = ['src/index.js', '.env
       if (args[0] === 'ls-files') return { stdout: files.join('\0') };
       if (args[0] === 'push') return { code: pushCode };
       if (args[0] === 'rev-parse' && args[1] === 'HEAD') return { stdout: `${SHA}\n` };
-      if (args[0] === 'rev-parse') return { stdout: `${remoteHead}\n` };
+      if (args[0] === 'ls-remote') return { stdout: `${remoteHead}\trefs/heads/main\n` };
     }
     if (command === 'ssh') {
       return { code: sshCode, stdout: sshStdout === undefined ? `@@astratra prev=${PREV}\n@@astratra deps=changed\nHealthy inside\n@@astratra result=deployed\n` : sshStdout };
@@ -55,6 +55,7 @@ function okFetch() {
 async function deploy(root, runner, extra = {}) {
   const commands = [];
   const result = await runRemoteDeploy(root, extra.config || remoteConfig(root), {
+    dryRun: extra.dryRun,
     output: extra.output || createOutput(),
     runProcess: runner,
     runCommand: async (command, options) => { commands.push({ command, cwd: options.cwd }); return { code: extra.stepCode || 0 }; },
@@ -148,6 +149,33 @@ describe('remote deploy flow', () => {
     expect(result.error.message).toContain('inconnu');
   });
 
+  test('a success marker with a failed ssh exit remains an unknown server state', async () => {
+    const root = createTempProject();
+    const { result } = await deploy(root, gitWorld({ sshCode: 255 }));
+    expect(result).toMatchObject({ exitCode: 1, stage: 'remote', previous: PREV, error: { code: 'DEPLOY_SSH_FAILED' } });
+  });
+
+  test('a project can show its remote marker lines in the terminal', async () => {
+    const root = createTempProject();
+    const output = createOutput();
+    const config = remoteConfig(root, { marker: '@@tertius', showMarkers: true });
+    const { result } = await deploy(root, gitWorld({ sshStdout: `@@tertius prev=${PREV}\n@@tertius result=deployed\n` }), { config, output });
+    expect(result.exitCode).toBe(0);
+    expect(output.lines).toContain(`  @@tertius prev=${PREV}`);
+  });
+
+  test('dry run shows the plan without tests, push, ssh, public fetch or lock', async () => {
+    const root = createTempProject();
+    const runner = gitWorld();
+    const fetch = okFetch();
+    const { result, commands } = await deploy(root, runner, { dryRun: true, fetch });
+    expect(result).toMatchObject({ exitCode: 0, dryRun: true });
+    expect(commands).toEqual([]);
+    expect(runner.calls).toEqual([]);
+    expect(fetch.calls).toEqual([]);
+    expect(fs.existsSync(path.join(root, '.deploy.lock'))).toBe(false);
+  });
+
   test('public health retried, then reported without claiming a rollback', async () => {
     const root = createTempProject();
     const fetch = createFakeFetch([['GET', jsonResponse(502, {})]]);
@@ -198,7 +226,7 @@ describe('remote deploy building blocks', () => {
       'tertius', '/home/tertius/app', '/home/tertius/node', SHA, 'origin', 'main',
       '(^|/)(package-lock\\.json|npm-shrinkwrap\\.json|package\\.json)$', 'npm ci --omit=dev',
       'pm2 startOrReload deploy/ecosystem.config.cjs --update-env && pm2 save',
-      'http://127.0.0.1:3100/health\nhttp://127.0.0.1:3101/health', '12', '5', '5', '1'
+      'http://127.0.0.1:3100/health\nhttp://127.0.0.1:3101/health', '12', '5', '5', '1', '@@astratra'
     ]);
     expect(() => buildRemoteDeployArgs({ ...remote, appDir: '/a\nrm -rf /' }, SHA)).toThrow(expect.objectContaining({ code: 'DEPLOY_CONFIG_INVALID' }));
     expect(() => buildRemoteDeployArgs(remote, 'HEAD; rm')).toThrow(expect.objectContaining({ code: 'DEPLOY_TARGET_INVALID' }));
@@ -218,6 +246,12 @@ describe('remote deploy building blocks', () => {
   test('markers parsed; ordinary output ignored', () => {
     expect(parseMarkers('noise\n@@astratra prev=abc\n@@astratra url=200 http://127.0.0.1:1/h\n@@astratra result=deployed\n'))
       .toEqual({ prev: 'abc', result: 'deployed', urls: [{ status: 200, url: 'http://127.0.0.1:1/h' }] });
+  });
+
+  test('project marker is used by the remote deploy script and understood locally', () => {
+    const remote = resolveRemoteConfig('/r', remoteConfig('/r', { marker: '@@tertius' }));
+    expect(buildRemoteDeployArgs(remote, SHA).at(-1)).toBe('@@tertius');
+    expect(parseMarkers('@@tertius prev=abc\n@@tertius result=rolled-back\n', '@@tertius')).toMatchObject({ prev: 'abc', result: 'rolled-back' });
   });
 });
 

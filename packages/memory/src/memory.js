@@ -26,7 +26,7 @@ const {
   checkCandidate
 } = require('./rules');
 const { cosine, keywordScore, fuseByRank, buildPortrait } = require('./ranking');
-const { parseModelJson, defaultConsolidationPrompt, transcriptText } = require('./consolidation');
+const { readExtraction, defaultConsolidationPrompt, transcriptText } = require('./consolidation');
 
 const DEFAULT_KINDS = Object.freeze(['goal', 'preference', 'fact', 'person', 'event', 'feeling']);
 const CHANNELS = Object.freeze({ EXPLICIT: 'explicit', AUTO: 'auto', BACKGROUND: 'background' });
@@ -62,7 +62,8 @@ function dateOf(value, code) {
   return date;
 }
 
-/* One queue per place in this process: two writes for one person never interleave. */
+/* One queue per place in this process: two writes for one person never interleave.
+   Exported so a host can compose it with a lock shared between processes. */
 function createLocalLock() {
   const tails = new Map();
   return async function withLock(where, fn) {
@@ -116,6 +117,8 @@ function createMemory(options = {}) {
   const knownForConsolidation = options.knownForConsolidation ?? 60;
   const knownTextMax = options.knownTextMax ?? 240;
   const transcriptMax = options.transcriptMax ?? 40000;
+  /* A transcript over transcriptMax keeps its start ('start') or its end ('end': what is new). */
+  const transcriptKeep = options.transcriptKeep === 'end' ? 'end' : 'start';
 
   const ruleConfig = { kinds, roleKinds, rules, maxTextLength };
   const kindOf = (value, fallback = defaultKind) => normalizeKind(value, { kinds, aliases: kindAliases, fallback });
@@ -138,6 +141,11 @@ function createMemory(options = {}) {
 
   const openAll = (rows) => Promise.all((rows || []).map(open));
 
+  /* Only vectors of the same embedding source AND the same length are compared: a source label alone cannot vouch for it. */
+  const comparable = (row, embedding) => Array.isArray(row.vector)
+    && row.vectorSource === embedding.source
+    && row.vector.length === embedding.vector.length;
+
   /* What leaves the package: never the vector. */
   function publicMemory(record) {
     if (!record) return null;
@@ -155,7 +163,7 @@ function createMemory(options = {}) {
       lastUsedAt: record.lastUsedAt || null,
       createdAt: record.createdAt,
       updatedAt: record.updatedAt,
-      hasVector: Array.isArray(record.vector) && record.vector.length > 0
+      hasVector: typeof record.hasVector === 'boolean' ? record.hasVector : Array.isArray(record.vector) && record.vector.length > 0
     };
     if (typeof record.score === 'number') out.score = record.score;
     return out;
@@ -232,7 +240,7 @@ function createMemory(options = {}) {
    */
   async function enforceCap(where) {
     if (!maxActive) return 0;
-    const active = await store.list(where, { state: 'active' });
+    const active = await store.list(where, { state: 'active', withVector: false });
     if (active.length <= maxActive) return 0;
     const last = (row) => new Date(row.lastUsedAt || row.createdAt || 0).getTime();
     const victims = active
@@ -274,8 +282,7 @@ function createMemory(options = {}) {
       const active = await openAll(await store.list(where, { state: 'active' }));
       const words = wordsOf(candidate.text);
       const duplicate = (embedding
-        && active.find((row) => Array.isArray(row.vector) && row.vectorSource === embedding.source
-          && cosine(embedding.vector, row.vector) >= duplicateThreshold))
+        && active.find((row) => comparable(row, embedding) && cosine(embedding.vector, row.vector) >= duplicateThreshold))
         || active.find((row) => wordsOf(row.text) === words)
         || null;
 
@@ -310,6 +317,10 @@ function createMemory(options = {}) {
    * Change one memory's text, kind or importance. The old version is kept
    * behind the new one, so undo(newId) restores it. A name the memory already
    * carried stays allowed; only a name the edit ADDS is refused.
+   *
+   * With `opts.inPlace` the memory is edited where it stands: same id, same
+   * creation date, no earlier version kept, so nothing to undo. It is for a
+   * person correcting their own memory on a screen that shows it by id.
    */
   async function update(whereInput, id, changes = {}, opts = {}) {
     const where = placeOf(whereInput);
@@ -339,6 +350,18 @@ function createMemory(options = {}) {
     const embedding = text === old.text
       ? (Array.isArray(old.vector) ? { vector: old.vector, source: old.vectorSource } : null)
       : await vectorFor(text, 'passage', where);
+
+    if (opts.inPlace) {
+      return withLock(where, async () => {
+        const patch = { text: await seal(text), kind, importance, updatedAt: now() };
+        if (text !== old.text) {
+          patch.vector = embedding ? embedding.vector : null;
+          patch.vectorSource = embedding ? embedding.source : null;
+        }
+        const saved = await store.update(where, old.id, patch, { onlyActive: true });
+        return saved ? { ok: true, memory: publicMemory(await open(saved)), supersededId: null } : { ok: false, reason: REASONS.CONFLICT };
+      });
+    }
 
     return withLock(where, async () => {
       const at = now();
@@ -385,12 +408,16 @@ function createMemory(options = {}) {
     });
   }
 
-  /** Erase one memory and every earlier version of it. */
+  /**
+   * Erase one memory and every earlier version of it. An earlier version is
+   * never erased on its own: the memory that replaced it would stay, and the
+   * person would believe the fact forgotten.
+   */
   async function forget(whereInput, id) {
     const where = placeOf(whereInput);
     return withLock(where, async () => {
       const current = await store.get(where, String(id));
-      if (!current) return false;
+      if (!current || current.supersededBy) return false;
       return (await removeWithHistory(where, [current.id])) > 0;
     });
   }
@@ -419,14 +446,14 @@ function createMemory(options = {}) {
   async function list(whereInput, filter = {}) {
     const where = placeOf(whereInput);
     const kindsFilter = Array.isArray(filter.kinds) ? filter.kinds.map((kind) => kindOf(kind, null)).filter(Boolean) : undefined;
-    const rows = await store.list(where, { state: 'active', kinds: kindsFilter, limit: filter.limit });
+    const rows = await store.list(where, { state: 'active', kinds: kindsFilter, limit: filter.limit, withVector: false });
     return (await openAll(rows)).map(publicMemory);
   }
 
   /** Memories learnt in the background and not yet shown to the person. */
   async function listUnseen(whereInput) {
     const where = placeOf(whereInput);
-    const rows = await store.list(where, { state: 'active', channel: CHANNELS.BACKGROUND, seen: false });
+    const rows = await store.list(where, { state: 'active', channel: CHANNELS.BACKGROUND, seen: false, withVector: false });
     return (await openAll(rows)).map(publicMemory);
   }
 
@@ -490,7 +517,7 @@ function createMemory(options = {}) {
         .filter((row) => row.score > 0)
         .sort((a, b) => b.score - a.score || last(b) - last(a));
       semantic = query
-        ? rows.filter((row) => Array.isArray(row.vector) && row.vectorSource === query.source)
+        ? rows.filter((row) => comparable(row, query))
           .map((row) => ({ ...row, score: cosine(query.vector, row.vector) }))
           .filter((row) => minSimilarity === null || row.score >= minSimilarity)
           .sort((a, b) => b.score - a.score)
@@ -514,7 +541,7 @@ function createMemory(options = {}) {
   /** The short text always given to the model. `masked: true` passes it through `mask` first. */
   async function portrait(whereInput, opts = {}) {
     const where = placeOf(whereInput);
-    const rows = await openAll(await store.list(where, { state: 'active' }));
+    const rows = await openAll(await store.list(where, { state: 'active', withVector: false }));
     const text = buildPortrait(rows, opts);
     return opts.masked && text ? mask(text, where) : text;
   }
@@ -528,32 +555,50 @@ function createMemory(options = {}) {
    * With `ref` (a conversation id) and a store that implements claimRef, a
    * conversation is consolidated once. Paused: the conversation is marked
    * done and nothing is learnt from it, even after the pause ends.
+   *
+   * Each write stands on its own: one that is refused or fails never loses
+   * the others. When something failed, the status is 'failed' with a `reason`
+   * ('invalid_where', 'model', 'unreadable', 'store', 'error') and the `error`
+   * behind it, so the host can log why; what was kept stays kept, and the
+   * next run merges it as a duplicate.
    */
   async function consolidate(whereInput, input = {}) {
-    const empty = { added: 0, corrected: 0, refused: 0, summary: null };
+    const none = { added: 0, corrected: 0, refused: 0, failed: 0, proposed: 0, summary: null };
     let where;
     try {
       where = placeOf(whereInput);
     } catch (error) {
       logger.warn(`[memory] consolidate: ${error.message}`);
-      return { status: 'failed', ...empty };
+      return { status: 'failed', reason: 'invalid_where', error, ...none };
     }
-    if (!llm) return { status: 'unavailable', ...empty };
+    if (!llm) return { status: 'unavailable', ...none };
     const ref = input.ref === undefined || input.ref === null ? null : String(input.ref);
     const canClaim = ref && typeof store.claimRef === 'function';
     let claimed = false;
+    let stage = 'error';
+
+    /* A failed run is retried next time: the conversation is not marked done. */
+    async function failed(reason, error, result = none) {
+      if (claimed && typeof store.releaseRef === 'function') {
+        try { await store.releaseRef(where, ref); } catch (_error) { /* the claim stays; nothing else to do */ }
+      }
+      logger.warn(`[memory] consolidation failed (${reason}): ${error && error.message}`);
+      return { status: 'failed', reason, error, ...result };
+    }
+
     try {
       if (canClaim) {
         claimed = await store.claimRef(where, ref);
-        if (!claimed) return { status: 'already', ...empty };
+        if (!claimed) return { status: 'already', ...none };
       }
-      if (await isPaused(where)) return { status: 'paused', ...empty };
+      if (await isPaused(where)) return { status: 'paused', ...none };
 
-      const raw = transcriptText(input.transcript).slice(0, transcriptMax);
-      if (!raw.trim()) return { status: 'empty', ...empty };
+      const whole = transcriptText(input.transcript);
+      if (!whole.trim()) return { status: 'empty', ...none };
+      const raw = whole.length <= transcriptMax ? whole : transcriptKeep === 'end' ? whole.slice(-transcriptMax) : whole.slice(0, transcriptMax);
 
       const last = (row) => new Date(row.lastUsedAt || 0).getTime();
-      const knownRows = (await openAll(await store.list(where, { state: 'active' })))
+      const knownRows = (await openAll(await store.list(where, { state: 'active', withVector: false })))
         .sort((a, b) => b.importance - a.importance || last(b) - last(a)
           || new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
         .slice(0, knownForConsolidation);
@@ -568,57 +613,69 @@ function createMemory(options = {}) {
         language: input.language,
         role: input.role
       });
+      stage = 'model';
       const answer = await llm({ ...request, purpose: 'memory-consolidation', where });
-      const parsed = parseModelJson(typeof answer === 'string' ? answer : JSON.stringify(answer));
+      stage = 'error';
+      let extraction;
+      try {
+        extraction = readExtraction(typeof answer === 'string' ? answer : JSON.stringify(answer));
+      } catch (error) {
+        return await failed('unreadable', error);
+      }
 
-      const result = { added: 0, corrected: 0, refused: 0, summary: null };
-      if (typeof parsed.summary === 'string' && parsed.summary.trim()) result.summary = parsed.summary.replace(/\s+/g, ' ').trim();
+      const result = { ...none, summary: extraction.summary, proposed: extraction.facts.length + extraction.corrections.length };
+      let firstError = null;
       const source = { ...(input.source || {}), ...(ref ? { ref } : {}) };
       const explicitFor = async (fact) => (isExplicitFact ? Boolean(await isExplicitFact(fact, input.transcript, where)) : false);
 
       /* A correction may only name a memory that was shown. */
-      for (const correction of Array.isArray(parsed.corrections) ? parsed.corrections : []) {
-        if (!correction || !known.has(String(correction.id))) continue;
-        const outcome = await update(where, String(correction.id), {
-          text: correction.text,
-          kind: correction.kind,
-          importance: correction.importance
-        }, {
-          personName: input.personName,
-          explicit: await explicitFor(correction),
-          source: { ...source, channel: CHANNELS.BACKGROUND },
-          ctx: input.ctx
-        });
-        if (outcome.ok && !outcome.unchanged) result.corrected += 1;
-        else if (!outcome.ok) result.refused += 1;
+      for (const correction of extraction.corrections) {
+        if (!known.has(correction.id)) continue;
+        try {
+          const outcome = await update(where, correction.id, {
+            text: correction.text,
+            kind: correction.kind,
+            importance: correction.importance
+          }, {
+            personName: input.personName,
+            explicit: await explicitFor(correction),
+            source: { ...source, channel: CHANNELS.BACKGROUND },
+            ctx: input.ctx
+          });
+          if (outcome.ok && !outcome.unchanged) result.corrected += 1;
+          else if (!outcome.ok) result.refused += 1;
+        } catch (error) {
+          result.failed += 1;
+          firstError ??= error;
+        }
       }
 
-      for (const fact of Array.isArray(parsed.facts) ? parsed.facts : []) {
-        if (!fact || typeof fact.text !== 'string') continue;
-        /* The pause was read once, before the model was asked. */
-        const outcome = await keep(where, {
-          text: fact.text,
-          kind: fact.kind,
-          importance: fact.importance,
-          role: input.role,
-          personName: input.personName,
-          explicit: await explicitFor(fact),
-          channel: CHANNELS.BACKGROUND,
-          source,
-          ctx: input.ctx
-        }, false);
-        if (outcome.ok) result.added += 1;
-        else result.refused += 1;
+      for (const fact of extraction.facts) {
+        try {
+          /* The pause was read once, before the model was asked. */
+          const outcome = await keep(where, {
+            text: fact.text,
+            kind: fact.kind,
+            importance: fact.importance,
+            role: input.role,
+            personName: input.personName,
+            explicit: await explicitFor(fact),
+            channel: CHANNELS.BACKGROUND,
+            source,
+            ctx: input.ctx
+          }, false);
+          if (outcome.ok) result.added += 1;
+          else result.refused += 1;
+        } catch (error) {
+          result.failed += 1;
+          firstError ??= error;
+        }
       }
+      if (result.failed) return await failed('store', firstError, result);
       logger.info(`[memory] consolidated: ${result.added} added, ${result.corrected} corrected, ${result.refused} refused`);
       return { status: 'done', ...result };
     } catch (error) {
-      /* A failed run is retried next time: the conversation is not marked done. */
-      if (claimed && typeof store.releaseRef === 'function') {
-        try { await store.releaseRef(where, ref); } catch (_error) { /* the claim stays; nothing else to do */ }
-      }
-      logger.warn(`[memory] consolidation failed: ${error && error.message}`);
-      return { status: 'failed', ...empty };
+      return failed(stage === 'model' ? 'model' : 'error', error);
     }
   }
 
@@ -666,6 +723,7 @@ function createMemory(options = {}) {
 
 module.exports = {
   createMemory,
+  createLocalLock,
   MemoryError,
   DEFAULT_KINDS,
   CHANNELS

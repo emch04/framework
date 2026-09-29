@@ -6,8 +6,9 @@ d'agent minimale à tool-calling. Dépend de `@astratra/core`.
 Ce package ne fournit volontairement aucun catalogue de modèles, aucun SDK
 provider, aucun outil métier — tout ça vient du projet consommateur. Ce
 qu'il fournit, c'est le mécanisme durement acquis : suivi de quota, ordre de
-fallback, cooldown/dégradation, et une petite boucle d'orchestration
-d'agent.
+fallback, cooldown/dégradation, deux adaptateurs HTTP sans dépendance (le
+format OpenAI et Gemini), et deux boucles d'agent (protocole écrit, ou
+appels d'outils natifs).
 
 ## Routeur de providers
 
@@ -42,6 +43,129 @@ l'appel du provider. Sans Redis, ou si Redis devient indisponible, le routeur
 continue avec des compteurs RAM locaux : ce repli ne peut pas garantir un
 quota distribué. Les compteurs journaliers se réinitialisent automatiquement
 à minuit.
+
+### L'ordre d'une demande, et qui a répondu
+
+Un même projet a souvent plusieurs ordres pour les mêmes modèles : le plus
+rapide d'abord pour ce que la personne attend, le plus capable d'abord pour
+le reste, ceux qui voient seulement pour une photo. `route` dit en plus qui a
+répondu (pour les journaux).
+
+```js
+const router = createProviderRouter({
+  providers,
+  cooldownMs: 120_000,
+  cooldownJitterMs: 0,
+  // Ce qui met au repos : un 429 par défaut ; ici aussi un 503 et un délai dépassé.
+  cooldownOn: (error) => [429, 503].includes(error.statusCode) || error.name === 'TimeoutError',
+  // Tous au repos ? On les essaie quand même : un repos est une supposition.
+  whenAllCooling: 'try'
+});
+
+const { value, key, partial } = await router.route(requete, {
+  candidates: [{ provider: 'groq', model: 'qwen/qwen3.8-27b', extra: { reasoning_format: 'hidden' } }, { provider: 'gemini', model: 'gemini-3.6-flash' }],
+  select: (model, provider) => provider.id === 'gemini' || model.vision === true, // une photo : ceux qui voient
+  accepts: (reponse) => Boolean(reponse.text),                                   // refusée : le suivant
+  partial: (reponse) => reponse.cut === true                                     // coupée : en dernier recours
+}, { signal, purpose: 'chat' });
+```
+
+- Un fournisseur dont `available(ctx)` est faux (pas de clé) est sauté sans
+  bruit ; aucun disponible : `code: 'AI_NO_PROVIDER'`. Aucun qui convienne à
+  `select` : `'AI_NO_MATCH'`. Tous essayés : `'AI_UNAVAILABLE'` (AppError 503).
+- Une réponse refusée par `accepts` passe au modèle suivant sans compter comme
+  une panne ; une réponse `partial` n'est rendue que si personne ne finit.
+- Une **voie** (`provider.lane(ctx)`) : une clé à part pour un usage, avec son
+  propre quota. Elle se repose seule (`"gemini:modèle@news"`) : une clé saturée
+  par un travail de fond n'arrête jamais les conversations.
+- `ctx.signal` interrompu : la demande s'arrête net avec la raison de
+  l'appelant, aucun modèle suivant n'est demandé et aucun ne se repose.
+- `now` injecte l'horloge des repos ; `reset()` les oublie. Le minuteur de
+  minuit ne garde jamais le processus en vie.
+
+### Les adaptateurs : format OpenAI et Gemini
+
+```js
+const { createGeminiProvider, createOpenAICompatibleProvider } = require('@astratra/ai');
+
+createGeminiProvider({
+  getKey: (ctx) => ctx.env[`GEMINI_API_KEY_${ctx.purpose}`] || ctx.env.GEMINI_API_KEY,
+  lane: (ctx) => (ctx.env[`GEMINI_API_KEY_${ctx.purpose}`] ? ctx.purpose : null),
+  fetch, detailed: true, toRequest: (requete) => requete
+});
+createOpenAICompatibleProvider({
+  id: 'cloudflare',
+  url: (ctx) => ctx.env.CF_ACCOUNT && `https://api.cloudflare.com/client/v4/accounts/${ctx.env.CF_ACCOUNT}/ai/v1/chat/completions`,
+  getKey: (ctx) => ctx.env.CF_TOKEN, fetch, detailed: true, toRequest: (requete) => requete
+});
+```
+
+Les deux prennent la même requête (`{ system, messages, tools, maxTokens }`,
+photos comprises) et rendent la même réponse : `detailed: true` rend
+`{ text, toolCalls, cut }` au routeur, qui juge. La clé et l'adresse sont
+relues à chaque appel (`ctx`) ; `ctx.fetch` et `ctx.timeoutMs` valent pour un
+appel ; `extra` d'un modèle s'ajoute à celui du fournisseur. Gemma reçoit la
+consigne en tête du premier message ; les parties de réflexion et les balises
+`<think>` (même fermée sans ouverture) ne sont jamais montrées ; un appel
+d'outil **écrit dans le texte** (façons de Qwen et de Hermes) devient un vrai
+appel — et n'est jamais une réponse à montrer. Des arguments illisibles gardent
+l'appel, marqué `invalid` avec `invalidReason` (`not_json`, `not_object`), et
+repartent en `{}` au tour suivant.
+
+## Outils natifs : la boucle d'un agent qui appelle ses outils
+
+```js
+const { createToolCaller, runToolLoop, toolSpecs, validateNativeTools } = require('@astratra/ai');
+
+const outils = validateNativeTools(catalogue, { requireSummary: true }); // au démarrage
+const appeler = createToolCaller({
+  tools: outils, context: { userId }, signal, timeoutMs: 20_000,
+  emit: flux.send,                   // 'step' { id, tool, params } puis 'step_done' { id, ok }
+  keep: sources.keep,                // createSourceLedger()
+  record: async ({ tool, args, found }) => garderAction(tool, args, found), // à confirmer, à annuler
+  messages: { waiting: 'Rien n’est écrit : la personne doit confirmer sur son téléphone.' }
+});
+const { text } = await runToolLoop({
+  system, messages, tools: toolSpecs(outils), turn, callTool: appeler,
+  maxTurns: 6, maxMs: 60_000, finalInstruction: 'Answer now with what you have read: no more tools.', signal
+});
+```
+
+Un outil : `{ name, description, parameters, kind, summary?, run }`, avec
+`perform` pour un outil `confirm` (rien n'est écrit avant qu'un humain
+confirme ; le modèle lit que ça attend) et `undo` pour un outil `write`. Un
+outil qui lève, qui tarde, qu'on invente, ou des arguments illisibles
+deviennent une erreur que le modèle **lit** et corrige au tour suivant ; ce
+qu'un outil rend est borné (`resultMax`, 6 000). Les outils demandés ensemble
+tournent en même temps. À court de tours ou de temps, un dernier tour sans
+outils répond avec ce qui a été lu ; un tour sans texte ni outil lève
+`code: 'AI_NO_ANSWER'`, pour que l'appelant réponde autrement.
+`summary(args)` donne les valeurs de la ligne d'étape (`stepParams`, coupées à
+120 caractères) : l'interface écrit la phrase, le serveur n'en écrit aucune.
+
+## Le flux vers l'app (server-sent events)
+
+```js
+const flux = openEventStream(res);   // Node ou Express
+flux.send('step', { id: 's1', tool: 'read_bible' });
+flux.close();
+flux.signal;                          // interrompu quand la personne part — pas quand le serveur ferme
+```
+
+Chaque bloc s'écrit `event: <type>\ndata: <json>\n\n`, sans mise en tampon par
+un proxy (`X-Accel-Buffering: no`) ; écrire après la fin ne fait rien.
+
+## Recherche web (Serper)
+
+```js
+const resultats = await searchSerper({ query, sites: ['jw.org'], hl: 'fr' }, {
+  key: process.env.SERPER_API_KEY, fetch,
+  accept: (resultat, url) => !estHostile(resultat)   // écarté avant que le modèle ne lise
+});
+```
+
+Des résultats https avec un titre, 8 au plus. Sans clé, rien n'est demandé
+(`code: 'WEB_SEARCH_NO_KEY'`) ; une panne porte `'WEB_SEARCH_FAILED'`, jamais la clé.
 
 ## Registre d'outils
 
@@ -201,10 +325,12 @@ const lignes = buildPassagesContext({
 
 ## Le texte de la réponse
 
-`tidyMarkdown` ramène la réponse au Markdown qu'un téléphone dessine,
-`plainText` l'enlève pour une voix, et `verifyQuotations(texte, { findReferences,
-resolve })` remplace une citation infidèle suivie de sa référence par le vrai
-texte — ce qu'est une référence et où vit son texte t'appartient.
+`tidyMarkdown` ramène la réponse au Markdown qu'un téléphone dessine (avec
+`remove`, des expressions que l'app ne montre jamais), `plainText` l'enlève
+pour une voix, `wholeSentences` ramène un texte coupé à sa dernière phrase
+entière, et `verifyQuotations(texte, { findReferences, resolve })` remplace une
+citation infidèle suivie de sa référence par le vrai texte — ce qu'est une
+référence et où vit son texte t'appartient.
 
 ## La langue de la réponse, la cadence, les points compatibles OpenAI
 
@@ -213,7 +339,8 @@ texte — ce qu'est une référence et où vit son texte t'appartient.
   seulement au-dessus d'un seuil — bien plus haut pour deux mots.
 - `createAskLimit({ max, windowMs, code })` : fenêtre glissante par personne ;
   le refus porte un code et l'attente, jamais une phrase ; les comptes qui
-  n'écrivent plus sont oubliés.
+  n'écrivent plus sont oubliés (toutes les 500 demandes, et dès qu'une fenêtre
+  est passée depuis le dernier nettoyage).
 - `createOpenAICompatibleProvider({ id, url, getKey, models, fetch })` : un
   fournisseur pour le routeur. La clé est relue à chaque appel, une erreur porte
   le statut HTTP (429 → refroidissement) et jamais la clé, des arguments d'outil

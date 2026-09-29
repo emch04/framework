@@ -33,6 +33,8 @@ function plainText(text) {
  * @param {string} text
  * @param {object} [options]
  * @param {boolean} [options.removeEmoji] drop emoji — for an app that draws its own symbols. Default false.
+ * @param {RegExp[]} [options.remove] ce que l'app ne montre jamais, retiré après les marques
+ *   (des lettres d'un autre alphabet recopiées d'un titre, par exemple). Chaque expression est globale.
  */
 function tidyMarkdown(text, options = {}) {
   let out = String(text === null || text === undefined ? '' : text)
@@ -49,6 +51,10 @@ function tidyMarkdown(text, options = {}) {
     .replace(/(^|[^*])\*(?!\*)/g, '$1')
     .replace(/`([^`]+)`/g, '$1')
     .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1');
+  for (const pattern of options.remove || []) {
+    if (!(pattern instanceof RegExp) || !pattern.global) throw new Error('tidyMarkdown: every options.remove entry must be a global RegExp.');
+    out = out.replace(pattern, '');
+  }
   if (options.removeEmoji) {
     out = out.replace(/[\p{Extended_Pictographic}\p{Emoji_Modifier}\u{FE0F}\u{200D}]/gu, '');
   }
@@ -57,6 +63,20 @@ function tidyMarkdown(text, options = {}) {
     .replace(/[ \t]+$/gm, '')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
+}
+
+/**
+ * Un texte coupé à sa longueur, ramené à sa dernière phrase entière : jamais
+ * un mot coupé en deux. Sans fin de phrase, le texte reste tel quel.
+ * @param {string} text
+ * @param {object} [options]
+ * @param {string[]} [options.marks] ce qui termine une phrase. Défaut : . ! ? … » ) "
+ */
+function wholeSentences(text, options = {}) {
+  const trimmed = String(text === null || text === undefined ? '' : text).trimEnd();
+  const marks = options.marks || ['.', '!', '?', '…', '»', ')', '"'];
+  const end = Math.max(...marks.map((mark) => trimmed.lastIndexOf(mark)));
+  return end > 0 ? trimmed.slice(0, end + 1) : trimmed;
 }
 
 /* A quotation between guillemets, curly quotes or straight quotes. */
@@ -114,4 +134,4 @@ async function verifyQuotations(text, options = {}) {
   return out;
 }
 
-module.exports = { plainText, tidyMarkdown, verifyQuotations, isFaithfulQuotation };
+module.exports = { plainText, tidyMarkdown, verifyQuotations, isFaithfulQuotation, wholeSentences };

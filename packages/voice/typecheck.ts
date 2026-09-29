@@ -31,7 +31,18 @@ import {
   createPieceVoiceService,
   mimeTypeForAudio,
   normalizeLanguage,
-  voiceCacheSource
+  voiceCacheSource,
+  VOICE_FINISH,
+  VOICE_LOUDNESS,
+  buildReadingGraph,
+  createReadingAssembler,
+  buildResidentPiperArgs,
+  createResidentPiperPool,
+  createFileVoiceCache,
+  createMicrophoneGate,
+  createUtteranceSegmenter,
+  runProcess,
+  pcm16ToWav
 } from './src';
 import type {
   Spawn,
@@ -114,4 +125,29 @@ async function exercise(): Promise<void> {
   ];
 }
 
+const assembler = createReadingAssembler({ spawn, clock });
+const pool = createResidentPiperPool({ spawn: () => ({}), partMaxMs: 1000 });
+const fileCache = createFileVoiceCache({
+  filesystem: {
+    mkdir: async () => undefined,
+    readFile: async () => new Uint8Array(),
+    writeFile: async () => undefined,
+    rename: async () => undefined,
+    remove: async () => undefined,
+    list: async () => [],
+    modifiedAt: async () => 0,
+    touch: async () => undefined
+  },
+  directory: '/voice',
+  retainDays: 60
+});
+const gate = createMicrophoneGate({ vad: { classify: async () => 1, frameSize: 512 }, echo: { compare: async () => 0.1, dropAs: 'silence', silentRun: 64 } });
+const segmenter = createUtteranceSegmenter({ transcribe: async () => ({ text: 'hello', confidence: 0.9 }) });
+void [
+  VOICE_FINISH, VOICE_LOUDNESS, buildReadingGraph([{ pitch: 1, after: 0.25 }]), assembler.assemble({ takes: [{ file: 'a.wav' }], output: 'o.m4a' }),
+  buildResidentPiperArgs({ modelPath: 'voice.onnx' }), pool.say({ model: 'voice.onnx', pace: 1, pause: 0.3 }, 'Hello', 'o.wav'), pool.size,
+  fileCache.get('key'), fileCache.prune(), gate.push('AAAA'), segmenter.push('AAAA'), segmenter.finish(),
+  runProcess(spawn, 'ffmpeg', [], { clock, timeoutMs: 1000 }), pcm16ToWav(new Uint8Array(2), 24000),
+  createProviderVoiceService({ providers: [], restingLast: true })
+];
 void exercise;

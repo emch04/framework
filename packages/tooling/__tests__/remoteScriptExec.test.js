@@ -4,7 +4,6 @@
  * `ssh host bash -s` would receive. No network beyond 127.0.0.1.
  */
 const fs = require('fs');
-const http = require('http');
 const path = require('path');
 const { execFileSync } = require('child_process');
 const { REMOTE_DEPLOY_SCRIPT, REMOTE_STATUS_SCRIPT, parseMarkers } = require('../src/deploy/remoteScript');
@@ -32,22 +31,7 @@ function commit(dir, files, message) {
   return git(dir, 'rev-parse', 'HEAD');
 }
 
-let server;
-let port;
-let appDirForServer;
-
-beforeAll(async () => {
-  // Healthy unless the checked-out version says "broken": a bad release, for real.
-  server = http.createServer((req, res) => {
-    const version = fs.readFileSync(path.join(appDirForServer, 'version.txt'), 'utf8').trim();
-    res.statusCode = version === 'broken' ? 500 : 200;
-    res.end(version);
-  });
-  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
-  port = server.address().port;
-});
-
-afterAll(() => new Promise((resolve) => server.close(resolve)));
+const port = 9876;
 
 function setup(appDirName = 'app') {
   const base = createTempProject();
@@ -58,24 +42,34 @@ function setup(appDirName = 'app') {
   const v1 = commit(dev, { 'version.txt': 'v1\n', 'package-lock.json': '{"v":1}\n' }, 'v1');
   const appDir = path.join(base, appDirName);
   git(base, 'clone', '-q', '-b', 'main', path.join(base, 'origin.git'), appDir);
-  appDirForServer = appDir;
+  const shim = path.join(base, 'curl');
+  fs.writeFileSync(shim, '#!/usr/bin/env bash\nurl="${@: -1}"\nif [[ "$url" == *":1/health" ]]; then printf 000; elif grep -q broken "$TEST_APP_DIR/version.txt"; then printf 500; else printf 200; fi\n');
+  fs.chmodSync(shim, 0o755);
   const log = path.join(base, 'actions.log');
   fs.writeFileSync(log, '');
   return { base, dev, appDir, v1, log };
 }
 
-async function runDeployScript({ appDir, target, log, install, attempts = '1', deps = '(^|/)package-lock\\.json$', remote = 'origin' }) {
+async function runDeployScript({ appDir, target, log, install, attempts = '1', deps = '(^|/)package-lock\\.json$', remote = 'origin', marker = '@@astratra' }) {
   const args = [
     '', appDir, '', target, remote, 'main', deps,
     install || `echo "install $(cat version.txt)" >> '${log}'`,
     `echo "reload $(cat version.txt)" >> '${log}'`,
-    `http://127.0.0.1:${port}/health`, attempts, '1', '2', '1'
+    `http://127.0.0.1:${port}/health`, attempts, '1', '2', '1', marker
   ];
-  const result = await runProcess('bash', ['-s', '--', ...args], { input: REMOTE_DEPLOY_SCRIPT, env: GIT_ENV, quiet: true });
-  return { ...result, markers: parseMarkers(result.stdout), actions: fs.readFileSync(log, 'utf8').trim().split('\n').filter(Boolean) };
+  const result = await runProcess('bash', ['-s', '--', ...args], { input: REMOTE_DEPLOY_SCRIPT, env: { ...GIT_ENV, PATH: `${path.dirname(appDir)}:${process.env.PATH}`, TEST_APP_DIR: appDir }, quiet: true });
+  return { ...result, markers: parseMarkers(result.stdout, marker), actions: fs.readFileSync(log, 'utf8').trim().split('\n').filter(Boolean) };
 }
 
 describe('remote deploy script, executed', () => {
+  test('uses the project marker through a real local Git deploy', async () => {
+    const { dev, appDir, log } = setup();
+    const v2 = commit(dev, { 'version.txt': 'v2\n' }, 'v2');
+    const result = await runDeployScript({ appDir, target: v2, log, marker: '@@tertius' });
+    expect(result.code).toBe(0);
+    expect(result.markers.result).toBe('deployed');
+    expect(result.stdout).toContain('@@tertius result=deployed');
+  });
   test('healthy release: reset to target, reload once, no install when dependencies did not move', async () => {
     const { dev, appDir, v1, log } = setup();
     const v2 = commit(dev, { 'version.txt': 'v2\n' }, 'v2');
@@ -159,9 +153,9 @@ describe('remote deploy script, executed', () => {
 
 describe('remote status script, executed', () => {
   test('reports each internal URL and the last matching backup line', async () => {
-    const { base } = setup();
+    const { base, appDir } = setup();
     const backupLog = writeFile(base, 'backup.log', '2026-09-26 03:00 backup sent\n2026-09-27 03:00 backup FAILED\n2026-09-27 03:05 backup sent\n');
-    const result = await runProcess('bash', ['-s', '--', '', '', `http://127.0.0.1:${port}/health\nhttp://127.0.0.1:1/health`, '2', backupLog, 'backup sent', '0'], { input: REMOTE_STATUS_SCRIPT, quiet: true });
+    const result = await runProcess('bash', ['-s', '--', '', '', `http://127.0.0.1:${port}/health\nhttp://127.0.0.1:1/health`, '2', backupLog, 'backup sent', '0'], { input: REMOTE_STATUS_SCRIPT, env: { ...GIT_ENV, PATH: `${base}:${process.env.PATH}`, TEST_APP_DIR: appDir }, quiet: true });
     const markers = parseMarkers(result.stdout);
     expect(markers.urls).toEqual([
       { status: 200, url: `http://127.0.0.1:${port}/health` },

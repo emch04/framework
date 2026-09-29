@@ -51,3 +51,6 @@ test('piece result contains no failed provider audio', async () => {
   ] });
   expect((await service.synthesize(['one', 'two'])).pieces).toEqual(['good:one', 'good:two']);
 });
+test('a closing quote or bracket stays with its sentence', () => {
+  expect(splitSpeechPieces('Il a dit « oui.» Puis il est parti (vite.) Fin ?', { maxChars: 18 })).toEqual(['Il a dit « oui.»', 'Puis il est parti', '(vite.) Fin ?']);
+});

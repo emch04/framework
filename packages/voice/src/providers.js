@@ -78,35 +78,40 @@ function createProviderVoiceService(options = {}) {
       const candidates = Array.isArray(keys) ? [...new Set(keys.filter(Boolean))] : [undefined];
       const offset = candidates.length ? cursor++ % candidates.length : 0;
       const models = provider.models?.length ? provider.models : [provider.model];
+      /* Every model on every key, the best model first. Those at rest are left out, or (restingLast) tried once the others have failed. */
+      const choices = [];
       for (const model of models) {
         for (let i = 0; i < candidates.length; i += 1) {
           const key = candidates[(i + offset) % candidates.length];
           const id = identity(providerId, model, key);
-          if (await cooldownFor(id) > clock.now()) continue;
-          const dayId = `${new Date(clock.now()).toISOString().slice(0, 10)}:${id}`;
-          if (options.usageStore && key !== undefined) {
-            try {
-              if ((await options.usageStore.getCount(dayId)) >= (options.maxSuccessesPerDay ?? 9)) continue;
-            } catch (_error) { /* Provider remains available if tracking fails. */ }
-          }
+          choices.push({ model, key, id, resting: await cooldownFor(id) > clock.now() });
+        }
+      }
+      const ordered = options.restingLast ? [...choices.filter((choice) => !choice.resting), ...choices.filter((choice) => choice.resting)] : choices.filter((choice) => !choice.resting);
+      for (const { model, key, id } of ordered) {
+        const dayId = `${new Date(clock.now()).toISOString().slice(0, 10)}:${id}`;
+        if (options.usageStore && key !== undefined) {
           try {
-            const result = await provider.synthesize({ ...request, text, language, voice, model, key });
-            if (!result || result.audio == null || !result.audio.length) throw Object.assign(new Error('EMPTY_AUDIO'), { code: 'EMPTY_AUDIO' });
-            const entry = { audio: Buffer.from(result.audio), format: result.format, mimeType: result.mimeType };
-            if (key !== undefined) {
-              try { await options.usageStore?.increment(dayId); } catch (_error) { /* Optional usage store. */ }
-            }
-            try { await options.cache?.set(cacheKey, entry, options.cacheTtlSeconds ?? 604800); } catch (_error) { /* Optional cache. */ }
-            if (position > 0 && request.fallbackScope) {
-              try { await options.fallbackStore?.set(request.fallbackScope, providerId, options.fallbackTtlSeconds ?? 300); } catch (_error) { /* Optional scope store. */ }
-            }
-            return { ...entry, audio: Buffer.from(entry.audio), cacheKey, cached: false, provider: providerId, model: model ?? null, fallback: position > 0, attempts };
-          } catch (error) {
-            const code = classifyProviderError(error);
-            attempts.push({ provider: providerId, model: model ?? null, code });
-            const restMs = options.cooldownMsByCode?.[code] ?? (code === 'QUOTA' ? cooldownMs : 0);
-            if (restMs > 0) await rest(id, restMs);
+            if ((await options.usageStore.getCount(dayId)) >= (options.maxSuccessesPerDay ?? 9)) continue;
+          } catch (_error) { /* Provider remains available if tracking fails. */ }
+        }
+        try {
+          const result = await provider.synthesize({ ...request, text, language, voice, model, key });
+          if (!result || result.audio == null || !result.audio.length) throw Object.assign(new Error('EMPTY_AUDIO'), { code: 'EMPTY_AUDIO' });
+          const entry = { audio: Buffer.from(result.audio), format: result.format, mimeType: result.mimeType };
+          if (key !== undefined) {
+            try { await options.usageStore?.increment(dayId); } catch (_error) { /* Optional usage store. */ }
           }
+          try { await options.cache?.set(cacheKey, entry, options.cacheTtlSeconds ?? 604800); } catch (_error) { /* Optional cache. */ }
+          if (position > 0 && request.fallbackScope) {
+            try { await options.fallbackStore?.set(request.fallbackScope, providerId, options.fallbackTtlSeconds ?? 300); } catch (_error) { /* Optional scope store. */ }
+          }
+          return { ...entry, audio: Buffer.from(entry.audio), cacheKey, cached: false, provider: providerId, model: model ?? null, fallback: position > 0, attempts };
+        } catch (error) {
+          const code = classifyProviderError(error);
+          attempts.push({ provider: providerId, model: model ?? null, code });
+          const restMs = options.cooldownMsByCode?.[code] ?? (code === 'QUOTA' ? cooldownMs : 0);
+          if (restMs > 0) await rest(id, restMs);
         }
       }
     }
@@ -150,12 +155,14 @@ function createGeminiTtsAdapter({ fetch, endpoint, model, models, voice, voices,
       const body = await response.json();
       const part = body?.candidates?.[0]?.content?.parts?.find((item) => item.inlineData?.data)?.inlineData;
       if (!part) throw Object.assign(new Error('INVALID_AUDIO'), { code: 'INVALID_AUDIO' });
-      if (/^audio\/(?:wav|x-wav)/i.test(part.mimeType || '')) return { audio: Buffer.from(part.data, 'base64'), format: 'wav', mimeType: 'audio/wav' };
-      if (!/^audio\/L16/i.test(part.mimeType || '')) throw Object.assign(new Error('INVALID_AUDIO'), { code: 'INVALID_AUDIO' });
+      const audio = Buffer.from(part.data, 'base64');
+      /* A WAV file says so by its first four bytes, whatever mime type came with it. */
+      if (/^audio\/(?:wav|x-wav)/i.test(part.mimeType || '') || audio.subarray(0, 4).toString() === 'RIFF') return { audio, format: 'wav', mimeType: 'audio/wav' };
+      if (!/^audio\/(?:L16|pcm)/i.test(part.mimeType || '')) throw Object.assign(new Error('INVALID_AUDIO'), { code: 'INVALID_AUDIO' });
       const rate = Number(/rate=(\d+)/i.exec(part.mimeType)?.[1] || 24000);
-      return { audio: pcm16ToWav(Buffer.from(part.data, 'base64'), rate), format: 'wav', mimeType: 'audio/wav' };
+      return { audio: pcm16ToWav(audio, rate), format: 'wav', mimeType: 'audio/wav' };
     }
   };
 }
 
-module.exports = { classifyProviderError, createProviderVoiceService, createPiperProvider, createGeminiTtsAdapter };
+module.exports = { classifyProviderError, createProviderVoiceService, createPiperProvider, createGeminiTtsAdapter, pcm16ToWav };

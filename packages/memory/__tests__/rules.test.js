@@ -19,6 +19,7 @@ test('normalizeKind folds case and accents and reads aliases only into known kin
 test('normalizeImportance clamps, rounds and falls back', () => {
   expect([normalizeImportance('4'), normalizeImportance(4.5), normalizeImportance(0), normalizeImportance(12), normalizeImportance('x', 2), normalizeImportance(null)])
     .toEqual([4, 5, 1, 5, 2, 3]);
+  expect([normalizeImportance(''), normalizeImportance('   ', 2), normalizeImportance(' 4 ')]).toEqual([3, 2, 4]);
 });
 
 test('mentionsName matches whole words, folded, three letters or more', () => {
@@ -42,4 +43,15 @@ test('ranking helpers', () => {
   expect(keywordScore('a b', 'a b')).toBe(0);
   expect(fuseByRank([['a', 'b'], ['b', 'c']])).toEqual(['b', 'a', 'c']);
   expect(buildPortrait([{ text: 'x', importance: 5 }, { text: 'y', importance: 3 }])).toBe('- x');
+});
+
+test('buildPortrait stops at the first memory that does not fit, or with fill leaves it out and keeps the shorter ones', () => {
+  const memories = [
+    { text: 'first', importance: 5, lastUsedAt: '2026-01-03' },
+    { text: `long ${'x'.repeat(40)}`, importance: 5, lastUsedAt: '2026-01-02' },
+    { text: 'short', importance: 4, lastUsedAt: '2026-01-01' }
+  ];
+  const plain = (memory) => memory.text;
+  expect(buildPortrait(memories, { maxLength: 30, format: plain })).toBe('first');
+  expect(buildPortrait(memories, { maxLength: 30, format: plain, fill: true })).toBe('first\nshort');
 });

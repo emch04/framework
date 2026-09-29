@@ -91,6 +91,26 @@ describe('createAskLimit', () => {
     expect(limit.size()).toBe(1);
   });
 
+  test('a window passed since the last clean-up cleans too: a quiet server forgets its idle accounts', () => {
+    const HOUR = 60 * 60 * 1000;
+    const limit = createAskLimit({ max: 5, windowMs: HOUR });
+    for (let index = 0; index < 400; index += 1) limit.take(`account-${index}`, index);
+    expect(limit.size()).toBe(400);
+    limit.take('late', 2 * HOUR);
+    expect(limit.size()).toBe(1);
+  });
+
+  test('an account still inside its window keeps its count through the clean-up', () => {
+    const HOUR = 60 * 60 * 1000;
+    const limit = createAskLimit({ max: 2, windowMs: HOUR, code: 'TOO_MANY' });
+    limit.take('idle', 0);
+    limit.take('busy', HOUR - 10);
+    limit.take('busy', HOUR - 5);
+    limit.take('other', HOUR + 1);
+    expect(limit.size()).toBe(2);
+    expect(() => limit.take('busy', HOUR + 2)).toThrow('TOO_MANY');
+  });
+
   test('wiring mistakes are refused', () => {
     expect(() => createAskLimit({ max: 0, windowMs: 1 })).toThrow(/max/);
     expect(() => createAskLimit({ max: 1 })).toThrow(/windowMs/);

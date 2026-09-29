@@ -43,6 +43,11 @@ buildPiperArgs({
 });
 ```
 
+`VOICE_FILTER` is the finish (`VOICE_FINISH`: equalizers, high-pass, de-esser,
+compressor) followed by the loudness step (`VOICE_LOUDNESS`). They are exported
+apart because a reading assembled from several takes is normalized in two
+passes (see "Assemble a reading" below).
+
 ## Synthesize, finish, cache
 
 ```js
@@ -79,6 +84,34 @@ speech. `createMemoryVoiceCache()` is provided for tests and local use.
 The injected file adapter's `remove` method must be idempotent and return a
 Promise. The injected `spawn` follows Node's `child_process.spawn` shape.
 
+## Assemble a reading, resident Piper, readings on disk
+
+A long reading is often several takes: a piece per group of sentences read in
+the cloud, or a part per tone read by Piper. `createReadingAssembler({ spawn,
+ffmpegPath })` joins them into one finished AAC file. Each take
+(`{ file, pitch, after }`) is brought to its pitch (a lower voice is played at
+another rate and brought back to time, so the pace is kept) and to one rate,
+followed by its silence; then come the finish (none for a voice already
+finished) and the loudness in two passes: the first measures the whole reading,
+the second applies one steady gain (`measuredLoudness`). One pass lets loudnorm
+find its level while it reads, and the first seconds come out too loud.
+`buildReadingGraph` gives the ffmpeg graph alone.
+
+`createResidentPiperPool({ spawn, piperPath })` keeps Pipers in memory, one per
+voice and delivery (`{ model, pace, pause }`), started once and handed each
+text as a line of JSON (`buildResidentPiperArgs` shares the delivery of the
+command line). A Piper started for each text spends half a second loading its
+voice. One that dies or hangs is dropped and its next text starts a new one.
+`warm(models, deliveries, { file, cleanup })` starts them all and has each say
+a word, so the first reading does not pay for it.
+
+`createFileVoiceCache({ filesystem, directory, retainDays })` keeps each
+finished reading as a file under its key (`keyPattern` decides what a key is,
+so a key can never name a path). A reading heard again is touched; one not heard
+for `retainDays` (60) is removed by `prune`, which a write runs by itself at
+most every six hours. It is a `VoiceCache`, so `get` gives
+`{ audio, format, mimeType }`.
+
 ## Persistent Piper server contract
 
 This package does not port or run a Python server. A persistent Piper server
@@ -104,6 +137,12 @@ for one hour by default. `cooldownStore` can persist that rest between service
 instances; `usageStore` can limit successful keyed calls per UTC day (nine by
 default). `cooldownMsByCode` can set rest times for `AUTH` or `TRANSIENT`
 failures. Failed optional stores do not prevent synthesis.
+
+`restingLast` keeps candidates at rest from being skipped: every model on every
+key is tried, those at rest after the others, so a blip that rested all the keys
+does not send every reading to the local voice for the length of the rest.
+`cooldownMsByCode` can rest any kind of failure (`QUOTA`, `AUTH`, `TRANSIENT`,
+`PROVIDER_ERROR`: a refused key answers 400 as often as 403).
 
 Cache identity includes text, language, provider, selected voice and the
 caller's voice version. A cached fallback cannot masquerade as the primary
@@ -162,15 +201,29 @@ replacing rejected frames with equal-length silence, with lookback and hangover.
 If its injected classifier fails, it releases held audio and passes subsequent
 audio through.
 
+`createMicrophoneGate({ vad, echo })` chains the two for base64 16-bit PCM in and
+out, as a phone sends it: first the speech gate (noise becomes silence of the
+same length, so a model still hears the time go by and knows when the person has
+stopped), then the echo guard, whose dropped sound is silence too. A chunk that
+goes through unchanged comes out as it went in, to the bit. `vad` and `echo` are
+the options of `createVadSpeechGate` and `createEchoGuard`, or gates already
+made; `playbackSent` and `playbackInterrupted` tell the guard when the
+assistant's voice plays.
+
 `createEchoGuard({ compare, now, threshold, tailMs, minSamples,
-windowSamples, passGapMs })` accepts playback duration through `playbackSent(bytes,
+windowSamples, passGapMs, silentRun, dropAs, latchOnFailure })` accepts playback duration through `playbackSent(bytes,
 sampleRate)`, extends queued playback, and retains an echo tail after
 `playbackInterrupted()`. `inspect(segment)` returns a segment or `null` with a
 reason code. `push(segment)` can hold sequential audio up to a comparison
 window. Matching audio is dropped; too-short held audio may be dropped
 conservatively. Exact silence is excluded from speaker comparison; a
-different speaker continues without a second comparison during the configured
-short pass gap. The existing `setPlaying` and `filter` methods remain. With
+different speaker continues without a second comparison for as long as its
+chunks come without a pause longer than the pass gap. The window fills with sound
+only (`silentRun`: exact silence at least that many samples long is left out; the
+default 1 leaves out every zero sample). `dropAs: 'silence'` returns what is
+dropped as silence of the same length, so a stream keeps its timing. After a
+comparator failure the guard stops comparing and everything passes
+(`latchOnFailure`). The existing `setPlaying` and `filter` methods remain. With
 no comparator or a comparator failure, audio passes through. The host
 supplies the speaker comparator and audio clock.
 `chainEchoGuards(...guards)` applies several optional audio guards in order
@@ -186,11 +239,22 @@ model log probability, no-speech probability and echoes of injected expected
 vocabulary. Heuristics return reason codes and a low confidence value; they
 are not proof of transcription quality. `confidenceFromLogProbabilities`
 converts a decoder's token log probabilities to a bounded score when present.
+`createUtteranceSegmenter({ transcribe })` cuts a microphone into what the person
+said, one sentence at a time, on base64 PCM16 that a speech gate has already
+sorted: a frame is speech when its energy passes `threshold`, a pause shorter
+than `silenceMs` (520) stays inside the sentence, a longer one ends it and is
+not decoded, a sentence shorter than `minSpeechMs` (240) is noise. Each sentence
+is decoded by the injected `transcribe` (`createLocalTranscriber`'s fits) and
+comes back with its `text`, `confidence` and the sentence itself as `audio`, so a
+caller that gives up on the local decoder can replay it. A decoder that fails
+rejects with that audio in the error, and the sentences after it go on.
 `createTranscriptionProviderChain` tries injected transcribers in order. It
 first asks each to detect language; if that result is absent or outside the
 caller-supplied supported list, it can retry in the requested language. A
 failed or empty result moves to the next provider and returns provider and
-fallback codes. Cloud HTTP clients and model choices remain caller owned.
+fallback codes. Each provider is also given `requestedLanguage`, what the caller
+asked for, for one that cannot listen freely: it may answer in that language and
+say so in `heardLanguage`, and no second decoding follows. Cloud HTTP clients and model choices remain caller owned.
 
 `createConfidentialPolicy({ defaultRoles, lockedRoles, cloudFallbackRoles,
 localUnsupportedLanguages })` returns session decisions with `mode`,
@@ -217,11 +281,14 @@ within a reading. Combining audio and applying pauses remain caller owned.
 
 ## Intentionally out of scope
 
-- no Piper, ffmpeg, Redis, filesystem, or HTTP dependency;
+- no Piper, ffmpeg, Redis, filesystem, or HTTP dependency (Node's `spawn` and
+  file system are injected, so the assembler, the resident pool and the file
+  cache run against fakes in tests);
 - no text normalization, language detection, user-facing copy, or fixed app roles;
 - no Python server implementation or bundled network client;
 - no model files, ONNX, sherpa, or Whisper bindings;
-- no cache eviction policy: the backing store owns retention beyond the TTL.
+- no cache eviction policy for the memory and injected caches: the backing store
+  owns retention beyond the TTL (the file cache prunes by age).
 
 ## Tests
 

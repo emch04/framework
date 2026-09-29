@@ -5,18 +5,22 @@
    mistaken for the current voice after such a change. */
 const VOICE_VERSION = 'v2';
 
+/* The finish and the loudness are kept apart: a reading assembled from several
+   takes is normalized in two passes (measure, then apply one steady gain),
+   which needs the loudness step on its own. */
 /* These three equalizers are deliberately explicit. A broad "voice" preset
    hid the real regression: warmth at 160 Hz, consonant presence at 3 kHz and
    Piper's metallic edge at 8 kHz had to remain independently reviewable. */
-const VOICE_FILTER = [
+const VOICE_FINISH = [
   'equalizer=f=160:t=q:w=0.9:g=2',
   'equalizer=f=3000:t=q:w=1.3:g=2',
   'equalizer=f=8000:t=q:w=1.5:g=-2.5',
   'highpass=f=70',
   'deesser=i=0.3',
-  'acompressor=threshold=-20dB:ratio=2.5:attack=5:release=80',
-  'loudnorm=I=-16:TP=-1.5:LRA=11'
+  'acompressor=threshold=-20dB:ratio=2.5:attack=5:release=80'
 ].join(',');
+const VOICE_LOUDNESS = 'loudnorm=I=-16:TP=-1.5:LRA=11';
+const VOICE_FILTER = `${VOICE_FINISH},${VOICE_LOUDNESS}`;
 
 function buildFfmpegArgs(inputPath, outputPath, options = {}) {
   return [
@@ -32,7 +36,7 @@ function buildFfmpegArgs(inputPath, outputPath, options = {}) {
   ];
 }
 
-function measuredLoudness(report, target = 'loudnorm=I=-16:TP=-1.5:LRA=11') {
+function measuredLoudness(report, target = VOICE_LOUDNESS) {
   const found = /\{[^{}]*"input_i"[^{}]*\}/u.exec(String(report ?? ''));
   if (!found) return target;
   try {
@@ -107,6 +111,8 @@ function mimeTypeForAudio(pathOrExtension) {
 
 module.exports = {
   VOICE_FILTER,
+  VOICE_FINISH,
+  VOICE_LOUDNESS,
   VOICE_VERSION,
   buildFfmpegArgs,
   measuredLoudness,

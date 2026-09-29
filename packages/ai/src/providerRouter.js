@@ -45,7 +45,14 @@ function createProviderRouter(config = {}) {
     maxFailures: config.maxFailures ?? DEFAULT_MAX_FAILURES,
     degradedMs: config.degradedMs ?? DEFAULT_DEGRADED_MS,
     intentRouting: config.intentRouting || {},
-    redisKeyPrefix: config.redisKeyPrefix || 'astratra:ai:provider'
+    redisKeyPrefix: config.redisKeyPrefix || 'astratra:ai:provider',
+    /* Ce qui met un modèle au repos. Par défaut un 429 ; un projet peut y
+       ajouter un 503 « surchargé » ou un délai dépassé. */
+    cooldownOn: typeof config.cooldownOn === 'function' ? config.cooldownOn : isRateLimitError,
+    /* 'try' : quand tous les candidats se reposent, on les essaie quand même —
+       un repos est une supposition, pas un refus. */
+    whenAllCooling: config.whenAllCooling === 'try' ? 'try' : 'skip',
+    now: typeof config.now === 'function' ? config.now : Date.now
   };
   /* One circuit per PROVIDER, never one for all: a provider that is down must
      not take the others with it. Optional — the per-model cooldown and
@@ -55,42 +62,68 @@ function createProviderRouter(config = {}) {
   let midnightTimer = null;
   const resetDailyAtMidnight = () => {
     resetDailyUsage(state);
-    midnightTimer = setTimeout(resetDailyAtMidnight, msUntilNextMidnight());
+    midnightTimer = unref(setTimeout(resetDailyAtMidnight, msUntilNextMidnight()));
   };
-  midnightTimer = setTimeout(resetDailyAtMidnight, msUntilNextMidnight());
+  /* Le minuteur ne garde jamais le processus en vie : un routeur créé au
+     chargement d'un module ne doit pas empêcher un script ou des tests de finir. */
+  midnightTimer = unref(setTimeout(resetDailyAtMidnight, msUntilNextMidnight()));
 
   const redis = createRedisLink(config, options);
   const redisReady = redis.connect().then(() => redis.restoreState(state)).catch(() => {});
 
 
-  async function ask(prompt, request = {}, ctx = {}) {
+  /**
+   * Comme ask, mais dit aussi QUI a répondu : { value, provider, model, key, partial }.
+   * `key` est la clé d'état ("fournisseur:modèle", suivie de "@voie" quand le
+   * fournisseur a une voie pour cet appel).
+   */
+  async function route(prompt, request = {}, ctx = {}) {
     await redisReady;
-    const candidates = selectCandidates(providers, options.intentRouting, request);
-    const errors = [];
+    const signal = ctx && ctx.signal;
     const masker = ctx && ctx.masker && typeof ctx.masker.mask === 'function' ? ctx.masker : null;
     const providerCtx = masker ? withoutMasker(ctx) : ctx;
+    const accepts = typeof request.accepts === 'function' ? request.accepts : null;
+    const partial = typeof request.partial === 'function' ? request.partial : null;
 
-    for (const candidate of candidates) {
-      const { provider, model } = candidate;
-      const key = modelKey(provider, model);
-      if (!isModelAvailable(state, key, model, request)) continue;
+    /* Un fournisseur sans clé (ou éteint) est sauté sans bruit : ni quota, ni échec. */
+    const reachable = [];
+    for (const candidate of selectCandidates(providers, options.intentRouting, request)) {
+      if (typeof candidate.provider.available === 'function' && !(await candidate.provider.available(providerCtx))) continue;
+      reachable.push(candidate);
+    }
+    if (!reachable.length) throw unavailable('AI_NO_PROVIDER', 'No AI provider is available for this request.');
+    const matching = typeof request.select === 'function'
+      ? reachable.filter(({ provider, model }) => request.select(model, provider))
+      : reachable;
+    if (!matching.length) throw unavailable('AI_NO_MATCH', 'No available AI model matches this request.');
+
+    const keyed = matching.map((candidate) => ({ ...candidate, key: laneKey(candidate.provider, candidate.model, providerCtx) }));
+    const awake = keyed.filter(({ key, model }) => isModelAvailable(state, key, model, request, options.now()));
+    const tried = awake.length || options.whenAllCooling !== 'try' ? awake : keyed;
+
+    const errors = [];
+    let last = null;
+    let kept = null;
+    for (const { provider, model, key } of tried) {
+      stopIfAborted(signal);
       const reservation = await redis.reserveUsage(key, model, request);
       if (!reservation) continue;
 
-      const undo = reserveUsage(state, key, request);
+      const undo = reserveUsage(state, key, request, options.now());
 
       /* Masked at the moment it leaves: a provider that runs on this machine
          (`external: false`) gets the text as it is. */
       const outbound = masker && provider.external !== false;
       const send = async () => provider.call(outbound ? await masker.maskAsync(prompt) : prompt, providerCtx, model);
 
+      let raw;
       try {
-        const raw = breakers ? await breakers.run(provider.id, send) : await send();
-        clearFailures(state, key);
-        redis.mirrorFailures(key, state.models[key]);
-        return outbound ? unmaskResult(masker, raw) : raw;
+        raw = breakers ? await breakers.run(provider.id, send) : await send();
       } catch (error) {
+        /* La personne est partie : rien n'a échoué, on s'arrête là. */
+        stopIfAborted(signal);
         errors.push(error);
+        last = `${key}: ${error && error.message}`;
         if (isCircuitOpen(error)) {
           /* The breaker refused before anything was sent: nothing was used,
              and the model itself did not fail. */
@@ -100,36 +133,70 @@ function createProviderRouter(config = {}) {
         }
         markFailure(state, key, error, options);
         redis.mirrorFailure(key, state.models[key]);
+        continue;
       }
+      clearFailures(state, key);
+      redis.mirrorFailures(key, state.models[key]);
+      const value = outbound ? unmaskResult(masker, raw) : raw;
+      /* Une réponse coupée à sa longueur n'est pas donnée tant qu'un autre
+         modèle peut la finir : gardée en dernier recours. */
+      if (partial && partial(value) && (!accepts || accepts(value))) {
+        kept = kept || { value, provider: provider.id, model: model.id, key, partial: true };
+        last = `${key} stopped short`;
+        continue;
+      }
+      if (accepts && !accepts(value)) {
+        /* Une réponse que l'appelant refuse (outil inconnu, texte vide) passe
+           au modèle suivant ; ce n'est pas une panne du modèle. */
+        last = `${key} gave a response that was not accepted`;
+        continue;
+      }
+      return { value, provider: provider.id, model: model.id, key, partial: false };
     }
 
-    const suffix = errors.length ? ` Last error: ${errors[errors.length - 1].message}` : '';
-    throw new AppError(`No available AI provider/model for this request.${suffix}`, 503);
+    if (kept) return kept;
+    const error = unavailable('AI_UNAVAILABLE', `No available AI provider/model for this request.${last ? ` Last error: ${last}` : ''}`);
+    error.errors = errors;
+    throw error;
+  }
+
+  async function ask(prompt, request = {}, ctx = {}) {
+    return (await route(prompt, request, ctx)).value;
   }
 
   function getStats() {
-    const now = Date.now();
+    const now = options.now();
     const stats = {};
+    const entry = (providerId, model, modelState) => ({
+      provider: providerId,
+      rpm_now: currentRpm(modelState, now),
+      rpm_limit: model.rpm ?? null,
+      rpd_used: modelState.rpdUsed,
+      rpd_limit: model.rpd ?? null,
+      tpd_used: modelState.tpdUsed,
+      tpd_limit: model.tpd ?? null,
+      cooldown: isUntilActive(modelState.cooldownUntil, now),
+      degraded: isUntilActive(modelState.degradedUntil, now),
+      failures: modelState.failures || 0,
+      circuit: breakers ? breakers.stateOf(providerId) || 'closed' : null
+    });
     providers.forEach(provider => {
       (provider.models || []).forEach(model => {
         const key = modelKey(provider, model);
-        const modelState = state.models[key] || createModelState();
-        stats[key] = {
-          provider: provider.id,
-          rpm_now: currentRpm(modelState, now),
-          rpm_limit: model.rpm ?? null,
-          rpd_used: modelState.rpdUsed,
-          rpd_limit: model.rpd ?? null,
-          tpd_used: modelState.tpdUsed,
-          tpd_limit: model.tpd ?? null,
-          cooldown: isUntilActive(modelState.cooldownUntil, now),
-          degraded: isUntilActive(modelState.degradedUntil, now),
-          failures: modelState.failures || 0,
-          circuit: breakers ? breakers.stateOf(provider.id) || 'closed' : null
-        };
+        stats[key] = entry(provider.id, model, state.models[key] || createModelState());
       });
     });
+    /* Les modèles demandés par `request.candidates` et les voies n'existent
+       qu'une fois utilisés : ils apparaissent alors, sans limites déclarées. */
+    Object.entries(state.models).forEach(([key, modelState]) => {
+      if (!stats[key]) stats[key] = entry(key.split(':')[0], {}, modelState);
+    });
     return stats;
+  }
+
+  /** Oublie repos, dégradations, échecs et usage (tests, remise à zéro manuelle). */
+  function reset() {
+    Object.keys(state.models).forEach((key) => { state.models[key] = createModelState(); });
   }
 
   function stop() {
@@ -140,7 +207,7 @@ function createProviderRouter(config = {}) {
     redis.disconnect();
   }
 
-  return { ask, getStats, stop, breakers };
+  return { ask, route, getStats, reset, stop, breakers };
 }
 
 /** A pool, a factory, or nothing. */
@@ -317,7 +384,30 @@ function createRedisLink(config, options) {
   return { connect, restoreState, reserveUsage, releaseUsage, mirrorFailure, mirrorFailures, disconnect };
 }
 
+/*
+ * `request.candidates` : l'ordre de CETTE demande, à travers les fournisseurs
+ * ([{ provider, model, ...champs du modèle }]). Un projet a souvent plusieurs
+ * ordres pour les mêmes modèles (le plus rapide d'abord pour ce qu'on attend,
+ * le plus capable d'abord pour le reste). Un fournisseur inconnu est ignoré ;
+ * un modèle non déclaré par le fournisseur est pris tel que décrit.
+ */
+function explicitCandidates(providers, list) {
+  const byId = new Map(providers.map((provider) => [provider.id, provider]));
+  return list.flatMap((entry) => {
+    const provider = entry && byId.get(entry.provider);
+    if (!provider || !entry.model) return [];
+    const fields = { ...entry };
+    delete fields.provider;
+    delete fields.model;
+    const declared = (provider.models || []).find((model) => model.id === entry.model);
+    return [{ provider, model: { ...(declared || {}), ...fields, id: entry.model } }];
+  });
+}
+
 function selectCandidates(providers, intentRouting, request) {
+  if (Array.isArray(request.candidates)) {
+    return explicitCandidates(providers, request.candidates).filter(({ model }) => supportsComplexity(model, request.complexity));
+  }
   const preferred = request.intent && intentRouting[request.intent]
     ? intentRouting[request.intent].preferred || []
     : [];
@@ -345,8 +435,7 @@ function supportsComplexity(model, complexity) {
   return Array.isArray(model.complexity) && model.complexity.includes(complexity);
 }
 
-function isModelAvailable(state, key, model, request) {
-  const now = Date.now();
+function isModelAvailable(state, key, model, request, now) {
   const modelState = state.models[key] || createModelState();
   state.models[key] = modelState;
 
@@ -358,9 +447,8 @@ function isModelAvailable(state, key, model, request) {
   return true;
 }
 
-function reserveUsage(state, key, request) {
+function reserveUsage(state, key, request, now) {
   const modelState = state.models[key] || createModelState();
-  const now = Date.now();
   const tokens = estimatedTokens(request);
   modelState.rpmWindow = modelState.rpmWindow.filter(ts => now - ts < RPM_WINDOW_MS);
   modelState.rpmWindow.push(now);
@@ -393,12 +481,12 @@ function markFailure(state, modelId, error, options) {
   const modelState = state.models[modelId] || createModelState();
   modelState.failures = (modelState.failures || 0) + 1;
 
-  if (isRateLimitError(error)) {
-    modelState.cooldownUntil = Date.now() + options.cooldownMs + jitter(options.cooldownJitterMs);
+  if (options.cooldownOn(error)) {
+    modelState.cooldownUntil = options.now() + options.cooldownMs + jitter(options.cooldownJitterMs);
   }
 
   if (modelState.failures >= options.maxFailures) {
-    modelState.degradedUntil = Date.now() + options.degradedMs;
+    modelState.degradedUntil = options.now() + options.degradedMs;
   }
 
   state.models[modelId] = modelState;
@@ -412,6 +500,32 @@ function clearFailures(state, modelId) {
 
 function modelKey(provider, model) {
   return `${provider.id}:${model.id}`;
+}
+
+/*
+ * Une voie : une clé à part pour un usage (son propre quota gratuit). Elle se
+ * repose seule — une clé saturée par un travail de fond n'arrête jamais les
+ * conversations servies par la clé générale.
+ */
+function laneKey(provider, model, ctx) {
+  const lane = typeof provider.lane === 'function' ? provider.lane(ctx) : null;
+  return lane ? `${modelKey(provider, model)}@${lane}` : modelKey(provider, model);
+}
+
+function unavailable(code, message) {
+  const error = new AppError(message, 503);
+  error.code = code;
+  return error;
+}
+
+/* Une demande abandonnée par l'appelant s'arrête net, avec la raison de l'appelant. */
+function stopIfAborted(signal) {
+  if (signal && signal.aborted) throw signal.reason;
+}
+
+function unref(timer) {
+  if (timer && typeof timer.unref === 'function') timer.unref();
+  return timer;
 }
 
 function isRateLimitError(error) {

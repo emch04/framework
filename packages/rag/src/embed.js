@@ -28,6 +28,6 @@ function createEmbedder({ modelId, embed, batchSize = 32, maxBatchCharacters = 1
     if (vectors.some((vector) => vector.length !== dimensions)) throw new TypeError('MIXED_VECTOR_DIMENSIONS');
     return { modelId, vectors };
   }
-  return { modelId, embedTexts };
+  return { modelId, embedTexts, limits: { batchSize, maxBatchCharacters } };
 }
 module.exports = { createEmbedder, batches };

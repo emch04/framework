@@ -13,5 +13,9 @@ module.exports = {
   ...require('./answerText'),
   ...require('./language'),
   ...require('./askLimit'),
-  ...require('./openaiCompatible')
+  ...require('./openaiCompatible'),
+  ...require('./gemini'),
+  ...require('./nativeTools'),
+  ...require('./eventStream'),
+  ...require('./webSearch')
 };

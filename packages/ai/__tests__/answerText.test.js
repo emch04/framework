@@ -1,4 +1,4 @@
-const { isFaithfulQuotation, plainText, tidyMarkdown, verifyQuotations } = require('../src');
+const { isFaithfulQuotation, plainText, tidyMarkdown, verifyQuotations, wholeSentences } = require('../src');
 
 describe('tidyMarkdown', () => {
   test('brings headings, bullets and bold back to what a phone draws', () => {
@@ -16,6 +16,12 @@ describe('tidyMarkdown', () => {
   test('emoji go only when asked', () => {
     expect(tidyMarkdown('Bravo 🎉')).toBe('Bravo 🎉');
     expect(tidyMarkdown('Bravo 🎉', { removeEmoji: true })).toBe('Bravo');
+  });
+
+  test('what the app never shows goes, after the marks and before the spaces are tidied', () => {
+    const hebrew = /\s*[\u0590-\u05FF]+(\s*\[[^\]\n]{1,12}\])?/g;
+    expect(tidyMarkdown('### ר [Resh]\nHeureux  celui 🙂', { remove: [hebrew], removeEmoji: true })).toBe('###\nHeureux celui');
+    expect(() => tidyMarkdown('x', { remove: [/x/] })).toThrow(/global/);
   });
 
   test('extra blank lines and trailing spaces are removed', () => {
@@ -64,5 +70,15 @@ describe('verifyQuotations', () => {
 
   test('both readers are required', async () => {
     await expect(verifyQuotations('x', {})).rejects.toThrow(/findReferences/);
+  });
+});
+
+describe('wholeSentences', () => {
+  test('a text cut at its length ends on its last whole sentence, never a word in half', () => {
+    expect(wholeSentences('Jéhovah prend soin de nous. Jette ton fardeau sur Jéhov')).toBe('Jéhovah prend soin de nous.');
+    expect(wholeSentences('Il a dit : « Priez ! » Puis il est par')).toBe('Il a dit : « Priez ! »');
+    expect(wholeSentences('sans fin de phrase')).toBe('sans fin de phrase');
+    expect(wholeSentences(null)).toBe('');
+    expect(wholeSentences('a; b', { marks: [';'] })).toBe('a;');
   });
 });

@@ -41,9 +41,69 @@ The provider contract is `connect({ instructions, tools, earlier, mode, onEvent,
 
 The `registry` follows `@astratra/ai`'s `ToolRegistry` contract. The `actions` adapter queues and executes write actions. A spoken confirmation needs a proposed action, assistant readback, and recognized affirmative answer with no negative answer. Supply language-specific `catalog.affirmative` and `catalog.negative` phrase arrays. The same pending action can be confirmed by an explicit client `confirm` message. `createLiveShield` composes injected text masking, unmasking, outbound redaction, and structural key filtering. Its `input`/`output` hooks protect model speech, while `args`/`result` protect local tool calls and `external` protects third-party tool arguments. Supply an injected `catalog` and `persona` for instructions and repeat prompts; the package emits codes rather than fixed user-facing sentences.
 
+## A host with its own prompt, tools and protocol
+
+`createLiveSession` takes what a host already has instead of the package's
+defaults:
+
+- `instructions`: the whole text (or a function making it when the call starts,
+  given `{ context, mode }`), instead of `persona` and `catalog`. The shield
+  still masks it.
+- `tools`: `{ declarations, call({ id, name, args }) }` (or a function making it
+  when the call starts) instead of `registry` and `actions`. What
+  `annotateToolResult` returns is still attached to the reply that follows.
+- `wire`: `{ encode(message), decode(raw) }` for a client that speaks other
+  shapes (a message renamed, reshaped, or left unsent by returning `null`).
+  `attachLive` takes the same `encode` for what it sends by itself (a refused
+  call: `{ type: 'error', reason: 'BUSY' }`).
+- `microphone`: options for `createMicrophoneGate` of `@astratra/voice`
+  (`{ vad, echo }`), a gate, or a function making either when the call starts.
+  The sound goes through it before the provider or the local transcription;
+  the provider's voice tells it when it plays, so the echo guard knows when to
+  listen. A filter that cannot be made, or throws, never stands in the call's
+  way.
+- `observe(message)`: every message the session sends, as the session writes
+  it; `onEnd({ reason, code, turns, conversationId, ... })`: once, after the
+  client is let go (a host writes its logs there without delaying the hang-up).
+- `directInterrupt: false`: a client's `interrupt` is not sent to a provider
+  that hears the person itself.
+- `transcripts.create` is given `first`, the first thing the person said, to
+  title the conversation; `saved` reaches the client even when the call is
+  closing.
+
+A call is alive while the person or the assistant does something (words, a photo
+taken, the assistant's voice, a tool at work), not while the microphone runs: the
+sound alone does not keep a call open.
+
+The Gemini adapter takes `candidates` as a function (asked again at every change
+of line, for keys that are reloaded while the server runs); `gaveOut` decides
+whether a refusal or a cut was the key's fault (default: code 1008, or a reason
+that speaks of a quota, a key, a limit): the key rests and the next one takes
+over, otherwise the same key picks the line up with its handle. Once a line
+opens, what failed before may be tried again at the next change. A new session
+knows nothing, so it is told what was said: `handover({ kind, turns })` words it
+(`resume`: the first line of a call that goes on with a conversation, the
+assistant speaks first; `switch`: another line of the same call, it waits for the
+person). The tools Google asks for at once run at once; `toolError(error)` words
+the answer for one that throws; `maxImageChars` bounds a photo.
+
 ## Confidential path
 
 `local` supplies `transcribe`, a `thinker` or injected `textModel`, and a `reader` or voice provider list. `createTextThinker` and `createGeminiTextModel` are available for a streaming text model with tool rounds and candidate fallback. `createGeminiLiveReader` gathers Live audio, checks spoken words against requested text through `@astratra/voice`, and falls back through injected TTS providers. The call uses `@astratra/voice` for VAD segmentation, echo filtering, local transcript analysis, confidential fallback policy, and TTS chunking. Configure `createConfidentialPolicy` from `@astratra/voice` to lock roles or permit explicit cloud fallback. A doubtful transcript emits `repeat` and never reaches the model. The host owns its local decoder, text model, voice provider, and playback format. If a role cannot use cloud audio and local dependencies are absent, the call ends with `LOCAL_UNAVAILABLE`.
+
+The other confidential path keeps the provider's voice: `local` gives only a
+`transcriber` (`{ push(base64), finish() }`, for instance
+`createUtteranceSegmenter` of `@astratra/voice`), the sound is transcribed on
+the server, sentence by sentence, and the provider receives text and answers
+with its own voice and tools (`createTranscribedRelay`). The person sees what was
+heard; a doubtful sentence is never sent, `repeat` is emitted, and after
+repeated doubt (or a decoder that fails) the policy may move the call to normal
+without opening a new line: the sound goes to the provider as it is, the last
+sentence replayed first. `local` may be a function, asked once when a
+confidential call starts: one that throws (a model that will not load) is a local
+path that is not there, and the policy decides between `fallback` and
+`LOCAL_UNAVAILABLE`, before the instructions are made, so they are written for
+the mode the call really has.
 
 ## Client protocol
 

@@ -552,6 +552,7 @@ test('new call replaces its prior line and capacity rejects another user', async
       handleUpgrade: (_request, _socket, _head, callback) => {
         const client = new EventEmitter();
         client.readyState = 1;
+        client.send = jest.fn();
         client.close = jest.fn();
         clients.push(client);
         callback(client);
@@ -573,6 +574,7 @@ test('new call replaces its prior line and capacity rejects another user', async
   userId = 'other';
   http.emit('upgrade', { url: '/live' }, {}, null);
   await new Promise((resolve) => setImmediate(resolve));
+  expect(JSON.parse(clients[2].send.mock.calls[0][0])).toEqual({ type: 'error', reason: 'BUSY' });
   expect(clients[2].close).toHaveBeenCalledWith(CLOSE.BUSY);
   expect(server.size).toBe(1);
   server.close();

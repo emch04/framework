@@ -13,7 +13,7 @@
  *     and never the key.
  */
 
-const THINK = /<think>[\s\S]*?(?:<\/think>|$)/gi;
+const { providerResult, readToolArguments, readWrittenAnswer, readWrittenToolCalls, toolCallOf, withoutThinking } = require('./modelAnswers');
 
 function toTranscript(messages) {
   return (Array.isArray(messages) ? messages : []).map((message) => {
@@ -25,7 +25,8 @@ function toTranscript(messages) {
           tool_calls: message.toolCalls.map((call) => ({
             id: call.id,
             type: 'function',
-            function: { name: call.name, arguments: JSON.stringify(call.args === undefined ? {} : call.args) }
+            /* Des arguments illisibles (null) repartent en objet vide : le fournisseur refuserait « null ». */
+            function: { name: call.name, arguments: JSON.stringify(call.args && typeof call.args === 'object' ? call.args : {}) }
           }))
         } : {})
       };
@@ -47,18 +48,6 @@ function toTranscript(messages) {
     }
     return { role: message.role === 'system' ? 'system' : 'user', content: text };
   });
-}
-
-/** Tool arguments as an object, or null with `invalid: true` for anything else. */
-function readToolArguments(raw) {
-  if (raw === undefined || raw === null || raw === '') return { args: {}, invalid: false };
-  if (typeof raw === 'object') return { args: raw, invalid: false };
-  try {
-    const parsed = JSON.parse(String(raw));
-    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? { args: parsed, invalid: false } : { args: null, invalid: true };
-  } catch (_error) {
-    return { args: null, invalid: true };
-  }
 }
 
 /**
@@ -101,13 +90,12 @@ async function askChatModel(target, request, io = {}) {
     return {
       status: response.status,
       text: null,
-      toolCalls: message.tool_calls.map((call) => {
-        const { args, invalid } = readToolArguments(call.function && call.function.arguments);
-        return { id: call.id, name: call.function && call.function.name, args, ...(invalid ? { invalid: true } : {}) };
-      })
+      toolCalls: message.tool_calls.map((call) => toolCallOf(call.id, call.function && call.function.name, call.function && call.function.arguments))
     };
   }
-  const text = String(message.content === null || message.content === undefined ? '' : message.content).replace(THINK, '').trim();
+  const text = withoutThinking(message.content);
+  const written = readWrittenAnswer(text, Boolean(request.tools && request.tools.length));
+  if (written) return { status: response.status, ...written };
   return { status: response.status, text, cut: choice.finish_reason === 'length' };
 }
 
@@ -116,55 +104,55 @@ async function askChatModel(target, request, io = {}) {
  *
  * @param {object} options
  * @param {string} options.id
- * @param {string} options.url
- * @param {Function} options.getKey  () => key, read at every call: a key changed
+ * @param {string|Function} options.url  or (ctx) => url, read at every call (an account id kept with the keys).
+ * @param {Function} options.getKey  (ctx) => key, read at every call: a key changed
  *   from the settings screen takes effect without a restart.
- * @param {object[]} options.models  router model entries ({ id, rpm, rpd, tpd, complexity }).
- * @param {Function} options.fetch
+ * @param {object[]} options.models  router model entries ({ id, rpm, rpd, tpd, complexity, extra? }).
+ *   A model's `extra` joins the provider's for that model only.
+ * @param {Function} options.fetch   `ctx.fetch`, when given, replaces it for one call.
  * @param {boolean} [options.external] false for a model on this machine: the router then does not mask.
- * @param {number} [options.timeoutMs]
+ * @param {number} [options.timeoutMs] `ctx.timeoutMs` replaces it for one call.
  * @param {object} [options.extra]   joined to each request.
- * @param {Function} [options.toRequest] (prompt, ctx) => { system?, messages }. Default: the prompt as one user message.
+ * @param {Function} [options.lane]  (ctx) => string | null — a key of its own for this use: the router rests it apart.
+ * @param {boolean} [options.detailed] true: the call resolves { text, toolCalls, cut } (an empty text
+ *   included, for the router's `accepts` to judge) instead of the text alone.
+ * @param {Function} [options.toRequest] (prompt, ctx) => { system?, messages, tools?, maxTokens? }. Default: the prompt as one user message.
  */
 function createOpenAICompatibleProvider(options = {}) {
-  for (const field of ['id', 'url']) {
-    if (typeof options[field] !== 'string' || !options[field]) throw new Error(`createOpenAICompatibleProvider requires options.${field}.`);
+  if (typeof options.id !== 'string' || !options.id) throw new Error('createOpenAICompatibleProvider requires options.id.');
+  if (!(typeof options.url === 'function' || (typeof options.url === 'string' && options.url))) {
+    throw new Error('createOpenAICompatibleProvider requires options.url.');
   }
   if (typeof options.getKey !== 'function') throw new Error('createOpenAICompatibleProvider requires options.getKey.');
   if (typeof options.fetch !== 'function') throw new Error('createOpenAICompatibleProvider requires options.fetch.');
   const toRequest = options.toRequest || ((prompt) => ({ messages: [{ role: 'user', text: String(prompt) }] }));
+  const urlOf = (ctx) => (typeof options.url === 'function' ? options.url(ctx) : options.url);
 
   return {
     id: options.id,
     models: options.models || [],
     ...(options.external === false ? { external: false } : {}),
+    ...(typeof options.lane === 'function' ? { lane: options.lane } : {}),
+    /* Sans clé (ou sans adresse), le routeur saute ce fournisseur sans rien lui demander. */
+    async available(ctx = {}) {
+      return Boolean(urlOf(ctx)) && Boolean(await options.getKey(ctx));
+    },
     async call(prompt, ctx = {}, model = {}) {
-      const key = await options.getKey();
-      if (!key) {
+      const key = await options.getKey(ctx);
+      const url = urlOf(ctx);
+      if (!key || !url) {
         const missing = new Error(`Provider "${options.id}" has no key.`);
         missing.statusCode = 401;
         throw missing;
       }
       const answer = await askChatModel(
-        { url: options.url, key, model: model.id, extra: options.extra },
+        { url, key, model: model.id, extra: { ...(options.extra || {}), ...(model.extra || {}) } },
         { maxTokens: model.maxTokens, ...toRequest(prompt, ctx) },
-        { fetch: options.fetch, signal: ctx.signal, timeoutMs: options.timeoutMs }
+        { fetch: typeof ctx.fetch === 'function' ? ctx.fetch : options.fetch, signal: ctx.signal, timeoutMs: ctx.timeoutMs || options.timeoutMs }
       );
-      if (answer.status < 200 || answer.status >= 300) {
-        /* The status reaches the router (429 → cooldown); the key never does. */
-        const failure = new Error(`Provider "${options.id}" answered ${answer.status}.`);
-        failure.statusCode = answer.status;
-        throw failure;
-      }
-      if (answer.toolCalls) return { toolCalls: answer.toolCalls };
-      if (!answer.text) {
-        const empty = new Error(`Provider "${options.id}" gave no text.`);
-        empty.statusCode = 502;
-        throw empty;
-      }
-      return answer.text;
+      return providerResult(options.id, answer, options.detailed);
     }
   };
 }
 
-module.exports = { askChatModel, createOpenAICompatibleProvider, readToolArguments };
+module.exports = { askChatModel, createOpenAICompatibleProvider, readToolArguments, readWrittenToolCalls, withoutThinking };

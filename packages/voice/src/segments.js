@@ -137,26 +137,75 @@ function createVadSpeechGate({ classify = energyClassifier, frameSize = 512, thr
   };
 }
 
-function createEchoGuard({ compare, threshold = 0.75, onFailure, now = Date.now, tailMs = 800, minSamples = 0, windowSamples = 0, passGapMs = 300 } = {}) {
+/* The sound of a stretch: what is left when the runs of exact silence (at least `run` samples, the silence a gate made) are taken out. */
+function soundParts(samples, run = 1) {
+  const parts = [];
+  let start = 0;
+  let at = 0;
+  while (at < samples.length) {
+    if (samples[at] !== 0) { at += 1; continue; }
+    let end = at;
+    while (end < samples.length && samples[end] === 0) end += 1;
+    if (end - at >= run) {
+      if (at > start) parts.push(samples.subarray(start, at));
+      start = end;
+    }
+    at = end;
+  }
+  if (samples.length > start) parts.push(samples.subarray(start));
+  return parts;
+}
+
+const lengthOf = (parts) => parts.reduce((sum, part) => sum + part.length, 0);
+
+/**
+ * Keeps what the speaker played from coming back through the microphone.
+ * While playback sounds (and for an echo tail after), sound is compared with
+ * the injected `compare` (how much a stretch sounds like the played voice) and
+ * dropped when it does; anyone else goes through, so the person can still
+ * interrupt.
+ *
+ * `silentRun`: exact silence shorter than this is part of the sound (1: every
+ * zero sample is left out of a comparison). `dropAs: 'silence'` returns what is
+ * dropped as silence of the same length, so a stream keeps its timing (the
+ * default returns nothing for it). After a comparator failure the guard stops
+ * comparing: everything passes, as if it were not there (`latchOnFailure`).
+ */
+function createEchoGuard({ compare, threshold = 0.75, onFailure, now = Date.now, tailMs = 800, minSamples = 0, windowSamples = 0, passGapMs = 300, silentRun = 1, dropAs = 'nothing', latchOnFailure = true } = {}) {
   let forced = false;
   let playbackEnd = -Infinity;
+  /* Chunks held while a window fills, in order: [samples, their sound]. */
   let held = [];
-  let lastPassedAt = -Infinity;
+  let heldSound = 0;
+  /* A voice judged not the played one goes on being let through while its sound comes without a pause longer than passGapMs. */
+  let passing = false;
+  let lastPushAt = -Infinity;
+  let failed = false;
   const active = () => forced || now() < playbackEnd + tailMs;
-  async function judge(segment) {
-    if (typeof compare !== 'function') return { segment, reason: 'NO_COMPARATOR' };
-    const sounding = Float32Array.from(segment.filter((sample) => sample !== 0));
-    if (!sounding.length) return { segment, reason: 'NO_SOUND' };
-    if (sounding.length < minSamples) return { segment: null, reason: 'TOO_SHORT_TO_COMPARE' };
+  const dropped = (samples) => (dropAs === 'silence' ? new Float32Array(samples.length) : null);
+  async function judge(samples, parts) {
+    if (typeof compare !== 'function') return { segment: samples, reason: 'NO_COMPARATOR' };
+    if (failed) return { segment: samples, reason: 'COMPARATOR_UNAVAILABLE' };
+    const length = lengthOf(parts);
+    if (!length) return { segment: samples, reason: 'NO_SOUND' };
+    if (length < minSamples) return { segment: dropped(samples), reason: 'TOO_SHORT_TO_COMPARE' };
     try {
-      return (await compare(sounding)) >= threshold
-        ? { segment: null, reason: 'ECHO_DROPPED' }
-        : { segment, reason: 'SPEAKER_PASSED' };
+      return (await compare(joinFrames(parts))) >= threshold
+        ? { segment: dropped(samples), reason: 'ECHO_DROPPED' }
+        : { segment: samples, reason: 'SPEAKER_PASSED' };
     } catch (error) {
+      if (latchOnFailure) failed = true;
       onFailure?.(error);
-      return { segment, reason: 'COMPARATOR_UNAVAILABLE' };
+      return { segment: samples, reason: 'COMPARATOR_UNAVAILABLE' };
     }
   }
+  const release = () => {
+    const samples = joinFrames(held.map(([chunk]) => chunk));
+    const parts = held.flatMap(([, sound]) => sound);
+    held = [];
+    heldSound = 0;
+    return [samples, parts];
+  };
   return {
     setPlaying(value) { forced = Boolean(value); },
     playbackSent(bytes, sampleRate) {
@@ -166,32 +215,41 @@ function createEchoGuard({ compare, threshold = 0.75, onFailure, now = Date.now,
     playbackInterrupted() { playbackEnd = Math.min(playbackEnd, now()); forced = false; },
     async inspect(segment) {
       if (!active()) return { segment, reason: 'NO_PLAYBACK' };
-      return judge(segment);
+      return judge(segment, soundParts(segment, silentRun));
     },
     async filter(segment) { return (await this.inspect(segment)).segment; },
+    /**
+     * A stream, in order, never overlapping: what may go on now (`segment` null
+     * while a window fills). Held audio is judged when the window is full, when
+     * a silence comes or when playback ends; what came after it follows it.
+     */
     async push(segment) {
       if (!windowSamples) return this.inspect(segment);
+      const at = now();
+      const gap = at - lastPushAt;
+      lastPushAt = at;
+      if (!segment.length) return { segment, reason: 'NO_SOUND' };
+      if (failed) return { segment, reason: 'COMPARATOR_UNAVAILABLE' };
+      const sounding = active();
       const silent = segment.every((sample) => sample === 0);
-      if (silent && held.length) {
-        const prior = joinFrames(held);
-        held = [];
-        const verdict = await judge(prior);
-        if (verdict.reason === 'SPEAKER_PASSED') lastPassedAt = now();
+      if (!held.length) {
+        if (!sounding || silent) { passing = false; return { segment, reason: silent ? 'NO_SOUND' : 'NO_PLAYBACK' }; }
+        if (passing && gap <= passGapMs) return { segment, reason: 'SPEAKER_CONTINUES' };
+        passing = false;
+      }
+      if (held.length && (!sounding || silent)) {
+        const [samples, parts] = release();
+        const verdict = await judge(samples, parts);
         return { segment: verdict.segment ? joinFrames([verdict.segment, segment]) : segment, reason: verdict.reason };
       }
-      if (silent) { lastPassedAt = -Infinity; return { segment, reason: 'NO_SOUND' }; }
-      if (!active() && !held.length) { lastPassedAt = -Infinity; return { segment, reason: 'NO_PLAYBACK' }; }
-      if (active() && now() - lastPassedAt <= passGapMs && segment.some((sample) => sample !== 0)) return { segment, reason: 'SPEAKER_CONTINUES' };
-      if (active()) {
-        held.push(Float32Array.from(segment));
-        const size = held.reduce((sum, part) => sum + part.length, 0);
-        if (size < windowSamples) return { segment: null, reason: 'HELD_FOR_COMPARISON' };
-      }
-      const sound = joinFrames(held);
-      held = [];
-      const verdict = await judge(sound);
-      if (verdict.reason === 'SPEAKER_PASSED') lastPassedAt = now();
-      if (!active() && verdict.segment) return { segment: joinFrames([verdict.segment, segment]), reason: verdict.reason };
+      const chunk = Float32Array.from(segment);
+      const parts = soundParts(chunk, silentRun);
+      held.push([chunk, parts]);
+      heldSound += lengthOf(parts);
+      if (heldSound < windowSamples) return { segment: null, reason: 'HELD_FOR_COMPARISON' };
+      const [samples, sound] = release();
+      const verdict = await judge(samples, sound);
+      passing = verdict.reason === 'SPEAKER_PASSED';
       return verdict;
     }
   };

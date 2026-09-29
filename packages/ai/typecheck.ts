@@ -186,3 +186,50 @@ async function exerciseNew(): Promise<void> {
     pool.stateOf('x'), isProviderOutage(null), passageSource({ text: 'x' }).excerpt, plainText('x'), tidyMarkdown('x', { removeEmoji: true })];
 }
 void exerciseNew;
+
+/* Le routage d'une demande, les adaptateurs, les outils natifs et le flux (1.5). */
+import {
+  createGeminiProvider,
+  createToolCaller,
+  openEventStream,
+  runToolLoop,
+  searchSerper,
+  stepParams,
+  toolSpecs,
+  validateNativeTools,
+  wholeSentences
+} from '@astratra/ai';
+
+const routed = createProviderRouter({
+  providers: [
+    createGeminiProvider({ getKey: (ctx) => String(ctx.key ?? ''), lane: (ctx) => (ctx.purpose === 'news' ? 'news' : null), fetch: async () => ({ ok: true, status: 200, json: async () => ({}) }), detailed: true }),
+    createOpenAICompatibleProvider({ id: 'groq', url: (ctx) => (ctx.key ? 'https://api.test' : null), getKey: () => 'k', fetch: async () => ({ ok: true, status: 200, json: async () => ({}) }), detailed: true, toRequest: (request) => request })
+  ],
+  cooldownOn: (error) => error?.statusCode === 503,
+  whenAllCooling: 'try',
+  now: () => 0
+});
+routed.route({ system: 's', messages: [] }, {
+  candidates: [{ provider: 'groq', model: 'm', vision: true }],
+  select: (model) => model.vision === true,
+  accepts: (value) => Boolean(value),
+  partial: (value) => Boolean(value?.cut)
+}, { purpose: 'news' }).then(({ key, partial }) => `${key}${partial}`);
+routed.reset();
+
+const nativeTools = validateNativeTools([{
+  name: 'read_bible',
+  description: 'Lit un passage.',
+  parameters: { type: 'object', properties: {} },
+  kind: 'read',
+  summary: (args) => ({ reference: String(args.reference ?? '') }),
+  run: async () => ({ data: 'lu' })
+}], { requireSummary: true });
+const callTool = createToolCaller({ tools: nativeTools, emit: (type, data) => `${type}${JSON.stringify(data)}`, onCall: ({ ms }) => ms });
+runToolLoop({ system: 's', messages: [], tools: toolSpecs(nativeTools), turn: async () => ({ text: 'ok', toolCalls: [] }), callTool, finalInstruction: 'Réponds.' })
+  .then(({ text, turns }) => `${text}${turns}`);
+const params: Record<string, string | number> = stepParams(nativeTools[0], { reference: 'Jean 3:16' });
+const sentence: string = wholeSentences('Une phrase. Coup');
+searchSerper({ query: 'q', sites: ['jw.org'] }, { key: 'k', fetch: async () => ({ ok: true, status: 200, json: async () => ({}) }) }).then((results) => results.map((result) => result.url));
+declare const serverResponse: Parameters<typeof openEventStream>[0];
+openEventStream(serverResponse).send('answer', { text: `${params.reference}${sentence}` });

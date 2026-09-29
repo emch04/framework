@@ -60,9 +60,10 @@ function normalizeKind(value, { kinds, aliases = {}, fallback = null } = {}) {
   return fallback;
 }
 
-/* "4", 4.4 and 4 all mean 4; out of range is clamped; nonsense is the fallback. */
+/* "4", 4.4 and 4 all mean 4; out of range is clamped; nonsense (and a blank string) is the fallback. */
 function normalizeImportance(value, fallback = 3) {
-  if (value === null || value === undefined || value === '') return fallback;
+  if (value === null || value === undefined) return fallback;
+  if (typeof value === 'string' && !value.trim()) return fallback;
   const number = Number(value);
   return Number.isFinite(number) ? Math.min(5, Math.max(1, Math.round(number))) : fallback;
 }

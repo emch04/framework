@@ -331,3 +331,99 @@ describe('portrait, unseen, pause', () => {
     expect(await memory.listUnseen(A)).toEqual([]);
   });
 });
+
+describe('edit in place', () => {
+  test('inPlace keeps the id and the creation date, keeps no earlier version, and embeds the new words', async () => {
+    const { memory, store } = setup({ embed: async (text) => ({ vector: topicEmbed(text), source: 'm1' }) });
+    const kept = await memory.remember(A, { text: 'Plays violin', kind: 'fact', importance: 3 });
+    const edited = await memory.update(A, kept.memory.id, { text: 'Grows tomatoes in the garden', importance: 5 }, { inPlace: true, explicit: true });
+    expect(edited).toMatchObject({ ok: true, supersededId: null });
+    expect(edited.memory).toMatchObject({ id: kept.memory.id, text: 'Grows tomatoes in the garden', importance: 5, kind: 'fact', hasVector: true });
+    expect(edited.memory.createdAt).toEqual(kept.memory.createdAt);
+    expect(edited.memory.updatedAt.getTime()).toBeGreaterThan(kept.memory.updatedAt.getTime());
+    expect(store.size()).toBe(1);
+    expect((await store.get(A, kept.memory.id)).vector).toEqual(topicEmbed('garden'));
+    expect(await memory.undo(A, kept.memory.id)).toBe(true);
+  });
+
+  test('inPlace on kind or importance alone keeps the vector; the rules still apply; nothing changed is reported', async () => {
+    const { memory, store } = setup({
+      embed: async (text) => ({ vector: topicEmbed(text), source: 'm1' }),
+      rules: [patternRule({ code: 'secret', patterns: [/password/i] })]
+    });
+    const kept = await memory.remember(A, { text: 'Plays violin', kind: 'fact', importance: 3 });
+    const moved = await memory.update(A, kept.memory.id, { kind: 'goal' }, { inPlace: true });
+    expect(moved.memory).toMatchObject({ id: kept.memory.id, kind: 'goal' });
+    expect((await store.get(A, kept.memory.id)).vector).toEqual(topicEmbed('violin'));
+    expect(await memory.update(A, kept.memory.id, { text: 'My password' }, { inPlace: true })).toEqual({ ok: false, reason: 'secret' });
+    expect(await memory.update(A, kept.memory.id, { kind: 'goal' }, { inPlace: true })).toMatchObject({ ok: true, unchanged: true });
+    expect(await memory.update(B, kept.memory.id, { text: 'stolen' }, { inPlace: true })).toEqual({ ok: false, reason: 'not_found' });
+  });
+
+  test('inPlace on words the embedding cannot read leaves no vector rather than a wrong one; a concurrent change is a conflict', async () => {
+    let up = true;
+    const { memory, store } = setup({ embed: async (text) => { if (!up) throw new Error('down'); return { vector: topicEmbed(text), source: 'm1' }; } });
+    const kept = await memory.remember(A, { text: 'Plays violin', kind: 'fact' });
+    up = false;
+    const edited = await memory.update(A, kept.memory.id, { text: 'Plays the cello' }, { inPlace: true });
+    expect(edited.memory.hasVector).toBe(false);
+    const realUpdate = store.update;
+    store.update = async () => null;
+    expect(await memory.update(A, kept.memory.id, { text: 'Plays the harp' }, { inPlace: true })).toEqual({ ok: false, reason: 'conflict' });
+    store.update = realUpdate;
+  });
+});
+
+describe('older versions and vectors of another shape', () => {
+  test('forget refuses an older version: erasing it alone would leave the memory that replaced it', async () => {
+    const { memory, store } = setup();
+    const kept = await memory.remember(A, { text: 'Lives in Lyon', kind: 'fact' });
+    const fixed = await memory.update(A, kept.memory.id, { text: 'Lives in Paris' });
+    expect(await memory.forget(A, kept.memory.id)).toBe(false);
+    expect(store.size()).toBe(2);
+    expect(await memory.forget(A, fixed.memory.id)).toBe(true);
+    expect(store.size()).toBe(0);
+  });
+
+  test('vectors of another length are never compared, even under the same source label', async () => {
+    const store = createMemoryStore();
+    const { memory } = setup({ store, embed: async (text) => ({ vector: text.includes('long') ? [1, 0, 0, 0] : [1, 0], source: 'm1' }) });
+    const first = await memory.remember(A, { text: 'Plays violin', kind: 'fact' });
+    const second = await memory.remember(A, { text: 'Plays the long violin', kind: 'fact' });
+    expect(second.supersededId).toBeNull();
+    expect((await memory.recall(A, { query: 'a long note' })).map((m) => m.text)).toEqual(['Plays the long violin']);
+    expect(first.ok).toBe(true);
+    const bare = createMemoryStore();
+    delete bare.search;
+    const { memory: fallback } = setup({ store: bare, embed: async (text) => ({ vector: text.includes('long') ? [1, 0, 0, 0] : [1, 0], source: 'm1' }) });
+    await fallback.remember(A, { text: 'Plays violin', kind: 'fact' });
+    await fallback.remember(A, { text: 'Plays the long violin', kind: 'fact' });
+    expect((await fallback.recall(A, { query: 'a long note' })).map((m) => m.text)).toEqual(['Plays the long violin']);
+  });
+
+  test('lists ask the store to leave the vectors out, and hasVector stays true to the record', async () => {
+    const store = createMemoryStore();
+    const seen = [];
+    const realList = store.list;
+    store.list = async (where, filter) => { seen.push(filter); return realList(where, filter); };
+    const { memory } = setup({ store, embed: async (text) => ({ vector: topicEmbed(text), source: 'm1' }) });
+    await memory.remember(A, { text: 'Plays violin', kind: 'fact', importance: 5 });
+    seen.length = 0;
+    expect((await memory.list(A)).map((m) => m.hasVector)).toEqual([true]);
+    expect((await memory.listUnseen(A))).toEqual([]);
+    await memory.portrait(A);
+    expect(seen.length).toBe(3);
+    expect(seen.every((filter) => filter.withVector === false)).toBe(true);
+  });
+
+  test('createLocalLock serialises the work of one place, and only of that place', async () => {
+    const { createLocalLock } = require('../src');
+    const lock = createLocalLock();
+    const order = [];
+    const slow = lock(A, async () => { await new Promise((resolve) => setTimeout(resolve, 20)); order.push('a1'); });
+    const queued = lock(A, async () => { order.push('a2'); });
+    const other = lock(B, async () => { order.push('b1'); });
+    await Promise.all([slow, queued, other]);
+    expect(order).toEqual(['b1', 'a1', 'a2']);
+  });
+});

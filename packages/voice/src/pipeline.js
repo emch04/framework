@@ -14,7 +14,7 @@ function errorMessage(error) {
   return error instanceof Error ? error.message : String(error);
 }
 
-/** Run a child process through an injected spawn implementation. */
+/** Run a child process through an injected spawn implementation; resolves with the end of what it wrote on stderr (ffmpeg's loudness measure comes this way). */
 function runProcess(spawn, command, args, options = {}) {
   return new Promise((resolve, reject) => {
     let child;
@@ -25,6 +25,7 @@ function runProcess(spawn, command, args, options = {}) {
       return;
     }
     let stderr = '';
+    let head = '';
     let settled = false;
     const clock = options.clock;
     const timer = clock.setTimeout(() => {
@@ -37,12 +38,15 @@ function runProcess(spawn, command, args, options = {}) {
       callback();
     };
     if (child.stderr && typeof child.stderr.on === 'function') {
-      child.stderr.on('data', (chunk) => { stderr += String(chunk); });
+      child.stderr.on('data', (chunk) => {
+        if (head.length < 200) head += String(chunk);
+        stderr = (stderr + String(chunk)).slice(-4000);
+      });
     }
     child.on('error', (error) => finish(() => reject(error)));
     child.on('close', (code) => finish(() => {
-      if (code === 0) resolve();
-      else reject(new Error(`${command} exited with code ${code}: ${stderr.trim().slice(0, 200)}`));
+      if (code === 0) resolve(stderr);
+      else reject(new Error(`${command} exited with code ${code}: ${head.trim().slice(0, 200)}`));
     }));
     if (child.stdin) {
       if (options.input !== undefined) child.stdin.write(String(options.input));
@@ -153,4 +157,4 @@ function createVoiceService(options = {}) {
   return { synthesize, voiceVersion };
 }
 
-module.exports = { createVoiceService };
+module.exports = { createVoiceService, runProcess };

@@ -1,6 +1,6 @@
 {
   "name": "@astratra/memory",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Per-person memories for an AI assistant: injected store, embeddings and model, hybrid recall, duplicate merging, undoable corrections, background consolidation, portrait, and privacy operations that keep working with the AI switched off.",
   "engines": {
     "node": ">=20"

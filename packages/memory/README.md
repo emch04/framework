@@ -90,17 +90,23 @@ removed and whitespace collapsed. `C#` and `snake_case` survive.
 ## Duplicates, corrections, undo
 
 - A new memory whose vector is at least `duplicateThreshold` (0.92) close to an
-  active one **of the same embedding source**, or whose words are the same,
-  replaces it. Two embedding models never compare vectors.
+  active one **of the same embedding source and the same length**, or whose
+  words are the same, replaces it. Two embedding models never compare vectors,
+  and neither do two vectors of different lengths under one label.
 - `update(where, id, { text, kind, importance })` never overwrites. It writes a
   new version and marks the old one superseded; kind and importance stay unless
   given; the rules are checked again with the memory's original role.
+- `update(where, id, changes, { inPlace: true })` edits the memory where it
+  stands — same id, same creation date, no earlier version, nothing to undo.
+  It is for a person correcting their own memory on a screen that lists it by
+  id: a new id after each edit would leave the screen showing the old one.
 - `undo(where, id)` removes a version just written and brings back what it
   replaced. It serves both "don't remember that" after `remember` and "put it
   back" after `update`.
 - `forget(where, id)` erases the memory **and every earlier version of it**. A
   forgotten memory whose previous wording is still in the table is not
-  forgotten.
+  forgotten. An earlier version is never forgotten on its own (`false`): the
+  memory that replaced it would stay.
 - Beyond `maxActive` (300) active memories, the least important go first, then
   the longest unused (a never-used memory counts from its creation).
 
@@ -117,9 +123,11 @@ uses it. With a `cipher`, it cannot: encrypted text is ranked in process.
 
 ## Portrait
 
-`portrait(where, { maxLength = 1200, minImportance = 4, format, masked })` —
-important memories, most recently useful first, cut on a whole memory. With
-`masked: true` the text goes through your `mask` before it reaches a model.
+`portrait(where, { maxLength = 1200, minImportance = 4, format, masked, fill })` —
+important memories, most recently useful first, cut on a whole memory. It stops
+at the first memory that no longer fits; with `fill: true` that one is left out
+and the shorter ones after it still get their place. With `masked: true` the
+text goes through your `mask` before it reaches a model.
 
 ## Consolidation after a conversation
 
@@ -138,13 +146,31 @@ The model is shown the known memories (with ids, masked, 60 at most) and the
 masked transcript, and returns `{ facts, corrections, summary }`. Corrections
 may only name a memory it was shown. Every fact goes through the same rules as
 `remember`. `isExplicitFact(fact, transcript)` decides whether the person asked
-for a fact to be kept (for `allowWhenExplicit` rules).
+for a fact to be kept (for `allowWhenExplicit` rules, or your own rule reading
+`candidate.explicit`).
 
-It **never throws**. A failed run releases the `ref` so the next run retries.
+The answer is read as models really give it (`readExtraction`, also exported):
+a code fence or a sentence around the JSON, raw line breaks in strings, a
+trailing comma, a bare list of facts, facts as plain strings, `memories` or
+`new_facts` for `facts`, `updates` for `corrections`, `fact`/`memory`/`content`
+for `text`, `type`/`category` for `kind`, `priority` for `importance`, and an
+answer stopped half way (each whole fact before the cut is kept).
+
+It **never throws**, and each write stands on its own: a fact that is refused
+or whose write fails never loses the others. A failed run releases the `ref`
+so the next run retries (what was kept merges as a duplicate). It says why, for
+your logs: `{ status: 'failed', reason, error, added, corrected, refused,
+failed, proposed }` with `reason` one of `model` (the function threw),
+`unreadable` (nothing to read in the answer), `store` (`failed` writes threw),
+`invalid_where`, `error`. `error` is the cause itself — classify it yourself,
+never log the person's words.
+
 A paused person's conversation is marked done and nothing is learnt from it,
 even after the pause ends. The request is English by default; pass
-`consolidationPrompt` to write your own. Facts land on the `background`
-channel: `listUnseen()` returns them until `markSeen()`.
+`consolidationPrompt` to write your own. A transcript over `transcriptMax`
+keeps its start, or its end with `transcriptKeep: 'end'` (what is new, when you
+consolidate after each answer). Facts land on the `background` channel:
+`listUnseen()` returns them until `markSeen()`.
 
 ## Privacy with the AI switched off
 
@@ -200,12 +226,12 @@ an adapter with these methods (types in `index.d.ts`):
 | --- | --- |
 | `insert(record)` | the service supplies `id` |
 | `get(where, id)` | any state; `null` outside the place |
-| `list(where, filter)` | `state` (`active` default, `superseded`, `all`), `supersededBy`, `kinds`, `channel`, `seen`, `createdAfter/Before`, `limit`; newest first |
+| `list(where, filter)` | `state` (`active` default, `superseded`, `all`), `supersededBy`, `kinds`, `channel`, `seen`, `createdAfter/Before`, `limit`, `withVector` (`false`: leave the vectors out, set `hasVector`); newest first |
 | `update(where, id, patch, { onlyActive })` | never moves a record; `onlyActive` is a compare-and-set on "not superseded" |
 | `remove(where, ids)`, `removeAll(where)` | counts |
 | `purgeOwner(ownerId)` | every scope; `{ memories, settings, refs }` |
 | `getSettings(where)`, `setSettings(where, patch)` | `{ paused }` |
-| `claimRef`, `releaseRef` | optional — once-per-conversation consolidation |
+| `claimRef`, `releaseRef` | optional — once-per-conversation consolidation (a host that follows its own watermark, "read up to this message", does without) |
 | `search(where, input)` | optional — `{ semantic, lexical }` ranked records |
 | `listNeedingVector({ limit, source })` | optional — for `reindex()` |
 
@@ -214,6 +240,17 @@ Prove it with the contract suite, in your adapter's tests:
 ```js
 const { runStoreContract } = require('@astratra/memory');
 runStoreContract(async () => createMyStore(await freshDatabase()));
+```
+
+The suite runs under Jest or Vitest as it is. Under `node:test`, hand it the
+runner (its own small `expect` is used when there is none). A store whose ids
+have a shape (a UUID column) gives it a generator, and must answer "not found",
+never throw, for an id of another shape:
+
+```js
+import { describe, test } from 'node:test';
+import { randomUUID } from 'node:crypto';
+runStoreContract(async () => createMyStore(await freshDatabase()), { describe, test, newId: randomUUID });
 ```
 
 ## Everything injected
@@ -228,8 +265,9 @@ runStoreContract(async () => createMyStore(await freshDatabase()));
 | `llm({ system, prompt, purpose, where })` → string | none: no consolidation |
 | `cipher { encrypt, decrypt }` | none — an `encrypt` that returns its input is refused |
 | `now`, `generateId`, `logger` | `new Date()`, `randomUUID()`, silent |
-| `withLock(where, fn)` | in-process queue per place; use a distributed lock across instances |
+| `withLock(where, fn)` | in-process queue per place (`createLocalLock()`, exported to compose with a lock shared across instances) |
 | `maxTextLength`, `maxActive`, `duplicateThreshold`, `minSimilarity` | 500, 300, 0.92, none |
+| `transcriptMax`, `transcriptKeep` | 40000, `'start'` |
 
 `reindex({ limit, source })` gives a vector to memories without one — or, with
 `source`, re-embeds those from another model — and stops at the first failure.

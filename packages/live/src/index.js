@@ -11,5 +11,6 @@ module.exports = {
   ...require('./textModel'),
   ...require('./reader'),
   ...require('./confidential'),
+  ...require('./relay'),
   ...require('./session')
 };

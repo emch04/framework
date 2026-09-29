@@ -156,3 +156,69 @@ test('all providers unavailable returns codes without exposing keys', async () =
   try { await service.synthesize({ text: 'hello' }); throw new Error('expected failure'); }
   catch (error) { expect(error.code).toBe('PROVIDERS_UNAVAILABLE'); expect(JSON.stringify(error.attempts)).not.toContain('fake-key'); }
 });
+
+describe('reading in the cloud, key by key', () => {
+  const resting = (calls) => async () => { calls.push('called'); throw Object.assign(new Error('bad'), { status: 400 }); };
+
+  test('a key that gave out is left out while it rests, unless the service tries the resting ones last', async () => {
+    let now = 0; const seen = [];
+    const build = (extra) => createProviderVoiceService({
+      providers: [{ id: 'cloud', keys: ['one', 'two'], models: ['m'], synthesize: async ({ key }) => { seen.push(key); if (key === 'one') throw Object.assign(new Error('x'), { status: 400 }); return audio(key); } }],
+      clock: { now: () => now }, cooldownMsByCode: { PROVIDER_ERROR: 600000 }, ...extra
+    });
+    const plain = build({});
+    expect((await plain.synthesize({ text: 'a' })).audio.toString()).toBe('two');
+    seen.length = 0;
+    now = 1000;
+    await plain.synthesize({ text: 'b' });
+    expect(seen).toEqual(['two']);
+    /* Everything rests: nothing is asked without the option; with it, the resting ones are still tried. */
+    const failing = { id: 'cloud', keys: ['one'], synthesize: async () => { throw quota(); } };
+    const strict = createProviderVoiceService({ providers: [failing], clock: { now: () => now } });
+    await expect(strict.synthesize({ text: 'c' })).rejects.toMatchObject({ code: 'PROVIDERS_UNAVAILABLE' });
+    let calls = 0;
+    const counted = { id: 'cloud', keys: ['one'], synthesize: async () => { calls++; throw quota(); } };
+    const lenient = createProviderVoiceService({ providers: [counted], clock: { now: () => now }, restingLast: true });
+    await expect(lenient.synthesize({ text: 'd' })).rejects.toMatchObject({ code: 'PROVIDERS_UNAVAILABLE' });
+    await expect(lenient.synthesize({ text: 'e' })).rejects.toMatchObject({ code: 'PROVIDERS_UNAVAILABLE' });
+    expect(calls).toBe(2);
+  });
+  test('with restingLast every model on every key is tried, those at rest after the others', async () => {
+    const seen = [];
+    const service = createProviderVoiceService({
+      providers: [{ id: 'cloud', keys: ['a', 'b'], models: ['best', 'older'], synthesize: async ({ key, model }) => { seen.push(`${model}|${key}`); throw quota(); } }],
+      clock: { now: () => 0 }, restingLast: true
+    });
+    await expect(service.synthesize({ text: 'x' })).rejects.toMatchObject({ attempts: expect.any(Array) });
+    expect(seen).toEqual(['best|a', 'best|b', 'older|a', 'older|b']);
+    seen.length = 0;
+    await expect(service.synthesize({ text: 'y' })).rejects.toBeTruthy();
+    /* Every pair rests now: they are all tried once more, in order, none is skipped. */
+    expect(seen.sort()).toEqual(['best|a', 'best|b', 'older|a', 'older|b']);
+  });
+  test('a rest can be set for any kind of failure', async () => {
+    let now = 0; const calls = [];
+    const service = createProviderVoiceService({
+      providers: [{ id: 'cloud', keys: ['one'], synthesize: resting(calls) }, { id: 'local', synthesize: async () => audio('local') }],
+      clock: { now: () => now }, cooldownMsByCode: { PROVIDER_ERROR: 60000 }
+    });
+    await service.synthesize({ text: 'a' }); await service.synthesize({ text: 'b' });
+    expect(calls).toHaveLength(1);
+    now = 60001;
+    await service.synthesize({ text: 'c' });
+    expect(calls).toHaveLength(2);
+  });
+  test('Gemini answers in a WAV file whatever its mime type says, or in raw PCM at the rate it names', async () => {
+    const { pcm16ToWav } = require('../src');
+    const pcm = Buffer.alloc(480, 1);
+    const answer = (mimeType, data) => ({ ok: true, status: 200, json: async () => ({ candidates: [{ content: { parts: [{ inlineData: { mimeType, data: data.toString('base64') } }] } }] }) });
+    const wav = pcm16ToWav(pcm, 24000);
+    const adapter = (fetch) => createGeminiTtsAdapter({ fetch, endpoint: () => 'https://example.invalid', model: 'm', voice: 'v', keys: ['k'] });
+    expect((await adapter(async () => answer('audio/unknown', wav)).synthesize({ text: 'a', key: 'k' })).audio.equals(wav)).toBe(true);
+    const raw = await adapter(async () => answer('audio/l16; rate=16000', pcm)).synthesize({ text: 'a', key: 'k' });
+    expect(raw.audio.readUInt32LE(24)).toBe(16000);
+    expect(raw.audio.subarray(0, 4).toString()).toBe('RIFF');
+    expect((await adapter(async () => answer('audio/pcm', pcm)).synthesize({ text: 'a', key: 'k' })).audio.readUInt32LE(24)).toBe(24000);
+    await expect(adapter(async () => answer('audio/mpeg', pcm)).synthesize({ text: 'a', key: 'k' })).rejects.toMatchObject({ code: 'INVALID_AUDIO' });
+  });
+});

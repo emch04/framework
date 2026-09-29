@@ -40,6 +40,8 @@ const REMOTE_DEFAULTS = {
   reloadCommand: null,
   pm2: null,
   rollback: true,
+  marker: '@@astratra',
+  showMarkers: false,
   health: {
     internal: [],
     public: [],
@@ -99,7 +101,7 @@ async function runOverSsh(run, remote, script, args, output) {
   return run(invocation.command, invocation.args, {
     input: script,
     onLine: (line) => {
-      if (!line.startsWith('@@astratra ')) {
+      if (remote.showMarkers || !line.startsWith(`${remote.marker || '@@astratra'} `)) {
         output.log(`  ${line}`);
       }
     }
@@ -127,6 +129,11 @@ async function runRemoteDeploy(rootDir, config, options = {}) {
   }
 
   const notify = options.notify || createDesktopNotifier({ enabled: remote.notify === true, runProcess: run, platform: options.osPlatform });
+  if (options['dry-run'] || options.dryRun) {
+    const plannedSteps = (remote.preSteps || []).map((step) => typeof step === 'string' ? step : `${step.cwd || '.'}: ${step.command}`).join(', ');
+    output.log(`Essai a blanc : ${remoteName(remote)} ; branche ${remote.branch} ; tests ${plannedSteps || '(aucun)'} ; installation ${remote.installCommand} ; rechargement ${remote.reloadCommand} ; sante interne ${(remote.health.internal || []).join(', ')} ; sante publique ${(remote.health.public || []).join(', ')}.`);
+    return { exitCode: 0, dryRun: true, stages: [] };
+  }
   const lockOptions = options.lock || {};
   const stages = [];
   let lock = null;
@@ -168,7 +175,7 @@ async function runRemoteDeploy(rootDir, config, options = {}) {
       }
     }
     target = (await runGit(run, rootDir, ['rev-parse', 'HEAD'])).trim();
-    const published = (await runGit(run, rootDir, ['rev-parse', `${remote.remote}/${remote.branch}`])).trim();
+    const published = (await runGit(run, rootDir, ['ls-remote', remote.remote, `refs/heads/${remote.branch}`])).trim().split(/\s+/)[0];
     if (published !== target) {
       throw new ToolingError('DEPLOY_TARGET_NOT_PUSHED', `HEAD (${target.slice(0, 8)}) n'est pas ${remote.remote}/${remote.branch} (${published.slice(0, 8)}) : le serveur ne pourrait pas le recuperer.`, 409);
     }
@@ -177,7 +184,10 @@ async function runRemoteDeploy(rootDir, config, options = {}) {
     stage = 'remote';
     output.log(colors.bold(`Deploiement de ${target.slice(0, 12)} sur ${remoteName(remote)}...`));
     const remoteResult = await runOverSsh(run, remote, REMOTE_DEPLOY_SCRIPT, buildRemoteDeployArgs(remote, target), output);
-    const markers = parseMarkers(remoteResult.stdout);
+    const markers = parseMarkers(remoteResult.stdout, remote.marker);
+    if (markers.result === 'deployed' && remoteResult.code !== 0) {
+      throw new ToolingError('DEPLOY_SSH_FAILED', `Le serveur a annonce le deploiement mais ssh a fini avec le code ${remoteResult.code} : etat du serveur inconnu, verifier a la main.`, 502, { previous: markers.prev || null });
+    }
     if (markers.result !== 'deployed') {
       if (!markers.result) {
         throw new ToolingError('DEPLOY_SSH_FAILED', `Connexion ou script distant en echec (code ${remoteResult.code}) : etat du serveur inconnu, verifier a la main.`, 502, { previous: markers.prev || null });

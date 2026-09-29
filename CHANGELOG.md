@@ -3,6 +3,68 @@
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Chaque package Astratra est versionné indépendamment.
 
+## 2026-09-29 (34) — Tertius reprend ses briques depuis les paquets : ce que la production demandait
+
+`@astratra/memory` 0.2.0, `@astratra/rag` 0.2.0, `@astratra/ai` 1.5.0, `@astratra/voice` 0.3.0,
+`@astratra/live` 0.2.0 (dépend de `@astratra/voice` ^0.3.0 : publier `voice` d'abord) et
+`@astratra/tooling` 1.3.1, puis `create-astratra-app` 1.6.1. Tertius remplace sa mémoire, sa recherche, sa couche d'IA, sa voix,
+son direct et ses scripts de déploiement par ces paquets ; ce qui leur manquait y est ajouté.
+
+### Ajoute
+
+- `@astratra/memory` 0.2.0 — `readExtraction()` lit les réponses de modèles telles qu'ils les
+  écrivent (bloc de code, phrase autour, retours à la ligne bruts, virgule finale, liste de faits
+  seule, faits en texte, `memories`/`updates`/`fact`/`type`/`priority`, réponse coupée : chaque
+  fait entier avant la coupure est gardé). `consolidate()` dit pourquoi elle échoue (`reason` :
+  `model`, `unreadable`, `store`, `invalid_where`, `error`), compte `failed` et `proposed`, et
+  chaque écriture vit seule. `update(..., { inPlace: true })`, `transcriptKeep: 'end'`, option
+  `fill` du portrait, `list(..., { withVector: false })`, `createLocalLock` exporté ; le contrat
+  de magasin accepte `newId` et tourne sous `node:test`.
+- `@astratra/rag` 0.2.0 — indexation incrémentale par tranches (`listSourceChunkIds`,
+  `putDocuments`, `commitSource`), passages déjà découpés par l'application (`chunks`),
+  empreinte connue avant lecture (`fingerprint`), source illisible « garée »
+  (`noteSourceFailure`), borne de passe (`maxPassages`, `remaining`), erreurs `fatal`, magasin et
+  vectoriseur donnés par fonction, `watch` avec `onRun` / `onError`. Recherche : `alsoIn`,
+  `rerankMode: 'fuse'`, `perDocumentReranked`, `ties`, filtre transmis au magasin. Vectoriseur
+  distant : `external: false`, réponse `model` ou `modelId`, `maxRetryDelayMs`, erreurs `fatal`
+  avec `status` et `code` ; `limits` sur le vectoriseur.
+- `@astratra/ai` 1.5.0 — routage d'une demande : `candidates`, `select`, `accepts`, `partial`
+  et `wholeSentences`, `available`, voies à clé propre (`lane`), `cooldownOn`,
+  `whenAllCooling: 'try'`, horloge injectée, `route()` qui dit qui a répondu, `reset()`, arrêt net
+  quand l'appelant part ; adaptateur Gemini ; format OpenAI : adresse et clé relues par appel,
+  `extra` par modèle, `</think>` sans ouverture, appels d'outil écrits dans le texte relus et
+  jamais montrés, arguments illisibles expliqués (`invalidReason`) et renvoyés en `{}` ; outils
+  natifs et leur boucle (`validateNativeTools`, `createToolCaller`, `runToolLoop`) ; flux SSE
+  (`openEventStream`) ; recherche Serper (`searchSerper`) ; `tidyMarkdown({ remove })`.
+- `@astratra/voice` 0.3.0 — `createMicrophoneGate`, `createUtteranceSegmenter`,
+  `createReadingAssembler` et `buildReadingGraph`, `createResidentPiperPool`,
+  `createFileVoiceCache`, `restingLast`, `VOICE_FINISH`, `VOICE_LOUDNESS`, `pcm16ToWav`,
+  `runProcess`.
+- `@astratra/live` 0.2.0 — `createTranscribedRelay` (confidentiel : le son reste sur le serveur,
+  le fournisseur reçoit du texte et garde sa voix), options de session `instructions`, `tools`,
+  `wire`, `microphone`, `observe`, `onEnd`, `directInterrupt` ; adaptateur Gemini : `candidates`
+  en fonction, `gaveOut`, `handover`, `toolError`, `maxImageChars`.
+- `create-astratra-app` 1.6.1 — plancher relevé à `@astratra/ai` ^1.5.0. À publier en dernier.
+- `@astratra/tooling` 1.3.1 — essais à blanc du déploiement et de la publication (`--dry-run`),
+  marqueurs distants configurables, vérification de la branche distante réelle et du statut SSH.
+
+### Change
+
+- `@astratra/memory` — deux vecteurs de longueurs différentes ne sont plus jamais comparés ;
+  `forget` d'une ancienne version renvoie `false` ; une importance faite d'espaces retombe sur la
+  valeur par défaut.
+- `@astratra/voice` — garde d'écho : la fenêtre ne compte que le son, une voix reconnue passe
+  tant que son flux continue, un échec du comparateur l'arrête pour le reste de l'appel ;
+  `splitSpeechPieces` garde le guillemet fermant avec sa phrase ; la chaîne de transcription donne
+  `requestedLanguage` aux fournisseurs.
+- `@astratra/live` — le micro seul ne tient plus un appel ouvert ; la conversation reprise est
+  racontée dès la première ligne ; une clé ne se repose que sur un refus de clé ou de quota ; les
+  outils demandés ensemble s'exécutent ensemble ; `saved` arrive même pendant la fermeture ;
+  `attachLive` répond `BUSY` et s'arrête avec 1001.
+- `@astratra/tooling` — une configuration Apple invalide échoue explicitement ; une remise
+  manuelle ne marque plus l'empreinte native comme publiée ; un succès suivi d'une coupure SSH est
+  signalé comme état inconnu.
+
 ## 2026-09-28 (33) — extraction Oracle + Tertius : voix, direct, recherche, modèles, publication
 
 Nouveaux paquets `@astratra/rag` 0.1.0, `@astratra/live` 0.1.0 et

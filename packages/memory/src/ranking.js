@@ -49,9 +49,11 @@ const time = (value) => (value ? new Date(value).getTime() : 0);
 
 /**
  * The short text always handed to the model: important memories first by the
- * most recently useful, cut on a whole memory, never mid-sentence.
+ * most recently useful, cut on a whole memory, never mid-sentence. By default
+ * the portrait stops at the first memory that no longer fits; with `fill`, that
+ * one is left out and the shorter ones after it still get their place.
  */
-function buildPortrait(memories, { maxLength = 1200, minImportance = 4, format = (memory) => `- ${memory.text}` } = {}) {
+function buildPortrait(memories, { maxLength = 1200, minImportance = 4, format = (memory) => `- ${memory.text}`, fill = false } = {}) {
   const rows = (memories || [])
     .filter((memory) => Number(memory.importance) >= minImportance)
     .sort((a, b) => time(b.lastUsedAt) - time(a.lastUsedAt)
@@ -60,7 +62,10 @@ function buildPortrait(memories, { maxLength = 1200, minImportance = 4, format =
   let out = '';
   for (const memory of rows) {
     const line = format(memory);
-    if (out.length + (out ? 1 : 0) + line.length > maxLength) break;
+    if (out.length + (out ? 1 : 0) + line.length > maxLength) {
+      if (fill) continue;
+      break;
+    }
     out += (out ? '\n' : '') + line;
   }
   return out;

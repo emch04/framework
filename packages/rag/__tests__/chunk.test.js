@@ -37,3 +37,4 @@ test('stable ids and hashes do not depend on unrelated document order', () => {
   expect(chunkBlocks('A descriptive paragraph.', { sourceId: 'other', minLength: 1 })[0].id).not.toBe(a[0].id);
 });
 test('sentence recognizer does not split an abbreviation followed by a digit', () => { expect(sentencesOf('See sec. 2 for details. Continue here.')).toEqual(['See sec. 2 for details.', 'Continue here.']); });
+test('sentence recognizer keeps a French quotation and a scripture reference whole', () => { expect(sentencesOf('Lis Is. 66:13 ce soir. « Voici ce que dit Jéhovah. » Et ensuite ?')).toEqual(['Lis Is. 66:13 ce soir.', '« Voici ce que dit Jéhovah. »', 'Et ensuite ?']); });

@@ -21,6 +21,26 @@ function createMemoryVectorStore({ titleWeight = 3, contextWeight = 0.5, k1 = 1.
       for (const doc of documents) rows.set(doc.id, copy(doc));
       versions.set(sourceId, version);
     },
+    // Protocole incrémental (facultatif) : l'indexeur écrit tranche par tranche sans jamais recharger les vecteurs déjà stockés.
+    async listSourceChunkIds(sourceId, modelId) { return [...rows.values()].filter((doc) => doc.sourceId === sourceId && doc.modelId === modelId).map((doc) => doc.id); },
+    async putDocuments(sourceId, documents) {
+      if (!sourceId || !Array.isArray(documents)) throw new TypeError('INVALID_SOURCE');
+      const ids = new Set();
+      for (const doc of documents) {
+        if (!doc.id || ids.has(doc.id) || doc.sourceId !== sourceId || !doc.modelId || typeof doc.text !== 'string' || !Array.isArray(doc.vector) || !doc.vector.length || doc.vector.some((n) => !Number.isFinite(n))) throw new TypeError('INVALID_DOCUMENT');
+        if (rows.has(doc.id) && rows.get(doc.id).sourceId !== sourceId) throw new TypeError('DUPLICATE_DOCUMENT_ID');
+        ids.add(doc.id);
+      }
+      for (const doc of documents) rows.set(doc.id, copy(doc));
+    },
+    async commitSource(sourceId, version, keepIds) {
+      if (!sourceId || typeof version !== 'string' || !Array.isArray(keepIds)) throw new TypeError('INVALID_SOURCE');
+      const keep = new Set(keepIds); let removed = 0;
+      for (const [id, doc] of rows) if (doc.sourceId === sourceId && !keep.has(id)) { rows.delete(id); removed++; }
+      versions.set(sourceId, version);
+      return { removed };
+    },
+    async noteSourceFailure(sourceId, version) { versions.set(sourceId, version); return true; },
     async getSourceVersion(sourceId) { return versions.get(sourceId) ?? null; },
     async listSourceIds() { return [...versions.keys()]; },
     async getSourceDocuments(sourceId) { return [...rows.values()].filter((doc) => doc.sourceId === sourceId).map(copy); },

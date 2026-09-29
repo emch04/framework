@@ -64,6 +64,13 @@ un `env` et un `logFile` (sortie longue envoyée dans un fichier).
 
 ## Déploiement distant (`deploy --remote`)
 
+`--dry-run` affiche la configuration effective sans prendre de verrou, lancer
+les tests, pousser, ouvrir SSH ni sonder la production. Le marqueur distant
+vaut `@@astratra` par défaut ; `deploy.remote.marker` permet par exemple
+`@@tertius`, et `showMarkers: true` les affiche aussi dans le terminal. Le
+commit poussé est vérifié avec `git ls-remote`, et un code SSH
+non nul reste un échec même si le serveur a imprimé `result=deployed`.
+
 Aucun hôte, utilisateur, port ni nom pm2 n'est écrit dans le package : tout
 vient de `deploy.remote`.
 
@@ -110,6 +117,17 @@ machine locale. Codes : `DEPLOY_DIRTY_TREE`, `DEPLOY_WRONG_BRANCH`,
 `{ "pm2Apps": ["api", "ai"], "backupLog": "/home/app/backup.log", "backupPattern": "backup sent", "backupMaxAgeDays": 1 }`.
 
 ## Publication mobile (`publish`)
+
+`publish ios|android|all|update --dry-run` affiche le projet, la cible et les
+choix d'envoi sans lire les clés ni modifier les versions, ni contacter Expo ou
+les stores. `eas.maxViewFailures` règle le nombre d'échecs consécutifs admis
+pour la lecture du statut (5 par défaut). Un fichier Apple présent mais
+invalide fait échouer la publication ; seul l'absence de clé déclenche le
+repli Transporter. Un transfert manuel ne marque pas l'empreinte comme publiée :
+après livraison effective sur le store, utiliser `publish:fingerprint --record`.
+Lorsque `versionBump` vaut `false`, relever soi-même la version de l'app avant
+un build avec changement natif. `publish.version` peut fournir la version Expo
+effective quand elle est déclarée ailleurs que dans `package.json`.
 
 ```json
 {

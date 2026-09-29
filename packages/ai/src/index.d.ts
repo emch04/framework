@@ -14,8 +14,19 @@ export interface Provider {
   models: ProviderModel[];
   /** False for a model running on this machine: the router does not mask for it. */
   external?: boolean;
-  call(prompt: string, ctx: Record<string, unknown>, model: ProviderModel): Awaitable<unknown>;
+  /** Faux (sans clé, éteint) : le routeur le saute sans rien lui demander ni compter d'échec. */
+  available?(ctx: Record<string, unknown>): Awaitable<boolean>;
+  /** Une voie : une clé à elle pour cet usage, qui se repose seule ("fournisseur:modèle@voie"). */
+  lane?(ctx: Record<string, unknown>): string | null | undefined;
+  call(prompt: any, ctx: Record<string, unknown>, model: ProviderModel): Awaitable<unknown>;
   [key: string]: unknown;
+}
+
+/** Un candidat de `request.candidates` : un modèle d'un fournisseur, avec ses champs (extra, vision…). */
+export interface RouteCandidate {
+  provider: string;
+  model: string;
+  [field: string]: unknown;
 }
 
 export interface ProviderRequest {
@@ -23,6 +34,14 @@ export interface ProviderRequest {
   estimatedTokens?: number;
   intent?: string;
   maxTokens?: number;
+  /** L'ordre de CETTE demande, à travers les fournisseurs. */
+  candidates?: RouteCandidate[];
+  /** Ne garde que les modèles aptes à cette demande (une photo : ceux qui voient). */
+  select?: (model: ProviderModel, provider: Provider) => boolean;
+  /** Faux : la réponse est refusée, le modèle suivant est demandé (ce n'est pas une panne du modèle). */
+  accepts?: (value: any) => boolean;
+  /** Vrai : réponse coupée, gardée en dernier recours seulement. */
+  partial?: (value: any) => boolean;
   [key: string]: unknown;
 }
 
@@ -37,7 +56,31 @@ export interface ProviderRouterConfig {
   redisUrl?: string;
   /** One circuit per provider: a factory (providerId) => breaker, or a pool. */
   breakers?: ((providerId: string) => BreakerLike) | BreakerPool;
+  /** Ce qui met un modèle au repos (cooldownMs). Défaut : un 429. */
+  cooldownOn?: (error: any) => boolean;
+  /** 'try' : quand tous les candidats se reposent, on les essaie quand même. Défaut 'skip'. */
+  whenAllCooling?: 'skip' | 'try';
+  /** L'horloge des repos et des quotas. Défaut Date.now. */
+  now?: () => number;
 }
+
+export interface RouteResult<T = unknown> {
+  value: T;
+  provider: string;
+  model: string;
+  /** "fournisseur:modèle", suivi de "@voie" quand le fournisseur en a une pour cet appel. */
+  key: string;
+  /** La réponse coupée gardée en dernier recours. */
+  partial: boolean;
+}
+
+/**
+ * Levée par ask/route (AppError 503) : `code` vaut 'AI_NO_PROVIDER' (aucun
+ * fournisseur disponible), 'AI_NO_MATCH' (aucun ne convient à la demande) ou
+ * 'AI_UNAVAILABLE' (tous essayés, aucun n'a répondu ; `errors` les porte).
+ * Une demande abandonnée (ctx.signal) lève la raison de l'appelant.
+ */
+export type RouterErrorCode = 'AI_NO_PROVIDER' | 'AI_NO_MATCH' | 'AI_UNAVAILABLE';
 
 export interface ProviderStats {
   provider: string;
@@ -55,9 +98,13 @@ export interface ProviderStats {
 }
 
 export interface ProviderRouter {
-  ask(prompt: string, request?: ProviderRequest, ctx?: Record<string, unknown>): Promise<unknown>;
-  /** Les entrées sont indexées par "providerId:modelId". */
+  ask(prompt: any, request?: ProviderRequest, ctx?: Record<string, unknown>): Promise<unknown>;
+  /** Comme ask, et dit qui a répondu. */
+  route(prompt: any, request?: ProviderRequest, ctx?: Record<string, unknown>): Promise<RouteResult>;
+  /** Les entrées sont indexées par "providerId:modelId" (et "@voie"). */
   getStats(): Record<string, ProviderStats>;
+  /** Oublie repos, dégradations, échecs et usage. */
+  reset(): void;
   stop(): void;
   breakers: BreakerPool | null;
 }
@@ -455,7 +502,10 @@ export function rerankResults<R, S, F extends { results: R[]; sources?: S[] }>(
 /* ─────────────────── Answer text ─────────────────── */
 
 export function plainText(text: unknown): string;
-export function tidyMarkdown(text: unknown, options?: { removeEmoji?: boolean }): string;
+/** `remove` : des expressions globales retirées après les marques (ce que l'app ne montre jamais). */
+export function tidyMarkdown(text: unknown, options?: { removeEmoji?: boolean; remove?: RegExp[] }): string;
+/** Un texte coupé ramené à sa dernière phrase entière. */
+export function wholeSentences(text: unknown, options?: { marks?: string[] }): string;
 export function isFaithfulQuotation(quoted: string, source: string): boolean;
 export function verifyQuotations<Refs = unknown>(text: string, options: {
   findReferences: (text: string) => Awaitable<Array<{ start: number; end: number; refs: Refs }>>;
@@ -514,6 +564,10 @@ export interface ChatToolCall {
   args: Record<string, unknown> | null;
   /** The model sent arguments that are not a JSON object. */
   invalid?: true;
+  /** Pourquoi : 'not_json' (illisible) ou 'not_object'. */
+  invalidReason?: 'not_json' | 'not_object';
+  /** L'erreur de lecture, pour 'not_json'. */
+  invalidDetail?: string;
 }
 
 export type FetchLike = (url: string, init: { method: string; headers: Record<string, string>; body: string; signal?: AbortSignal }) => Promise<{ ok: boolean; status: number; json(): Promise<any> }>;
@@ -524,16 +578,159 @@ export function askChatModel(
   io: { fetch: FetchLike; signal?: AbortSignal; timeoutMs?: number }
 ): Promise<{ status: number; text?: string | null; toolCalls?: ChatToolCall[]; cut?: boolean }>;
 
-export function readToolArguments(raw: unknown): { args: Record<string, unknown> | null; invalid: boolean };
+export function readToolArguments(raw: unknown): { args: Record<string, unknown> | null; invalid: boolean; reason?: 'not_json' | 'not_object'; detail?: string };
 
-export function createOpenAICompatibleProvider(options: {
-  id: string;
-  url: string;
-  getKey: () => Awaitable<string | null | undefined>;
-  models: ProviderModel[];
+/** Les appels d'outil écrits dans un texte (<function=…>, <tool_call>{…}</tool_call>), relus. */
+export function readWrittenToolCalls(text: string): Array<{ id: string; name: string; args: Record<string, unknown> }>;
+/** Le raisonnement entre balises think retiré, même ouvert sans fin ou fermé sans ouverture. */
+export function withoutThinking(content: unknown): string;
+
+export interface ChatRequest {
+  system?: string;
+  messages: ChatMessage[];
+  tools?: Array<Record<string, unknown>>;
+  maxTokens?: number;
+  temperature?: number;
+}
+
+/** Ce qu'un fournisseur `detailed` rend au routeur. */
+export interface DetailedAnswer {
+  text: string | null;
+  toolCalls: ChatToolCall[];
+  cut: boolean;
+}
+
+export interface ChatProviderOptions {
+  getKey: (ctx: Record<string, unknown>) => Awaitable<string | null | undefined>;
+  models?: ProviderModel[];
+  /** `ctx.fetch` le remplace pour un appel. */
   fetch: FetchLike;
-  external?: boolean;
   timeoutMs?: number;
+  lane?: (ctx: Record<string, unknown>) => string | null | undefined;
+  /** Vrai : l'appel rend { text, toolCalls, cut } au lieu du texte seul. */
+  detailed?: boolean;
+  toRequest?: (prompt: any, ctx: Record<string, unknown>) => ChatRequest;
+}
+
+export function createOpenAICompatibleProvider(options: ChatProviderOptions & {
+  id: string;
+  url: string | ((ctx: Record<string, unknown>) => string | null | undefined);
+  external?: boolean;
   extra?: Record<string, unknown>;
-  toRequest?: (prompt: string, ctx: Record<string, unknown>) => { system?: string; messages: ChatMessage[] };
 }): Provider;
+
+/* ─────────────────── Gemini ─────────────────── */
+
+export function askGeminiModel(
+  model: string,
+  request: ChatRequest,
+  io: { key: string; fetch: FetchLike; signal?: AbortSignal; timeoutMs?: number; endpoint?: string; noSystemInstruction?: (model: string) => boolean }
+): Promise<{ status: number; text?: string | null; toolCalls?: ChatToolCall[]; cut?: boolean }>;
+
+export function createGeminiProvider(options: ChatProviderOptions & {
+  id?: string;
+  endpoint?: string;
+  /** Défaut : les modèles Gemma, qui ne prennent pas de consigne système. */
+  noSystemInstruction?: (model: string) => boolean;
+}): Provider;
+
+/* ─────────────────── Outils natifs et leur boucle ─────────────────── */
+
+export type NativeToolKind = 'read' | 'write' | 'confirm' | string;
+
+export interface NativeToolResult {
+  data?: unknown;
+  sources?: Array<Record<string, unknown>>;
+  card?: Record<string, unknown>;
+  undo?: unknown;
+  [key: string]: unknown;
+}
+
+export interface NativeTool<Ctx = Record<string, unknown>> {
+  name: string;
+  description: string;
+  parameters: { type: 'object'; [key: string]: unknown };
+  kind: NativeToolKind;
+  summary?: (args: Record<string, unknown>) => Record<string, string | number>;
+  run(args: Record<string, unknown>, ctx: Ctx & { signal: AbortSignal }): Awaitable<NativeToolResult | null | undefined>;
+  perform?(args: Record<string, unknown>, ctx: Ctx): Awaitable<NativeToolResult | null | undefined>;
+  undo?(undo: unknown, ctx: Ctx): Awaitable<unknown>;
+}
+
+export const NATIVE_TOOL_KINDS: string[];
+export function validateNativeTools<T extends NativeTool<any>>(tools: T[], options?: { kinds?: string[]; requireSummary?: boolean }): T[];
+export function toolSpecs(tools: NativeTool<any>[]): Array<{ name: string; description: string; parameters: Record<string, unknown> }>;
+export function stepParams(tool: NativeTool<any> | null | undefined, args: unknown, options?: { max?: number }): Record<string, string | number>;
+
+export interface NativeToolCall {
+  id: string;
+  name: string;
+  args: Record<string, unknown> | null;
+  invalid?: boolean;
+  invalidReason?: 'not_json' | 'not_object';
+  invalidDetail?: string;
+}
+
+export interface ToolMessage {
+  role: 'tool';
+  toolCallId: string;
+  name: string;
+  result: unknown;
+}
+
+export function createToolCaller<Ctx = Record<string, unknown>>(options: {
+  tools: Map<string, NativeTool<Ctx>> | NativeTool<Ctx>[];
+  context?: Ctx;
+  signal?: AbortSignal;
+  timeoutMs?: number;
+  now?: () => number;
+  emit?: (type: 'step' | 'step_done', data: Record<string, unknown>) => void;
+  keep?: (sources: unknown, data: unknown) => void;
+  record?: (entry: { tool: NativeTool<Ctx>; args: Record<string, unknown> | null; found: NativeToolResult }) => Awaitable<void>;
+  onCall?: (stats: { name: string; ms: number; ok: boolean }) => void;
+  resultMax?: number;
+  messages?: {
+    unknownTool?: (name: string) => string;
+    timeout?: () => string;
+    invalidArguments?: (call: { name: string; invalidReason?: string; invalidDetail?: string }) => string;
+    waiting?: string;
+  };
+}): (call: NativeToolCall) => Promise<ToolMessage>;
+
+export interface ToolTurn {
+  text: string | null;
+  toolCalls: NativeToolCall[];
+  model?: string;
+}
+
+/** Lève une AppError de code 'AI_NO_ANSWER' quand un tour ne donne ni texte ni outil. */
+export function runToolLoop(options: {
+  system: string;
+  messages: Array<ChatMessage | ToolMessage | Record<string, unknown>>;
+  tools?: Array<Record<string, unknown>>;
+  turn: (request: { system: string; messages: any[]; tools: Array<Record<string, unknown>> }) => Awaitable<ToolTurn>;
+  callTool: (call: NativeToolCall) => Promise<ToolMessage>;
+  maxTurns?: number;
+  maxMs?: number;
+  finalInstruction?: string;
+  now?: () => number;
+  signal?: AbortSignal;
+}): Promise<{ text: string; turns: number }>;
+
+/* ─────────────────── Flux d'évènements (SSE) ─────────────────── */
+
+export const EVENT_STREAM_HEADERS: Record<string, string>;
+export function openEventStream(
+  res: { statusCode: number; setHeader(name: string, value: string): unknown; flushHeaders(): void; write(chunk: string): unknown; end(): unknown; on(event: 'close', listener: () => void): unknown; writableEnded: boolean },
+  options?: { headers?: Record<string, string> }
+): { send(type: string, data: unknown): void; close(): void; signal: AbortSignal };
+
+/* ─────────────────── Recherche web ─────────────────── */
+
+export interface WebResult { title: string; url: string; snippet: string; date: string | null }
+
+/** Lève une erreur de code 'WEB_SEARCH_NO_KEY' (rien n'est demandé) ou 'WEB_SEARCH_FAILED'. */
+export function searchSerper(
+  search: { query: string; sites?: string[]; hl?: string; num?: number },
+  io: { key: string | null | undefined; fetch: FetchLike; accept?: (result: WebResult, url: URL) => boolean; timeoutMs?: number; endpoint?: string }
+): Promise<WebResult[]>;

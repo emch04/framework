@@ -58,6 +58,38 @@ function runStoreContract(makeStore, runner = {}) {
       await expect(store.replaceSource('a', 'v1', [{ ...row('a1'), vector: [NaN] }])).rejects.toThrow();
       await expect(store.searchVector([NaN], 'm')).rejects.toThrow();
     });
+    // Protocole incrémental, facultatif : ces tests ne disent rien d'un magasin qui ne l'a pas.
+    const incremental = async () => { const store = await makeStore(); return ['listSourceChunkIds', 'putDocuments', 'commitSource'].every((name) => typeof store[name] === 'function') ? store : null; };
+    test('incremental: documents are added slice by slice and listed by model without vectors', async () => {
+      const store = await incremental(); if (!store) return;
+      await store.putDocuments('a', [row('a1')]); await store.putDocuments('a', [row('a2'), { ...row('a3'), modelId: 'other' }]);
+      expect((await store.listSourceChunkIds('a', 'm')).sort()).toEqual(['a1', 'a2']);
+      expect(await store.searchKeyword('alpha')).toHaveLength(3);
+      await store.putDocuments('a', [row('a1')]);
+      expect((await store.listSourceChunkIds('a', 'm')).sort()).toEqual(['a1', 'a2']);
+    });
+    test('incremental: a commit keeps the named documents only, records the version and counts what it removed', async () => {
+      const store = await incremental(); if (!store) return;
+      await store.putDocuments('a', [row('a1'), row('a2')]); await store.putDocuments('b', [row('b1', 'b')]);
+      expect(await store.commitSource('a', 'v1', ['a1'])).toEqual({ removed: 1 });
+      expect(await store.getSourceVersion('a')).toBe('v1');
+      expect((await store.getSourceDocuments('a')).map((doc) => doc.id)).toEqual(['a1']);
+      expect(await store.getSourceVersion('b')).toBeNull();
+      expect((await store.getSourceDocuments('b')).map((doc) => doc.id)).toEqual(['b1']);
+    });
+    test('incremental: a document of another source is refused, and a failed slice writes nothing', async () => {
+      const store = await incremental(); if (!store) return;
+      await expect(store.putDocuments('a', [row('a1', 'b')])).rejects.toThrow();
+      await expect(store.putDocuments('a', [row('a1'), { ...row('a2'), vector: [NaN] }])).rejects.toThrow();
+      expect(await store.listSourceChunkIds('a', 'm')).toEqual([]);
+    });
+    test('incremental: a failure can be noted so the version is kept without touching the documents', async () => {
+      const store = await incremental(); if (!store || typeof store.noteSourceFailure !== 'function') return;
+      await store.putDocuments('a', [row('a1')]); await store.commitSource('a', 'v1', ['a1']);
+      expect(await store.noteSourceFailure('a', 'v2', Error('unreadable'))).toBe(true);
+      expect(await store.getSourceVersion('a')).toBe('v2');
+      expect((await store.getSourceDocuments('a')).map((doc) => doc.id)).toEqual(['a1']);
+    });
   });
 }
 module.exports = { runStoreContract };

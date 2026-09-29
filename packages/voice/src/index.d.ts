@@ -4,6 +4,8 @@ export type Awaitable<T> = T | Promise<T>;
 
 export const VOICE_VERSION: 'v2';
 export const VOICE_FILTER: string;
+export const VOICE_FINISH: string;
+export const VOICE_LOUDNESS: string;
 
 export interface FfmpegOptions {
   filter?: string;
@@ -105,6 +107,58 @@ export interface VoiceService {
 }
 
 export function createVoiceService(options: VoiceServiceOptions): VoiceService;
+export function runProcess(spawn: Spawn, command: string, args: string[], options: { clock: Pick<VoiceClock, 'setTimeout' | 'clearTimeout'>; timeoutMs: number; input?: string }): Promise<string>;
+
+export function buildReadingGraph(takes: Array<{ pitch?: number; after?: number }>, options?: { sampleRate?: number; sourceRate?: number; finish?: string | null; loudness?: string }): string;
+export function createReadingAssembler(options: {
+  spawn: Spawn;
+  ffmpegPath?: string;
+  clock?: VoiceClock;
+  timeoutMs?: number;
+  sampleRate?: number;
+  sourceRate?: number;
+  bitrate?: string;
+}): {
+  assemble(reading: { takes: Array<{ file: string; pitch?: number; after?: number }>; output: string; finish?: string | null }): Promise<{ output: string }>;
+};
+
+export function buildResidentPiperArgs(options: { modelPath: string; lengthScale?: number; sentenceSilence?: number; noiseScale?: number; noiseW?: number; speaker?: string | number | null }): string[];
+export function createResidentPiperPool(options: {
+  spawn: (command: string, args: string[], options?: object) => any;
+  piperPath?: string;
+  partMaxMs?: number;
+  clock?: Pick<VoiceClock, 'setTimeout' | 'clearTimeout'>;
+  noiseScale?: number;
+  noiseW?: number;
+}): {
+  say(voice: { model: string; pace: number; pause: number; speaker?: string | number | null }, text: string, file: string): Promise<void>;
+  warm(models: string[], deliveries: Array<{ pace: number; pause: number; speaker?: string | number | null }>, options: { text?: string; file(count: number): string; cleanup?(file: string): Awaitable<unknown> }): void;
+  readonly size: number;
+};
+
+export interface FileVoiceCache extends VoiceCache {
+  delete(key: string): Promise<boolean>;
+  prune(at?: number): Promise<number>;
+}
+export function createFileVoiceCache(options: {
+  filesystem: {
+    mkdir(directory: string): Promise<unknown>;
+    readFile(path: string): Promise<Uint8Array>;
+    writeFile(path: string, data: Uint8Array | string): Promise<unknown>;
+    rename(from: string, to: string): Promise<unknown>;
+    remove(path: string): Promise<unknown>;
+    list(directory: string): Promise<string[]>;
+    modifiedAt(path: string): Promise<number | null>;
+    touch(path: string): Promise<unknown>;
+  };
+  directory: string;
+  extension?: string;
+  keyPattern?: RegExp;
+  retainDays?: number;
+  pruneEveryMs?: number;
+  now?: () => number;
+  initialFiles?: Record<string, string>;
+}): FileVoiceCache;
 
 export interface VoiceProvider {
   id?: string;
@@ -127,6 +181,8 @@ export interface ProviderVoiceOptions {
   fallbackTtlSeconds?: number;
   voiceVersion?: string;
   cacheTtlSeconds?: number;
+  /** Candidates at rest are not skipped: they are tried last, after every other (default false). */
+  restingLast?: boolean;
 }
 export interface ProviderAttempt { provider: string; model?: string | null; code: string }
 export interface ProviderVoiceResult extends VoiceResult {
@@ -141,6 +197,7 @@ export function createProviderVoiceService(options: ProviderVoiceOptions): {
   synthesize(request: { text: unknown; language?: string; voice?: string; voiceVersion?: string; fallbackScope?: string }): Promise<ProviderVoiceResult>;
 };
 export function createPiperProvider(service: VoiceService, id?: string): VoiceProvider;
+export function pcm16ToWav(pcm: Uint8Array, rate: number): Buffer;
 export function createGeminiTtsAdapter(options: {
   fetch: (url: string, init: object) => Promise<{ ok: boolean; status: number; json(): Promise<unknown> }>;
   endpoint: (model: string) => string;
@@ -193,6 +250,12 @@ export function createEchoGuard(options?: {
   minSamples?: number;
   windowSamples?: number;
   passGapMs?: number;
+  /** Exact silence shorter than this many samples is part of the sound compared (default 1: every zero is left out). */
+  silentRun?: number;
+  /** 'silence': what is dropped comes back as silence of the same length, so a stream keeps its timing (default 'nothing'). */
+  dropAs?: 'nothing' | 'silence';
+  /** After a comparator failure, stop comparing: everything passes (default true). */
+  latchOnFailure?: boolean;
 }): {
   setPlaying(value: boolean): void;
   playbackSent(bytes: number, sampleRate: number): void;
@@ -247,7 +310,7 @@ export function createLocalTranscriber(options: {
   lowConfidence?: number;
 }): { transcribe(samples: ArrayLike<number> | Uint8Array, options?: { language?: string }): Promise<{ text: string; durationMs: number; doubtful: boolean; reason: string; confidence: number | null }> };
 export function createTranscriptionProviderChain(options: {
-  providers: Array<{ id?: string; transcribe(request: { audio: Uint8Array; language: string | null; mediaType?: string }): Awaitable<string | { text: string; heardLanguage?: string | null }> }>;
+  providers: Array<{ id?: string; transcribe(request: { audio: Uint8Array; language: string | null; requestedLanguage?: string | null; mediaType?: string }): Awaitable<string | { text: string; heardLanguage?: string | null }> }>;
   supportedLanguages?: string[];
 }): { transcribe(audio: Uint8Array, options?: { language?: string; mediaType?: string }): Promise<{
   text: string;
@@ -298,4 +361,27 @@ export function createPieceVoiceService<T>(options: {
     fallback: boolean;
     attempts: ProviderAttempt[];
   }>;
+};
+
+export function createMicrophoneGate(options?: {
+  vad?: Parameters<typeof createVadSpeechGate>[0] | { push(samples: Float32Array): Awaitable<Float32Array> } | null;
+  echo?: Parameters<typeof createEchoGuard>[0] | { push(segment: Float32Array): Awaitable<{ segment: Float32Array | null }>; playbackSent?(bytes: number, sampleRate: number): void; playbackInterrupted?(): void } | null;
+  now?: () => number;
+}): {
+  push(base64: string): Promise<string>;
+  playbackSent(bytes: number, sampleRate: number): void;
+  playbackInterrupted(): void;
+};
+
+export interface Utterance { text: string; confidence: number | null; audio: string; durationMs: number }
+export function createUtteranceSegmenter(options: {
+  transcribe: (samples: Float32Array) => Awaitable<string | { text: string; confidence?: number | null }>;
+  sampleRate?: number;
+  silenceMs?: number;
+  minSpeechMs?: number;
+  frameMs?: number;
+  threshold?: number;
+}): {
+  push(base64: string): Promise<Utterance[]>;
+  finish(): Promise<Utterance[]>;
 };

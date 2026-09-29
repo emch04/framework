@@ -21,8 +21,9 @@ const MARKER = '@@astratra';
 const REMOTE_DEPLOY_SCRIPT = String.raw`set -uo pipefail
 APP_USER="$1"; APP_DIR="$2"; NODE_DIR="$3"; TARGET="$4"; REMOTE="$5"; BRANCH="$6"
 DEPS_RE="$7"; INSTALL="$8"; RELOAD="$9"; HEALTH="${'${10}'}"; ATTEMPTS="${'${11}'}"; INTERVAL="${'${12}'}"; TIMEOUT="${'${13}'}"; ROLLBACK="${'${14}'}"
+MARKER_NAME="${'${15:-@@astratra}'}"
 PREV=""; DEPS_CHANGED=0
-mark() { printf '@@astratra %s\n' "$1"; }
+mark() { printf '%s %s\n' "$MARKER_NAME" "$1"; }
 as_app() {
   local run_path="/usr/local/bin:/usr/bin:/bin"
   [ -n "$NODE_DIR" ] && run_path="$NODE_DIR/bin:$run_path"
@@ -147,7 +148,7 @@ function buildRemoteDeployArgs(remote, target) {
     assertNoNewline('health.internal', url);
   }
 
-  return [
+  const args = [
     ...values.map(([, value]) => String(value)),
     (health.internal || []).join('\n'),
     String(health.attempts || 12),
@@ -155,6 +156,13 @@ function buildRemoteDeployArgs(remote, target) {
     toSeconds(health.timeoutMs || 5000),
     remote.rollback === false ? '0' : '1'
   ];
+  if (remote.marker) {
+    if (!/^@@[a-z][a-z0-9-]*$/.test(remote.marker)) {
+      throw new ToolingError('DEPLOY_CONFIG_INVALID', 'Marqueur de deploiement invalide.', 400);
+    }
+    args.push(remote.marker);
+  }
+  return args;
 }
 
 /** `ssh [options] host bash -s -- 'arg1' 'arg2'...` — ssh joins its arguments into one remote command line. */
@@ -168,14 +176,14 @@ function buildSshInvocation({ host, sshOptions = [], args = [] }) {
   };
 }
 
-function parseMarkers(stdout) {
+function parseMarkers(stdout, marker = MARKER) {
   const markers = {};
   const urls = [];
   for (const line of String(stdout || '').split(/\r?\n/)) {
-    if (!line.startsWith(`${MARKER} `)) {
+    if (!line.startsWith(`${marker} `)) {
       continue;
     }
-    const body = line.slice(MARKER.length + 1);
+    const body = line.slice(marker.length + 1);
     const separator = body.indexOf('=');
     if (separator === -1) {
       continue;

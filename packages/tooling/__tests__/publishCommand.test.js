@@ -103,6 +103,42 @@ function createWorld({ root, events = [], playFails = null, ascStatus = 200, alt
 }
 
 describe('publish orchestrator', () => {
+  test('dry run does not inspect credentials, fingerprint, or run publishing commands', async () => {
+    const { root, config } = setupProject({ withPlayKey: false });
+    const world = createWorld({ root });
+    const result = await runPublish(root, config, { ...world.options, target: 'android', dryRun: true, output: createOutput() });
+    expect(result).toMatchObject({ exitCode: 0, dryRun: true, target: 'android' });
+    expect(world.run.calls).toEqual([]);
+    expect(world.fetch.calls).toEqual([]);
+    expect(versionOf(root)).toBe('1.1.5');
+  });
+
+  test('an existing malformed Apple env file fails before a build, instead of opening Transporter', async () => {
+    const { root, home, config } = setupProject();
+    writeFile(home, '.appstoreconnect/acme.env', 'ASC_KEY_ID=$(false)\nASC_ISSUER_ID=invalid\n');
+    const world = createWorld({ root });
+    const result = await runPublish(root, config, { ...world.options, target: 'ios', output: createOutput() });
+    expect(result).toMatchObject({ exitCode: 1, error: { code: 'ASC_CREDENTIALS_INVALID' } });
+    expect(world.run.calls.some((call) => call.command === 'npx')).toBe(false);
+  });
+
+  test('manual store handoff does not mark the native fingerprint as published', async () => {
+    const { root, config } = setupProject();
+    config.publish.android.upload = 'manual';
+    config.publish.versionBump = false;
+    const world = createWorld({ root });
+    const result = await runPublish(root, config, { ...world.options, target: 'android', computeFingerprint: async () => 'native-one', output: createOutput() });
+    expect(result).toMatchObject({ exitCode: 0, results: [{ delivered: false }] });
+    expect(fs.existsSync(path.join(root, 'mobile/scripts/.fp'))).toBe(false);
+  });
+
+  test('a configured Expo version is reported instead of the package version', async () => {
+    const { root, config } = setupProject();
+    config.publish.version = '2.4.0';
+    const world = createWorld({ root });
+    const result = await runPublish(root, config, { ...world.options, target: 'update', message: 'fix', output: createOutput() });
+    expect(result).toMatchObject({ exitCode: 0, version: '2.4.0' });
+  });
   test('android, first build: bumps the version, builds, downloads, sends to Play, records the fingerprint', async () => {
     const { root, config } = setupProject();
     const world = createWorld({ root });

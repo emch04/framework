@@ -21,12 +21,13 @@ const {
   createConfidentialCall
 } = require('./confidential');
 const {
+  createTranscribedRelay
+} = require('./relay');
+const {
   createTextThinker
 } = require('./textModel');
 const voice = require('@astratra/voice');
 const {
-  base64ToBytes,
-  pcm16ToFloat,
   floatToPcm16,
   bytesToBase64
 } = require('./protocol');
@@ -38,6 +39,8 @@ const CLOSE = Object.freeze({
   UNAVAILABLE: 4503,
   NORMAL: 1000
 });
+/* Only what a person does (not the microphone running) shows that a call is alive. */
+const HUMAN_MESSAGES = new Set(['text', 'confirm', 'cancel', 'mode']);
 function createLiveSession({
   socket,
   context,
@@ -54,6 +57,11 @@ function createLiveSession({
   logger = {},
   catalog = {},
   persona = '',
+  instructions: instructionsOption,
+  tools: toolsOption,
+  wire = {},
+  observe,
+  onEnd,
   resumeWindowMs = 1800000,
   resumeTurns = 12,
   transcriptCompleteOnly = false,
@@ -63,9 +71,13 @@ function createLiveSession({
   maxCallMs = 1800000,
   shield = {},
   annotateToolResult,
-  directAudio = null
+  microphone = null,
+  directAudio = null,
+  directInterrupt = true
 }) {
   if (!socket || !context?.userId || !clock) throw new TypeError('SESSION_DEPENDENCY_REQUIRED');
+  const encode = wire.encode || encodeMessage;
+  const decode = wire.decode || decodeMessage;
   const startedAt = clock.now();
   const callId = context.callId || `${context.userId}:${startedAt}`;
   let lastDebitAt = startedAt;
@@ -77,14 +89,17 @@ function createLiveSession({
   let muted = false;
   let mode = null;
   let line = null;
+  let relay = null;
   let recorder = null;
   let timer = null;
   let warned = false;
   let conversationId = null;
   let history = [];
   let instructions = '';
+  let tools = null;
   let gate = null;
-  let echo = null;
+  /* What the confidential path needs on this server: undefined until asked (only a confidential call asks). */
+  let localSet;
   let audioQueue = Promise.resolve();
   let turnOver = false;
   const pendingMessages = [];
@@ -95,8 +110,16 @@ function createLiveSession({
     affirmative: catalog.affirmative,
     negative: catalog.negative
   });
+  const emit = message => {
+    if (socket.readyState !== 1) return;
+    try {
+      observe?.(message);
+    } catch (_error) {/* Observing is optional. */}
+    const raw = encode(message);
+    if (raw) socket.send(raw);
+  };
   const safeSend = message => {
-    if (!ended && socket.readyState === 1) socket.send(encodeMessage(message));
+    if (!ended) emit(message);
   };
   const recordTurn = (who, text) => {
     if (!text) return;
@@ -122,26 +145,31 @@ function createLiveSession({
       code: error?.code
     }));
   };
-  const tools = createCallTools({
-    registry,
-    context,
-    confirmation,
-    actions,
-    shield,
-    clock,
-    send: safeSend,
-    onResult: (name, result) => {
+  const annotate = (name, result) => {
+    try {
       const annotation = annotateToolResult?.(name, result);
       if (annotation != null) pendingAnnotations.push(annotation);
-    },
-    catalog
-  });
+    } catch (_error) {/* Annotations are optional. */}
+  };
+  /* What the confidential path may run on: the whole local pipeline (transcribe, think, read), or only the transcription (the provider answers). */
+  const localKind = () => {
+    if (!localSet) return null;
+    if (localSet.transcribe && (localSet.thinker || localSet.textModel) && (localSet.reader || localSet.readers)) return 'full';
+    return localSet.transcriber ? 'relay' : null;
+  };
   async function close(reason = 'NORMAL', code = CLOSE.NORMAL) {
     if (ended || closing) return;
     closing = true;
     if (reason === 'NORMAL' && line?.flush) {
       try {
         await line.flush();
+      } catch (_error) {
+        logger.warn?.('FINAL_AUDIO_FLUSH_FAILED');
+      }
+    }
+    if (relay) {
+      try {
+        await relay.finish();
       } catch (_error) {
         logger.warn?.('FINAL_AUDIO_FLUSH_FAILED');
       }
@@ -174,12 +202,21 @@ function createLiveSession({
       userId: context.userId
     }, turns, conversationId, logger);
     if (socket.readyState === 1) {
-      socket.send(encodeMessage({
+      emit({
         type: 'end',
         reason
-      }));
+      });
       socket.close(code);
     }
+    /* Once the phone is let go: what the host keeps of the call (its logs) never delays the hang-up. */
+    void Promise.resolve().then(() => onEnd?.({
+      reason,
+      code,
+      startedAt,
+      endedAt: clock.now(),
+      turns: turns.slice(),
+      conversationId
+    })).catch(() => logger.warn?.('END_HOOK_FAILED'));
   }
   async function tick() {
     if (ended || closing) return;
@@ -221,19 +258,21 @@ function createLiveSession({
       logger.warn?.('QUOTA_CHECK_FAILED');
     }
   }
+  /* How long a stretch of the provider's voice plays, for the echo guard: from its own mime type when it gives a rate. */
+  const audioRate = event => Number(/rate=(\d+)/.exec(String(event.mimeType || ''))?.[1]) || directAudio?.outputRate || microphone?.outputRate || 24000;
   function onProviderEvent(event) {
     if (ended) return;
     if (event.type === 'heard') recordTurn('person', event.text);
     if (event.type === 'said' || event.type === 'text') recordTurn('assistant', event.text);
     if (event.type === 'tool') busy += 1;
     if (event.type === 'tool_done') busy = Math.max(0, busy - 1);
-    if (event.type === 'audio' || event.type === 'ready' || event.type === 'turn') lastActivity = clock.now();
+    if (event.type === 'audio' || event.type === 'ready' || event.type === 'turn' || event.type === 'tool_done') lastActivity = clock.now();
     if (event.type === 'turn') {
       turnOver = true;
       persist();
     }
-    if (event.type === 'audio' && echo && event.data) echo.playbackSent(base64ToBytes(event.data).length, directAudio?.outputRate || 24000);
-    if (event.type === 'interrupted') echo?.playbackInterrupted();
+    if (event.type === 'audio' && gate && event.data) gate.playbackSent(Buffer.byteLength(event.data, 'base64'), audioRate(event));
+    if (event.type === 'interrupted') gate?.playbackInterrupted();
     if (event.type === 'error') {
       safeSend({
         type: 'error',
@@ -243,16 +282,107 @@ function createLiveSession({
     }
     if (event.type !== 'handle' && event.type !== 'goAway' && event.type !== 'tools' && event.type !== 'toolCancel') safeSend(event);
   }
+  /* The confidential path is asked for: what it needs is resolved once. Not there, the policy decides: the call goes on as normal (told), or ends. Null: the call was closed. */
+  async function settle(requested) {
+    if (requested !== 'confidential') return requested;
+    if (localSet === undefined) {
+      try {
+        localSet = (typeof local === 'function' ? await local(context) : local) || null;
+      } catch (_error) {
+        localSet = null;
+        logger.warn?.('LOCAL_LOAD_FAILED');
+      }
+    }
+    if (localKind()) return 'confidential';
+    const fallback = (policy || createConfidentialPolicy()).onLocalFailure({
+      role: context.role,
+      language: context.language,
+      requestedMode: 'confidential',
+      allowCloudFallback: context.allowCloudFallback
+    });
+    if (!fallback.cloudAudioAllowed) {
+      await close('LOCAL_UNAVAILABLE', CLOSE.UNAVAILABLE);
+      return null;
+    }
+    safeSend({
+      type: 'fallback',
+      reason: fallback.reason
+    });
+    return 'normal';
+  }
+  /* The person's sound goes to the provider as it is: from now on, and first the last sentence the local decoder could not read. */
+  async function leaveRelay(reason, audio) {
+    if (closing || !relay) return;
+    relay = null;
+    mode = 'normal';
+    safeSend({
+      type: 'fallback',
+      reason
+    });
+    if (audio) line?.sendAudio(audio);
+  }
+  function startRelay(decisionSession) {
+    relay = createTranscribedRelay({
+      transcriber: localSet.transcriber,
+      decision: decisionSession,
+      send: safeSend,
+      onHeard: () => {
+        lastActivity = clock.now();
+      },
+      onSentence: text => {
+        recordTurn('person', text);
+        line?.sendText(text);
+      },
+      onFallback: leaveRelay,
+      onUnavailable: () => close('LOCAL_UNAVAILABLE', CLOSE.UNAVAILABLE),
+      minConfidence: localSet.minConfidence
+    });
+  }
+  async function connectProvider(earlier) {
+    if (!provider?.connect) {
+      await close('PROVIDER_UNAVAILABLE', CLOSE.UNAVAILABLE);
+      return false;
+    }
+    const protectedEarlier = earlier.map(turn => ({
+      ...turn,
+      text: typeof shield.history === 'function' ? shield.history(turn.text) : turn.text
+    }));
+    try {
+      line = await provider.connect({
+        instructions,
+        tools,
+        earlier: protectedEarlier,
+        getHistory: () => [...history, ...turns].map(turn => ({
+          ...turn,
+          text: typeof shield.history === 'function' ? shield.history(turn.text) : turn.text
+        })),
+        onEvent: onProviderEvent,
+        onClose: code => void close(code, CLOSE.UNAVAILABLE)
+      });
+      /* The phone hung up while the line was opening: it is not left open on the provider's side. */
+      if (closing) {
+        line.close?.();
+        line = null;
+        return false;
+      }
+      return true;
+    } catch (_error) {
+      await close('PROVIDER_UNAVAILABLE', CLOSE.UNAVAILABLE);
+      return false;
+    }
+  }
+  /* Opens the line for a mode `settle` has confirmed. */
   async function openLine(nextMode, earlier) {
     line?.end?.();
     line?.close?.();
     line = null;
+    relay = null;
     mode = nextMode;
-    if (mode === 'confidential' && local?.transcribe && (local?.thinker || local?.textModel) && (local?.reader || local?.readers)) {
-      const service = local.readers ? voice.createPieceVoiceService({
-        providers: local.readers
+    if (mode === 'confidential' && localKind() === 'full') {
+      const service = localSet.readers ? voice.createPieceVoiceService({
+        providers: localSet.readers
       }) : null;
-      const reader = local.reader || {
+      const reader = localSet.reader || {
         synthesize: ({
           text,
           language
@@ -260,15 +390,15 @@ function createLiveSession({
           language
         })
       };
-      const textThinker = local.textModel ? createTextThinker({
-        model: local.textModel,
+      const textThinker = localSet.textModel ? createTextThinker({
+        model: localSet.textModel,
         instructions,
         declarations: tools.declarations,
         tools,
         earlier,
         onTool: (name, state) => safeSend({ type: state === 'start' ? 'tool' : 'tool_done', name })
       }) : null;
-      const thinker = local.thinker || (({
+      const thinker = localSet.thinker || (({
         text,
         onText,
         signal
@@ -276,9 +406,9 @@ function createLiveSession({
         onText,
         signal
       }));
-      if (textThinker && !local.thinker) thinker.undoLast = () => textThinker.undoLast();
+      if (textThinker && !localSet.thinker) thinker.undoLast = () => textThinker.undoLast();
       line = createConfidentialCall({
-        ...local,
+        ...localSet,
         thinker,
         reader,
         policy,
@@ -323,46 +453,13 @@ function createLiveSession({
       });
       return;
     }
-    if (mode === 'confidential') {
-      const fallback = (policy || createConfidentialPolicy()).onLocalFailure({
-        role: context.role,
-        language: context.language,
-        requestedMode: 'confidential',
-        allowCloudFallback: context.allowCloudFallback
-      });
-      if (!fallback.cloudAudioAllowed) {
-        await close('LOCAL_UNAVAILABLE', CLOSE.UNAVAILABLE);
-        return;
-      }
-      mode = 'normal';
-      safeSend({
-        type: 'fallback',
-        reason: fallback.reason
-      });
-    }
-    if (!provider?.connect) {
-      await close('PROVIDER_UNAVAILABLE', CLOSE.UNAVAILABLE);
-      return;
-    }
-    const protectedEarlier = earlier.map(turn => ({
-      ...turn,
-      text: typeof shield.history === 'function' ? shield.history(turn.text) : turn.text
+    if (!(await connectProvider(earlier))) return;
+    if (mode === 'confidential') startRelay(voice.createConfidentialSession(policy || createConfidentialPolicy(), {
+      role: context.role,
+      language: context.language,
+      requestedMode: 'confidential',
+      allowCloudFallback: context.allowCloudFallback
     }));
-    try {
-      line = await provider.connect({
-        instructions,
-        tools,
-        earlier: protectedEarlier,
-        getHistory: () => [...history, ...turns].map(turn => ({
-          ...turn,
-          text: typeof shield.history === 'function' ? shield.history(turn.text) : turn.text
-        })),
-        onEvent: onProviderEvent,
-        onClose: code => void close(code, CLOSE.UNAVAILABLE)
-      });
-    } catch (_error) {
-      await close('PROVIDER_UNAVAILABLE', CLOSE.UNAVAILABLE);
-    }
   }
   async function start() {
     if (quota) {
@@ -398,7 +495,8 @@ function createLiveSession({
       now: clock.now,
       completeOnly: transcriptCompleteOnly,
       deferLatestExchange,
-      onSaved: id => safeSend({
+      /* Even while the call is closing: the conversation made at the person's last words is still theirs to open. */
+      onSaved: id => emit({
         type: 'saved',
         conversationId: id
       })
@@ -412,8 +510,33 @@ function createLiveSession({
       language: context.language,
       requestedMode: context.mode
     });
-    mode = decision.mode;
-    instructions = buildInstructions({
+    mode = decision.mode === 'confidential' ? await settle(decision.mode) : decision.mode;
+    if (mode === null || closing) return;
+    const given = typeof toolsOption === 'function' ? await toolsOption(context) : toolsOption;
+    if (given) tools = {
+      ...given,
+      call: async request => {
+        const result = await given.call(request);
+        annotate(request.name, result);
+        return result;
+      }
+    };else tools = createCallTools({
+      registry,
+      context,
+      confirmation,
+      actions,
+      shield,
+      clock,
+      send: safeSend,
+      onResult: annotate,
+      catalog
+    });
+    const prompt = typeof instructionsOption === 'function' ? await instructionsOption({
+      context,
+      mode,
+      now: clock.now()
+    }) : instructionsOption;
+    instructions = typeof prompt === 'string' ? typeof shield.input === 'function' ? shield.input(prompt) : prompt : buildInstructions({
       persona,
       language: context.language,
       role: context.role,
@@ -421,32 +544,51 @@ function createLiveSession({
       catalog,
       shield
     });
-    if (directAudio) {
-      gate = voice.createVadSpeechGate(directAudio.vad || {});
-      echo = voice.createEchoGuard({
-        now: clock.now,
-        ...(directAudio.echo || {})
+    /* The microphone's filters: a failure to make them never stands in the call's way. */
+    try {
+      const filtering = microphone || directAudio;
+      const filters = typeof filtering === 'function' ? await filtering(context) : filtering;
+      if (filters) gate = typeof filters.push === 'function' ? filters : voice.createMicrophoneGate({
+        vad: filters.vad,
+        echo: filters.echo,
+        now: clock.now
       });
+    } catch (_error) {
+      logger.warn?.('MICROPHONE_FILTERS_FAILED');
     }
     await openLine(mode, history);
-    if (ended) return;
+    if (ended || closing) return;
     timer = clock.setInterval(() => {
       void tick();
     }, checkMs);
     timer?.unref?.();
     for (const raw of pendingMessages.splice(0)) await receive(raw);
   }
+  /* The microphone's sound, in order: through the filters, then to the local transcription or to the provider. */
+  async function hear(data) {
+    let audio = data;
+    if (gate) {
+      try {
+        audio = await gate.push(data);
+      } catch (_error) {
+        audio = data;
+      }
+    }
+    if (!audio || ended) return;
+    if (relay) await relay.push(audio);else line?.sendAudio(audio);
+  }
   async function receive(raw) {
     if (ended || closing) return;
-    const message = decodeMessage(raw);
+    const message = decode(raw);
     if (!message) return;
     if (!line && message.type !== 'end') {
       if (pendingMessages.length < 200) pendingMessages.push(raw);
       return;
     }
-    lastActivity = clock.now();
+    if (HUMAN_MESSAGES.has(message.type)) lastActivity = clock.now();
     if (message.type === 'end') return close('NORMAL');
     if (message.type === 'confirm' || message.type === 'cancel') {
+      if (!tools?.confirmByClient) return;
       const result = await (message.type === 'confirm' ? tools.confirmByClient(message.actionId) : tools.cancelByClient(message.actionId));
       if (result.code && result.code !== 'ACTION_DONE' && result.code !== 'ACTION_CANCELLED') safeSend({
         type: 'error',
@@ -460,9 +602,21 @@ function createLiveSession({
         language: context.language,
         requestedMode: message.mode
       });
-      if (decision.mode !== mode) {
+      const settled = await settle(decision.mode);
+      if (settled === null) return;
+      if (settled !== mode) {
         persist();
-        await openLine(decision.mode, [...history, ...turns]);
+        /* Only the transcription is local: the provider's line stays open, the sound is just sent to the other place. */
+        if (localKind() === 'relay' && line && !line.receive) {
+          mode = settled;
+          relay = null;
+          if (mode === 'confidential') startRelay(voice.createConfidentialSession(policy || createConfidentialPolicy(), {
+            role: context.role,
+            language: context.language,
+            requestedMode: 'confidential',
+            allowCloudFallback: context.allowCloudFallback
+          }));
+        } else await openLine(settled, [...history, ...turns]);
       }
       safeSend({
         type: 'mode',
@@ -476,15 +630,10 @@ function createLiveSession({
       line?.mute?.();
     }
     if (message.type === 'unmute') muted = false;
-    if (mode === 'confidential') return line?.receive(message);
+    if (mode === 'confidential' && line?.receive) return line.receive(message);
     if (message.type === 'audio' && !muted && typeof message.data === 'string') {
-      if (!gate && !echo) line?.sendAudio(message.data);else {
-        audioQueue = audioQueue.then(async () => {
-          const raw = pcm16ToFloat(base64ToBytes(message.data));
-          const filtered = await gate.push(raw);
-          const accepted = await echo.filter(filtered);
-          if (accepted?.length) line?.sendAudio(bytesToBase64(floatToPcm16(accepted)));
-        }).catch(() => line?.sendAudio(message.data));
+      if (!gate && !relay && localKind() !== 'relay') line?.sendAudio(message.data);else {
+        audioQueue = audioQueue.then(() => hear(message.data)).catch(() => {});
         await audioQueue;
       }
     }
@@ -493,8 +642,18 @@ function createLiveSession({
       turnOver = true;
       line?.sendText(message.text);
     }
-    if (message.type === 'image' && typeof message.data === 'string' && message.data.length <= 256 * 1024) line?.sendImage?.(message.data);
-    if (message.type === 'interrupt') line?.interrupt?.();
+    if (message.type === 'image' && typeof message.data === 'string' && message.data.length <= 256 * 1024) {
+      if (line?.sendImage?.(message.data) !== false) lastActivity = clock.now();
+    }
+    if (message.type === 'interrupt') {
+      if (relay) {
+        /* The text turn that follows the person's words is what stops the provider: the phone is told, and the guard stops waiting for an echo. */
+        gate?.playbackInterrupted();
+        safeSend({
+          type: 'interrupted'
+        });
+      } else if (directInterrupt) line?.interrupt?.();
+    }
   }
   return {
     start,
@@ -509,6 +668,9 @@ function createLiveSession({
     },
     get turns() {
       return turns.slice();
+    },
+    get history() {
+      return history.slice();
     }
   };
 }
@@ -523,13 +685,19 @@ function attachLive({
   logger = {},
   languages = [],
   modes = ['normal', 'confidential'],
-  conversationIdPattern = /^[\w:.-]{1,120}$/
+  conversationIdPattern = /^[\w:.-]{1,120}$/,
+  encode = encodeMessage
 }) {
   if (!httpServer?.on || !websocketServer?.handleUpgrade ||
       typeof authenticate !== 'function' || typeof createSession !== 'function') {
     throw new TypeError('SERVER_DEPENDENCY_REQUIRED');
   }
   const calls = new Map();
+  /* What the server says by itself, in the client's own words (or not at all, if the client never knew it). */
+  const tell = (client, message) => {
+    const raw = encode(message);
+    if (raw) client.send(raw);
+  };
   async function upgrade(request, socket, head) {
     let url;
     try {
@@ -554,7 +722,7 @@ function attachLive({
         try { verdict = await authorize(request, context); }
         catch (_error) { verdict = { allowed: false, reason: 'DENIED' }; }
         if (verdict === false || verdict?.allowed === false) {
-          if (verdict?.reason && client.readyState === 1) client.send(encodeMessage({ type: 'error', reason: verdict.reason }));
+          if (verdict?.reason && client.readyState === 1) tell(client, { type: 'error', reason: verdict.reason });
           client.close(verdict?.code || CLOSE.DENIED);
           return;
         }
@@ -565,6 +733,7 @@ function attachLive({
         calls.delete(userId);
       }
       if (calls.size >= maxCalls) {
+        if (client.readyState === 1) tell(client, { type: 'error', reason: 'BUSY' });
         client.close(CLOSE.BUSY);
         return;
       }
@@ -596,6 +765,10 @@ function attachLive({
         logger.warn?.('SESSION_START_FAILED', {
           code: error?.code
         });
+        /* What the session had already opened (a line to the provider) is closed with it. */
+        try {
+          await session?.close?.('SESSION_START_FAILED', CLOSE.UNAVAILABLE);
+        } catch (_error) {/* The client is closed below all the same. */}
         client.close(CLOSE.UNAVAILABLE);
         if (calls.get(userId) === session) calls.delete(userId);
       }
@@ -608,7 +781,8 @@ function attachLive({
     },
     close() {
       httpServer.off?.('upgrade', upgrade);
-      for (const session of calls.values()) void session.close('SERVER_CLOSED');
+      /* 1001, "going away": a server that stops is not a call that ended well. */
+      for (const session of calls.values()) void session.close('SERVER_CLOSED', 1001);
       calls.clear();
       websocketServer.close?.();
     }

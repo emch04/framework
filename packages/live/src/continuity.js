@@ -56,7 +56,9 @@ function createTranscriptRecorder({
           id = await store.create({
             userId,
             updatedAt: now(),
-            turns: []
+            turns: [],
+            /* What the conversation begins with: a host titles it after that. */
+            first: fresh.find(turn => turn.role === 'user')
           });
           onSaved(id);
         }

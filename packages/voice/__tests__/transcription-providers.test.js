@@ -48,3 +48,11 @@ test('provider receives audio and media type unchanged', async () => {
   expect(received.audio).toBe(audio);
   expect(received.mediaType).toBe('audio/wav');
 });
+test('a provider that cannot listen freely is told what the caller asked for, and its answer in that language ends the search', async () => {
+  const seen = [];
+  const chain = createTranscriptionProviderChain({ providers: [{ id: 'fixed', transcribe: async ({ language, requestedLanguage }) => { seen.push([language, requestedLanguage]); return { text: 'bonjour', heardLanguage: requestedLanguage }; } }], supportedLanguages: ['fr', 'en'] });
+  expect(await chain.transcribe(Buffer.from([1]), { language: 'fr' })).toMatchObject({ text: 'bonjour', heardLanguage: 'fr' });
+  expect(seen).toEqual([[null, 'fr']]);
+  await chain.transcribe(Buffer.from([1]));
+  expect(seen.at(-1)).toEqual([null, null]);
+});

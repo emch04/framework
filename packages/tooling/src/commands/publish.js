@@ -32,6 +32,7 @@ const { createDesktopNotifier } = require('../publish/notify');
 
 const PUBLISH_DEFAULTS = {
   appName: null,
+  version: null,
   projectDir: '.',
   fingerprintFile: '.native-fingerprint-published',
   fingerprint: { command: null },
@@ -42,6 +43,7 @@ const PUBLISH_DEFAULTS = {
     channel: 'production',
     pollIntervalMs: 60000,
     timeoutMs: 3 * 60 * 60 * 1000,
+    maxViewFailures: 5,
     buildUrlTemplate: null
   },
   downloadsDir: '~/Downloads',
@@ -158,6 +160,16 @@ function ascOptions(ctx) {
   };
 }
 
+function ascCredentialsAvailable(ctx) {
+  const options = ascOptions(ctx);
+  // Un fichier explicitement present mais invalide est une erreur de configuration.
+  if (options.envFile && fs.existsSync(options.envFile)) {
+    loadAscCredentials(options);
+    return true;
+  }
+  return hasAscCredentials(options);
+}
+
 async function runEas(ctx, args, { quietStdout = true } = {}) {
   const [command, ...prefix] = ctx.publishConfig.eas.command;
   return ctx.run(command, [...prefix, ...args], {
@@ -199,7 +211,7 @@ async function prepareVersion(ctx) {
     output.log('Natif inchange depuis le dernier build publie : la version reste.');
   }
 
-  return { fingerprint: current, decision, bumped, version: readPackageVersion(publishConfig.projectDir) };
+  return { fingerprint: current, decision, bumped, version: publishConfig.version || readPackageVersion(publishConfig.projectDir) };
 }
 
 async function buildOnEas(ctx, platformName, version) {
@@ -217,6 +229,7 @@ async function buildOnEas(ctx, platformName, version) {
     buildId,
     intervalMs: publishConfig.eas.pollIntervalMs,
     timeoutMs: publishConfig.eas.timeoutMs,
+    maxViewFailures: publishConfig.eas.maxViewFailures,
     sleep: ctx.sleep,
     now: ctx.now,
     view: async (id) => {
@@ -264,7 +277,7 @@ async function sendToGooglePlay(ctx, filePath) {
 async function sendToAppStore(ctx, filePath) {
   const ios = ctx.publishConfig.ios;
 
-  if (!hasAscCredentials(ascOptions(ctx))) {
+  if (!ascCredentialsAvailable(ctx)) {
     if (ios.fallback === 'transporter') {
       await ctx.open(['-a', 'Transporter', filePath]);
       ctx.output.log(colors.yellow('Cle d\'API Apple absente : Transporter est ouvert avec le fichier, il reste « Livrer ».'));
@@ -287,7 +300,7 @@ async function sendToAppStore(ctx, filePath) {
 
 async function verifyIosKey(ctx) {
   const ios = ctx.publishConfig.ios;
-  if (!ios.checkKey || !hasAscCredentials(ascOptions(ctx))) {
+  if (!ios.checkKey || !ascCredentialsAvailable(ctx)) {
     return null;
   }
   const credentials = loadAscCredentials(ascOptions(ctx));
@@ -302,7 +315,7 @@ async function lastCommitSubject(ctx) {
 }
 
 async function runUpdate(ctx, message) {
-  const version = readPackageVersion(ctx.publishConfig.projectDir);
+  const version = ctx.publishConfig.version || readPackageVersion(ctx.publishConfig.projectDir);
   const finalMessage = message || await lastCommitSubject(ctx);
   const result = await runEas(ctx, buildEasUpdateArgs({ channel: ctx.publishConfig.eas.channel, message: finalMessage }), { quietStdout: false });
   if (result.code !== 0) {
@@ -330,6 +343,11 @@ async function runPublish(rootDir, config, options = {}) {
 
   const ctx = createContext(rootDir, config, options);
   ctx.output.log(`${colors.blue(`Publication (${target})`)}\n`);
+
+  if (options['dry-run'] || options.dryRun) {
+    ctx.output.log(`Essai a blanc : projet ${ctx.publishConfig.projectDir} ; cible ${target} ; profil ${ctx.publishConfig.eas.profile} ; canal ${ctx.publishConfig.eas.channel} ; envoi Android ${ctx.publishConfig.android.upload} ; repli iOS ${ctx.publishConfig.ios.fallback}.`);
+    return { exitCode: 0, dryRun: true, target, results: [] };
+  }
 
   try {
     if (target === 'update') {
@@ -365,7 +383,7 @@ async function runPublish(rootDir, config, options = {}) {
       }
     }
 
-    if (results.some((entry) => entry.ok)) {
+    if (results.some((entry) => entry.ok && entry.delivered)) {
       recordPublishedFingerprint(ctx.publishConfig.fingerprintFile, prepared.fingerprint);
     }
 

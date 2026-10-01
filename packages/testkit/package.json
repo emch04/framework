@@ -1,0 +1,56 @@
+{
+  "name": "@astratra/testkit",
+  "version": "1.0.0",
+  "description": "Disposable test databases (MongoDB or Postgres in a container), reproducible per-country fake data, and a guard that refuses any production-looking database URI.",
+  "engines": {
+    "node": ">=22.22"
+  },
+  "main": "src/index.js",
+  "types": "src/index.d.ts",
+  "type": "commonjs",
+  "files": [
+    "src",
+    "jest-preset.js"
+  ],
+  "scripts": {
+    "test": "jest"
+  },
+  "jest": {
+    "preset": "./jest-preset.js",
+    "testMatch": [
+      "**/__tests__/**/*.test.js"
+    ]
+  },
+  "keywords": [
+    "astratra",
+    "testing",
+    "testcontainers",
+    "faker",
+    "fixtures"
+  ],
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
+  "dependencies": {
+    "@babel/plugin-transform-modules-commonjs": "^7.28.6",
+    "@faker-js/faker": "^10.6.0"
+  },
+  "peerDependencies": {
+    "@testcontainers/mongodb": ">=12.0.0",
+    "@testcontainers/postgresql": ">=12.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@testcontainers/mongodb": {
+      "optional": true
+    },
+    "@testcontainers/postgresql": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@testcontainers/mongodb": "^12.2.0",
+    "@testcontainers/postgresql": "^12.2.0",
+    "jest": "30.4.2"
+  }
+}

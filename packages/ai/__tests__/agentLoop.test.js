@@ -193,6 +193,82 @@ describe('agentLoop', () => {
     expect(handler).not.toHaveBeenCalled();
     expect(router.ask.mock.calls[1][0]).toContain('"denied":true');
   });
+
+  test('warns on repeated identical calls and stops at the configured limit', async () => {
+    const registry = createToolRegistry();
+    const handler = jest.fn(async () => ({ ok: true }));
+    registry.register({ name: 'lookup', description: 'Lookup', type: 'read', roles: ['member'], handler });
+    const router = { ask: jest.fn(async () => '<tool_call name="lookup">{"b":2,"a":1}</tool_call>') };
+    const events = [];
+    const reason = await runAgentLoop({ prompt: 'q', registry, router, userRole: 'member', loopGuard: { reminder: 2, firmReminder: 3, stop: 4 }, onEvent: event => events.push(event) });
+    expect(reason).toMatch(/arrêtée/);
+    expect(handler).toHaveBeenCalledTimes(3);
+    expect(events.map(event => event.repetitions)).toEqual([2, 3, 4]);
+    expect(events[2].type).toBe('tool_loop_stopped');
+  });
+
+  test('treats reordered object arguments as the same tool call', async () => {
+    const registry = createToolRegistry();
+    registry.register({ name: 'lookup', description: 'Lookup', type: 'read', roles: ['member'], handler: async () => ({}) });
+    let calls = 0;
+    const router = { ask: async () => (++calls === 1 ? '<tool_call name="lookup">{"a":1,"b":2}</tool_call>' : calls === 2 ? '<tool_call name="lookup">{"b":2,"a":1}</tool_call>' : 'done') };
+    await runAgentLoop({ prompt: 'q', registry, router, userRole: 'member', loopGuard: { reminder: 2, firmReminder: 4, stop: 6 } });
+  });
+
+  test('spills oversized results, rereads a slice, and hides data when storage fails', async () => {
+    const registry = createToolRegistry();
+    registry.register({ name: 'read', description: 'Read', type: 'read', roles: ['member'], handler: async () => 'x'.repeat(100) });
+    const memory = new Map();
+    const store = { set: async (id, value) => memory.set(id, value), get: async id => memory.get(id) };
+    const prompts = [];
+    const router = { ask: async prompt => {
+      prompts.push(prompt);
+      if (prompts.length === 1) return '<tool_call name="read">{}</tool_call>';
+      if (prompts.length === 2) {
+        const id = JSON.parse(prompt.match(/<tool_result name="read">(.*?)<\/tool_result>/)[1]).id;
+        return `<tool_call name="read_spilled_result">${JSON.stringify({ id, start: 10, length: 5 })}</tool_call>`;
+      }
+      if (prompts.length === 3) return 'done';
+    } };
+    await expect(runAgentLoop({ prompt: 'q', registry, router, userRole: 'member', spill: { threshold: 20, store } })).resolves.toBe('done');
+    expect(prompts[1]).toContain('"spilled":true');
+    expect(prompts[2]).toContain('"text":"xxxxx"');
+
+    const failing = { set: async () => { throw new Error('disk secret'); }, get: async () => null };
+    const failRouter = { ask: jest.fn().mockResolvedValueOnce('<tool_call name="read">{}</tool_call>').mockResolvedValueOnce('safe') };
+    await runAgentLoop({ prompt: 'q', registry, router: failRouter, userRole: 'member', spill: { threshold: 20, store: failing } });
+    expect(failRouter.ask.mock.calls[1][0]).toContain('result_storage_failed');
+    expect(failRouter.ask.mock.calls[1][0]).not.toContain('xxxxxxxx');
+  });
+
+  test('combines risk analyzers and confirms unknown tools under a threshold policy', async () => {
+    const registry = createToolRegistry();
+    const handler = jest.fn(async () => ({ ok: true }));
+    registry.register({ name: 'act', description: 'Act', type: 'write', risk: 'LOW', roles: ['member'], handler });
+    const proposals = [];
+    const router = { ask: jest.fn().mockResolvedValueOnce('<tool_call name="act">{}</tool_call>').mockResolvedValueOnce('pending') };
+    await runAgentLoop({ prompt: 'q', registry, router, userRole: 'member', confirmationPolicy: { threshold: 'HIGH' }, riskAnalyzers: [async () => 'MEDIUM', async () => 'HIGH'], pendingActions: { propose: async input => { proposals.push(input); return { action: { id: 'p1' } }; } } });
+    expect(handler).not.toHaveBeenCalled();
+    expect(proposals[0].action).toBe('act');
+  });
+
+  test('requires confirmation for an undeclared UNKNOWN risk and honors always/never policies', async () => {
+    const registry = createToolRegistry();
+    const handler = jest.fn(async () => ({ ok: true }));
+    registry.register({ name: 'act', description: 'Act', type: 'write', roles: ['member'], handler });
+    const pending = { propose: async () => ({ action: { id: 'unknown-1' } }) };
+    const run = async confirmationPolicy => {
+      const router = { ask: jest.fn().mockResolvedValueOnce('<tool_call name="act">{}</tool_call>').mockResolvedValueOnce('done') };
+      return runAgentLoop({ prompt: 'q', registry, router, userRole: 'member', confirmationPolicy, pendingActions: pending });
+    };
+    await run({ threshold: 'HIGH' });
+    expect(handler).not.toHaveBeenCalled();
+    await run('never');
+    expect(handler).toHaveBeenCalledTimes(1);
+    handler.mockClear();
+    await run('always');
+    expect(handler).not.toHaveBeenCalled();
+  });
 });
 
 describe('agent loop: failing tools, time budget, last turn', () => {

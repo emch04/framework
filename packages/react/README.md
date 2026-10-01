@@ -52,7 +52,7 @@ configurer CORS, `HttpOnly`, `Secure`, `SameSite` et une protection CSRF adaptee
 a son environnement. Astratra ne remplace pas cette configuration —
 `@astratra/security` fournit ces primitives cote backend (voir son README).
 
-**CSRF** : depuis `0.2.0`, `createApiFetch` lit lui-meme le cookie
+**CSRF** : `createApiFetch` lit lui-meme le cookie
 `astratra_csrf` et l'attache en header `x-csrf-token` sur toute requete
 mutante (tout sauf `GET`/`HEAD`/`OPTIONS`) — les noms par defaut
 correspondent exactement a ceux de `@astratra/security`, aucune config

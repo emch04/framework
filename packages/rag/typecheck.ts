@@ -2,9 +2,9 @@ import {
   assertVectorStoreContract, batches, chunkBlocks, chunkText, createEmbedder,
   createHybridSearch, createIndexer, createLocalEmbedder, createMemoryVectorStore,
   createRemoteEmbedder, createReranker, fuseByRank, normalizeDocument,
-  runStoreContract, verifySources
+  runStoreContract, verifySources, ExtractionError, createDoclingClient, extractTables, tableToMarkdown
 } from './src';
-import type { Block, Chunk, Document, Embedder, IndexStats, MemoryVectorStore, Reranker, VectorStore } from './src';
+import type { DoclingClient, ExtractionResult, Block, Chunk, Document, Embedder, IndexStats, MemoryVectorStore, Reranker, VectorStore } from './src';
 const store: MemoryVectorStore = createMemoryVectorStore();
 const custom: VectorStore = store;
 const embedder: Embedder = createEmbedder({ modelId: 'example', embed: async (texts) => texts.map(() => [1, 0]) });
@@ -35,3 +35,26 @@ async function exercise(): Promise<void> {
 }
 void exercise;
 void runStoreContract;
+
+
+const docling: DoclingClient = createDoclingClient({ baseUrl: 'http://127.0.0.1:5001', apiKey: 'cle', timeoutMs: 120_000 });
+
+async function exerciseExtraction(): Promise<void> {
+  const result: ExtractionResult = await docling.convert({
+    file: new Uint8Array([1, 2, 3]),
+    filename: 'bulletin.pdf',
+    formats: ['md', 'json'],
+    options: { ocr: true, ocrLang: ['fr', 'en'], tableMode: 'accurate' }
+  });
+  const markdown: string | null = result.markdown;
+  const first = result.tables[0];
+  const asMarkdown: string = first ? tableToMarkdown(first) : '';
+  const again = extractTables(result.json);
+  try {
+    await docling.health();
+  } catch (error) {
+    if (error instanceof ExtractionError) void error.code;
+  }
+  void [markdown, asMarkdown, again];
+}
+void exerciseExtraction;

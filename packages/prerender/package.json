@@ -1,6 +1,6 @@
 {
   "name": "@astratra/prerender",
-  "version": "0.2.0",
+  "version": "1.0.0",
   "description": "Prérendu SEO générique pour un site Vite + React : un HTML par route, shell SPA préservé, sitemap issu de la même liste que les pages.",
   "engines": {
     "node": ">=20"

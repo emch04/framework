@@ -378,6 +378,53 @@ compte rétrogradé entre la lecture et l'écriture n'est pas supprimé par erre
 - Il n'envoie rien : `deliver` se branche sur `@astratra/notify` ou autre.
 - Il ne stocke rien et n'appelle aucune base.
 
+# Droits IA et clé unique
+
+`createAIEntitlements` garde une empreinte SHA-256 de chaque clé ; le secret
+n'est retourné qu'à l'émission. Les droits sont recalculés depuis le compte à
+chaque résolution et suivent donc immédiatement son plan courant. La
+configuration des groupes et limites appartient au produit :
+
+```js
+const { createAIEntitlements } = require('@astratra/entitlements');
+const droits = createAIEntitlements({
+  catalog,
+  resolveAccount: (id) => Comptes.findById(id),
+  plans: {
+    gratuit: {
+      groups: { courant: ['modele-courant'] }, allowedGroups: ['courant'],
+      aliases: { defaut: 'modele-courant' },
+      quotas: { requestsPerMinute: 30, tokensPerMinute: 40_000, requestsPerDay: 500 },
+      budgets: { daily: 0, monthly: 0 },
+    },
+  },
+});
+const cle = await droits.issueKey(compte.id, { groups: ['courant'], quotas: { requestsPerMinute: 10 } });
+const decision = await droits.decide(cle.token, 'defaut', 12);
+```
+
+`execute(token, modele, estimation, replis, invoke)` vérifie modèle, quota et
+budget pour chaque cible, réserve l'estimation avant `invoke`, puis règle au
+coût réel. `invoke` renvoie `{ cost, tokens, provider }` ; le coût est associé
+à la cible réellement appelée (le store mémoire conserve aussi les coûts par
+fournisseur). L'estimation peut être un nombre ou une
+fonction `(modele) => coût`, pour chiffrer séparément chaque cible de repli.
+`revoke(id)` invalide immédiatement la clé.
+Les fenêtres quota sont minute glissante par minute UTC, jour UTC ; les budgets
+sont remis à zéro au début de la minute, du jour et du mois UTC. Les restrictions facultatives
+d'une clé sont des intersections ou des plafonds : elles ne peuvent élargir
+aucun droit du compte.
+
+Le store par défaut est en mémoire, pour tests et développement seulement.
+Pour PostgreSQL, Redis ou MongoDB, injecter `store` avec les opérations de
+`AIEntitlementsStore` déclarées dans `index.d.ts`. `reserve` et `settle`, ainsi
+que la vérification et l'incrément des quotas, doivent être atomiques entre
+instances. Implémenter ces méthodes avec transaction/verrou ou script atomique
+selon le stockage. Injecter `now: () => number` pour contrôler l'horloge.
+
+Raisons de refus de `decide` : `invalid_key`, `account_not_found`,
+`model_not_allowed`, `quota` ou `budget`.
+
 ## Tests
 
 ```bash

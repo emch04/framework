@@ -11,6 +11,9 @@ sans carte graphique, et son client Node.
   point d'entrée, relance avec brouillage, disjoncteur par point d'entrée,
   et des résultats qui **ne lèvent jamais** : l'appelant garde son
   comportement d'avant quand le service manque.
+- **Catalogue des prix des modèles** : prix d'un appel à un modèle hébergé
+  (Groq, Gemini, OpenAI, Anthropic, Vercel AI Gateway, Cloudflare…), fenêtre
+  de contexte et capacités, avec des surcharges locales qui priment.
 - **Déploiement** : générateurs purs d'une entrée pm2 et d'une unité systemd
   durcie, script d'environnement Python aux versions épinglées.
 
@@ -80,6 +83,105 @@ vecteur, puis réindexé).
 - `onEvent` reçoit `retry`, `failure`, `circuit_open`, `breaker` : jamais les
   textes.
 
+## Prix des modèles
+
+```js
+const { createPriceCatalog } = require('@astratra/models');
+
+const prices = createPriceCatalog({
+  overrides: {
+    'groq/openai/gpt-oss-120b': { billing: 'free_tier' },             // gratuit tant que le palier tient
+    'gemini-2.5-pro': { pricesPerMillion: { input: 1.0 } },            // prix négocié
+    'llama-local': { prices: { input: 0, output: 0 }, contextWindow: { maxInput: 8192 } }
+  },
+  aliases: { 'oracle-rapide': 'groq/openai/gpt-oss-120b' }
+});
+
+const cost = prices.cost('openai/gpt-oss-120b', response.usage, { provider: 'groq' });
+if (cost.ok) ledger.record(cost);       // { total, listTotal, billing, breakdown, unitPrices, catalogDate, computedAt, ... }
+else log.warn(cost.code, cost.message); // unknown_model | invalid_usage | no_price
+```
+
+| Méthode | Rend |
+|---|---|
+| `lookup(model, { provider })` | `key`, `provider`, `mode`, `prices` (surcharges appliquées), `listPrices` (catalogue), `tiers`, `contextWindow`, `capabilities`, `billing`, `deprecationDate`, `source`, `matchedBy` |
+| `cost(model, usage, { provider, freeTierExhausted })` | `total` facturé, `listTotal` (valeur catalogue), `breakdown`, `unitPrices`, `tier`, `usage`, `billing`, `creditPool?`, `catalogDate`, `computedAt` |
+| `contextWindow(model)` | `maxInput`, `maxOutput` (`null` si inconnu) |
+| `capabilities(model)` | `vision`, `tools`, `toolChoice`, `audioInput`, `audioOutput`, `reasoning`, `promptCaching`, `responseSchema`, `pdfInput`, `webSearch` |
+
+Aucune de ces méthodes ne lève pour un modèle inconnu ou un usage illisible :
+`{ ok: false, code: 'unknown_model' | 'invalid_usage' | 'no_price', message }`.
+Un champ utilisé sans aucun prix donne `no_price`, jamais un coût nul
+silencieux. Seule une surcharge ou un alias invalide lève (`TypeError`), à la
+création.
+
+### Retrouver un modèle
+
+Dans l'ordre : identifiant exact (casse ignorée, `models/` de Gemini
+retiré) ; alias exact ou par motif (`{ match: /^gpt-4o-\d{4}/, model: 'gpt-4o' }`,
+ou une chaîne `(?i)^...` comme le `match_pattern` de Langfuse) ; préfixe de
+fournisseur (`openai/gpt-4o` → `gpt-4o`, `google/…` → `gemini/…`,
+`vercel/…` → `vercel_ai_gateway/…`) ; enfin suffixe unique chez ce
+fournisseur (`gpt-oss-120b` + `groq` → `groq/openai/gpt-oss-120b`).
+L'option `provider` limite la recherche à ce fournisseur : le
+`openai/gpt-oss-120b` de Groq n'est jamais facturé au prix d'OpenAI, et un
+modèle absent chez ce fournisseur rend `unknown_model`.
+
+### Usage
+
+`usage` est soit des comptes **disjoints** (`input`, `output`, `cacheRead`,
+`cacheWrite`, `cacheWrite1h`, `audioInput`, `audioOutput`, `reasoning`,
+`images`, `seconds`), soit l'objet d'usage brut d'OpenAI (chat ou
+Responses), d'Anthropic, de Gemini (`usageMetadata`) ou de l'AI SDK : les
+jetons en cache inclus dans le total d'entrée sont retirés avant le calcul
+(`normalizeUsage`).
+
+- Cache en lecture et en écriture (5 min et 1 h) à leur prix ; sans prix de
+  cache, au prix d'entrée (comme LiteLLM). Audio au prix audio, sinon au prix
+  texte ; raisonnement au prix du raisonnement, sinon de la sortie.
+- Long contexte (`*_above_200k_tokens`) et `tiered_pricing` : toute la
+  requête passe au palier dès que l'invite (entrée + cache + audio) le
+  dépasse. Un prix surchargé n'est jamais majoré par un palier du catalogue.
+
+### Surcharges
+
+Objet indexé par identifiant, ou tableau `{ model | match, ... }` (la
+première qui correspond gagne). Elles priment toujours sur le catalogue.
+
+| Champ | Effet |
+|---|---|
+| `prices`, `pricesPerMillion` | prix négociés (USD par jeton, ou par million) |
+| `discount` | remise (fraction) sur tous les autres prix du catalogue, paliers compris |
+| `billing: 'free'` | facturé 0, `listTotal` garde la valeur catalogue |
+| `billing: 'free_tier'` | 0 tant que le palier tient ; `cost(..., { freeTierExhausted: true })` facture au prix |
+| `billing: 'credits'` + `creditPool` | montant réel, à débiter du crédit nommé |
+| `as` | emprunte l'entrée d'un modèle du catalogue pour un nom local |
+| `contextWindow`, `capabilities`, `provider`, `mode`, `note` | complètent ou remplacent le catalogue |
+
+### Coût figé
+
+Chaque coût est un objet gelé qui porte ses prix unitaires, la date du
+catalogue et l'heure du calcul : enregistrez-le tel quel. Une mise à jour du
+catalogue ou d'une surcharge ne change jamais un coût déjà calculé.
+
+### Provenance et mise à jour
+
+`data/prix-modeles-AAAA-MM-JJ.json` est une copie datée, non modifiée, de
+[`model_prices_and_context_window.json`](https://github.com/BerriAI/litellm/blob/main/model_prices_and_context_window.json)
+du projet LiteLLM (BerriAI), sous licence MIT ; rien n'est repris du dossier
+`enterprise/` de ce dépôt, qui relève d'une autre licence. Le copyright, la
+licence, l'adresse et l'empreinte SHA-256 de la copie sont dans
+[data/NOTICE](data/NOTICE). Le chargement prend le fichier daté le plus
+récent, une fois par processus.
+
+```bash
+npm run prices:update -- --dry-run   # résumé : modèles ajoutés, retirés, prix changés
+npm run prices:update                # écrit la copie du jour, retire l'ancienne, réécrit NOTICE
+```
+
+Le script ne tourne jamais tout seul : relisez le résumé et lancez les
+tests avant de publier.
+
 ## Déploiement
 
 ```js
@@ -113,7 +215,7 @@ const unit = createSystemdUnit({
 ## Tests
 
 ```bash
-npm test                 # client, disjoncteur, générateurs, contrat client <-> app.py (python3 requis pour ce dernier)
+npm test                 # client, disjoncteur, générateurs, prix des modèles, contrat client <-> app.py (python3 requis pour ce dernier)
 npm run test:server      # service Python avec moteurs factices
 npm run check:setup      # bash -n et épinglages du script d'installation
 ```

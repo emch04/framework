@@ -266,3 +266,173 @@ export function setupVenvCommand(options: {
   components?: Array<'onnx' | 'entities' | 'transcribe'>;
   python?: string;
 }): string[];
+
+/* ---- model prices -------------------------------------------------------- */
+
+/** Unit prices in USD: per token, except `image` (per generated image) and `second` (per audio second). */
+export type PriceName =
+  | 'input' | 'output' | 'cacheRead' | 'cacheWrite' | 'cacheWrite1h'
+  | 'audioInput' | 'audioOutput' | 'reasoning' | 'image' | 'second';
+export type UnitPrices = Partial<Record<PriceName, number>>;
+
+export type UsageField =
+  | 'input' | 'output' | 'cacheRead' | 'cacheWrite' | 'cacheWrite1h'
+  | 'audioInput' | 'audioOutput' | 'reasoning' | 'images' | 'seconds';
+/** Disjoint counts: a token appears in one field only. */
+export type CanonicalUsage = Record<UsageField, number>;
+
+/** Canonical counts, or the usage object of OpenAI (chat or Responses), Anthropic, Gemini or the AI SDK. */
+export type UsageInput = Partial<CanonicalUsage> | Record<string, unknown>;
+
+export type Billing = 'paid' | 'free' | 'free_tier' | 'credits';
+export type MatchedBy = 'exact' | 'alias' | 'provider_prefix' | 'provider_suffix' | 'override';
+export type PriceResultCode = 'unknown_model' | 'invalid_usage' | 'no_price';
+
+export interface ModelCapabilities {
+  vision: boolean;
+  tools: boolean;
+  toolChoice: boolean;
+  audioInput: boolean;
+  audioOutput: boolean;
+  reasoning: boolean;
+  promptCaching: boolean;
+  responseSchema: boolean;
+  pdfInput: boolean;
+  webSearch: boolean;
+}
+
+export interface ContextWindow { maxInput: number | null; maxOutput: number | null }
+
+export interface PriceTier {
+  name: string;
+  /** Long-context surcharge: applies when the prompt is above this many tokens. */
+  above?: number;
+  /** tiered_pricing range [min, max) of prompt tokens. */
+  range?: [number, number];
+  prices: UnitPrices;
+}
+
+export interface PriceFailure {
+  ok: false;
+  code: PriceResultCode;
+  model: string;
+  message: string;
+  key?: string;
+  /** On `no_price`: usage fields with no price at all. */
+  missing?: UsageField[];
+}
+
+export interface ModelPriceInfo {
+  ok: true;
+  model: string;
+  key: string;
+  provider: string | null;
+  mode: string | null;
+  matchedBy: MatchedBy;
+  source: 'catalog' | 'override' | 'catalog+override';
+  billing: Billing;
+  /** Effective prices (overrides applied). */
+  prices: UnitPrices;
+  /** Catalog prices, before any override. */
+  listPrices: UnitPrices;
+  tiers: PriceTier[];
+  contextWindow: ContextWindow;
+  capabilities: ModelCapabilities;
+  deprecationDate: string | null;
+  catalogDate: string | null;
+  creditPool?: string;
+  note?: string;
+}
+
+/** Frozen snapshot: never changes once computed, whatever happens to the catalog. */
+export interface CallCost {
+  ok: true;
+  model: string;
+  key: string;
+  provider: string | null;
+  matchedBy: MatchedBy;
+  source: 'catalog' | 'override' | 'catalog+override';
+  currency: 'USD';
+  billing: Billing;
+  /** What is billed (0 for free and free tier). */
+  total: number;
+  /** What the catalog says the call is worth, or null when it has no price. */
+  listTotal: number | null;
+  breakdown: Partial<Record<UsageField, number>>;
+  unitPrices: Partial<Record<UsageField, { price: PriceName; perUnit: number }>>;
+  tier: string | null;
+  usage: CanonicalUsage;
+  catalogDate: string | null;
+  computedAt: string;
+  creditPool?: string;
+}
+
+export interface PriceOverride {
+  /** Exact model id (any accepted spelling) — or use `match`. */
+  model?: string;
+  /** Pattern on the requested id or the catalog key: a RegExp, or a string with an optional (?i) prefix. */
+  match?: RegExp | string;
+  /** Catalog id to borrow prices, window and capabilities from. */
+  as?: string;
+  prices?: UnitPrices;
+  pricesPerMillion?: UnitPrices;
+  /** Fraction off every catalog price not set in `prices`, e.g. 0.2. */
+  discount?: number;
+  /** Default 'paid'. */
+  billing?: Billing;
+  /** Required with billing 'credits'. */
+  creditPool?: string;
+  contextWindow?: Partial<ContextWindow>;
+  capabilities?: Partial<ModelCapabilities>;
+  provider?: string;
+  mode?: string;
+  note?: string;
+}
+
+export interface LookupOptions {
+  /** Provider the call went to (e.g. 'groq', 'gemini', 'google', 'vercel'): scopes the search to it. */
+  provider?: string;
+}
+
+export interface CostOptions extends LookupOptions {
+  /** Bill a 'free_tier' model at its price (the free quota is used up). */
+  freeTierExhausted?: boolean;
+}
+
+export type LiteLLMCatalog = Record<string, Record<string, unknown>>;
+
+export interface PriceCatalog {
+  lookup(model: string, options?: LookupOptions): ModelPriceInfo | PriceFailure;
+  cost(model: string, usage: UsageInput, options?: CostOptions): CallCost | PriceFailure;
+  contextWindow(model: string, options?: LookupOptions): ({ ok: true; model: string; key: string } & ContextWindow) | PriceFailure;
+  capabilities(model: string, options?: LookupOptions): ({ ok: true; model: string; key: string } & ModelCapabilities) | PriceFailure;
+  readonly date: string | null;
+  readonly size: number;
+}
+
+export function createPriceCatalog(options?: {
+  /** LiteLLM-format catalog. Default: the bundled dated copy. */
+  data?: LiteLLMCatalog;
+  date?: string | null;
+  /** Object keyed by model id, or an array (first match wins). Throws TypeError when invalid. */
+  overrides?: Record<string, Omit<PriceOverride, 'model'>> | PriceOverride[];
+  aliases?: Record<string, string> | Array<{ from: string; model: string } | { match: RegExp | string; model: string }>;
+  now?: () => number;
+}): PriceCatalog;
+
+export function loadBundledCatalog(): { data: LiteLLMCatalog; date: string; file: string };
+export function bundledCatalogFile(dir?: string): { file: string; date: string } | null;
+/** Vendor usage -> canonical disjoint counts, or null when not recognised. */
+export function normalizeUsage(usage: unknown): CanonicalUsage | null;
+export function diffPriceCatalogs(before: LiteLLMCatalog, after: LiteLLMCatalog): {
+  added: string[];
+  removed: string[];
+  changed: Array<{ key: string; field: string; before: unknown; after: unknown }>;
+};
+
+export const PRICE_NAMES: readonly PriceName[];
+export const USAGE_FIELDS: readonly UsageField[];
+export const BILLINGS: readonly Billing[];
+export const COST_CODES: readonly PriceResultCode[];
+export const PROVIDER_ALIASES: Readonly<Record<string, string>>;
+export const CATALOG_URL: string;

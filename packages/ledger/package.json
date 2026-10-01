@@ -1,0 +1,45 @@
+{
+  "name": "@astratra/ledger",
+  "version": "1.0.0",
+  "description": "Moteur de comptabilité en partie double : écritures équilibrées et immuables, numérotation sans trou, clôture, lettrage, rapprochement bancaire, états SYSCOHADA, plans OHADA (SYSCOHADA, SYSCEBNL) et TVA RDC.",
+  "engines": {
+    "node": ">=20"
+  },
+  "main": "src/index.js",
+  "types": "src/index.d.ts",
+  "type": "commonjs",
+  "files": [
+    "src",
+    "data",
+    "scripts",
+    "NOTICE"
+  ],
+  "scripts": {
+    "test": "jest",
+    "import:odoo": "node scripts/import-odoo.js"
+  },
+  "jest": {
+    "testMatch": [
+      "**/__tests__/**/*.test.js"
+    ]
+  },
+  "keywords": [
+    "astratra",
+    "accounting",
+    "comptabilite",
+    "ledger",
+    "double-entry",
+    "ohada",
+    "syscohada",
+    "syscebnl"
+  ],
+  "license": "MIT AND LGPL-3.0-only",
+  "publishConfig": {
+    "access": "public"
+  },
+  "devDependencies": {
+    "@astratra/store-postgres": "^1.1.0",
+    "jest": "30.4.2",
+    "pg-mem": "^3.0.5"
+  }
+}

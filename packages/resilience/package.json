@@ -1,6 +1,6 @@
 {
   "name": "@astratra/resilience",
-  "version": "0.2.0",
+  "version": "1.0.0",
   "description": "Circuit breaker with a single half-open probe, a TTL cache that degrades instead of failing, retry with jitter, a cluster-wide job lock and a background timer registry.",
   "engines": {
     "node": ">=20"

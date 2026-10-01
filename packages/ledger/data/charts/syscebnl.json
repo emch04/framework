@@ -1,0 +1,5287 @@
+{
+ "id": "syscebnl",
+ "name": "SYSCEBNL",
+ "source": {
+  "repository": "https://github.com/odoo/odoo",
+  "branch": "20.0",
+  "commit": "28ac90563f7239aef8fea6f20494adbcdd104236",
+  "license": "LGPL-3.0-only",
+  "copyright": "Odoo S.A.",
+  "files": [
+   {
+    "path": "addons/l10n_syscohada/data/template/account.account-syscebnl.csv",
+    "url": "https://raw.githubusercontent.com/odoo/odoo/28ac90563f7239aef8fea6f20494adbcdd104236/addons/l10n_syscohada/data/template/account.account-syscebnl.csv",
+    "sha256": "c6abbd2c9f7cc6ec602ccb0397f9292bb653a08c1a45df552382620c6bbfcaab"
+   },
+   {
+    "path": "addons/l10n_syscohada/data/template/account.account.group-syscebnl.csv",
+    "url": "https://raw.githubusercontent.com/odoo/odoo/28ac90563f7239aef8fea6f20494adbcdd104236/addons/l10n_syscohada/data/template/account.account.group-syscebnl.csv",
+    "sha256": "50ba35edba5ec2375c59296bc7c47017995bcf8e57276eb4922366b8e1a3277a"
+   }
+  ]
+ },
+ "groups": [
+  {
+   "prefix": "1",
+   "labels": {
+    "en": "Sustainable resources accounts",
+    "fr": "Comptes de ressources durables"
+   },
+   "sourceId": "syscebnl_group_1"
+  },
+  {
+   "prefix": "10",
+   "labels": {
+    "en": "Endowment",
+    "fr": "Dotation"
+   },
+   "sourceId": "syscebnl_group_10"
+  },
+  {
+   "prefix": "11",
+   "labels": {
+    "en": "Reserves",
+    "fr": "Réserves"
+   },
+   "sourceId": "syscebnl_group_11"
+  },
+  {
+   "prefix": "12",
+   "labels": {
+    "en": "Retained earnings",
+    "fr": "Report à nouveau"
+   },
+   "sourceId": "syscebnl_group_12"
+  },
+  {
+   "prefix": "13",
+   "labels": {
+    "en": "Net income for the year",
+    "fr": "Résultat net de l'exercice"
+   },
+   "sourceId": "syscebnl_group_13"
+  },
+  {
+   "prefix": "14",
+   "labels": {
+    "en": "Investment grants",
+    "fr": "Subventions d'investissement"
+   },
+   "sourceId": "syscebnl_group_14"
+  },
+  {
+   "prefix": "15",
+   "labels": {
+    "en": "Regulated provisions and similar funds",
+    "fr": "Provisions réglementées et fonds assimilés"
+   },
+   "sourceId": "syscebnl_group_15"
+  },
+  {
+   "prefix": "16",
+   "labels": {
+    "en": "Restricted funds",
+    "fr": "Fonds affectés"
+   },
+   "sourceId": "syscebnl_group_16"
+  },
+  {
+   "prefix": "17",
+   "labels": {
+    "en": "Funds carried forward",
+    "fr": "Fonds reportés"
+   },
+   "sourceId": "syscebnl_group_17"
+  },
+  {
+   "prefix": "18",
+   "labels": {
+    "en": "Loans and similar debt",
+    "fr": "Emprunts et dette assimilées"
+   },
+   "sourceId": "syscebnl_group_18"
+  },
+  {
+   "prefix": "19",
+   "labels": {
+    "en": "Provisions for liabilities and charges",
+    "fr": "Provisions pour risques et charges"
+   },
+   "sourceId": "syscebnl_group_19"
+  },
+  {
+   "prefix": "2",
+   "labels": {
+    "en": "Non-current assets",
+    "fr": "Compte d'actif immobilisé"
+   },
+   "sourceId": "syscebnl_group_2"
+  },
+  {
+   "prefix": "20",
+   "labels": {
+    "en": "Fixed assets held for sale from gifts and bequests not yet received and temporary usufruct",
+    "fr": "Immobilisations destinées à la vente provenant de dons et legs non encore reçus et usufruit temporaire"
+   },
+   "sourceId": "syscebnl_group_20"
+  },
+  {
+   "prefix": "21",
+   "labels": {
+    "en": "Intangible fixed assets",
+    "fr": "Immobilisations incorporelles"
+   },
+   "sourceId": "syscebnl_group_21"
+  },
+  {
+   "prefix": "22",
+   "labels": {
+    "en": "Land",
+    "fr": "Terrains"
+   },
+   "sourceId": "syscebnl_group_22"
+  },
+  {
+   "prefix": "23",
+   "labels": {
+    "en": "Buildings, technical installations and fixtures",
+    "fr": "Bâtiments, installations techniques et agencements"
+   },
+   "sourceId": "syscebnl_group_23"
+  },
+  {
+   "prefix": "24",
+   "labels": {
+    "en": "Equipment, furniture and biological assets",
+    "fr": "Matériel, mobilier et actifs biologiques"
+   },
+   "sourceId": "syscebnl_group_24"
+  },
+  {
+   "prefix": "25",
+   "labels": {
+    "en": "Advances and deposits paid on fixed assets",
+    "fr": "Avances et acomptes versés sur immobilisations"
+   },
+   "sourceId": "syscebnl_group_25"
+  },
+  {
+   "prefix": "26",
+   "labels": {
+    "en": "Investments in associates",
+    "fr": "Titres de participation"
+   },
+   "sourceId": "syscebnl_group_26"
+  },
+  {
+   "prefix": "27",
+   "labels": {
+    "en": "Other non-current financial assets",
+    "fr": "Autres immoblisations financières"
+   },
+   "sourceId": "syscebnl_group_27"
+  },
+  {
+   "prefix": "28",
+   "labels": {
+    "en": "Depreciation",
+    "fr": "Amortissements"
+   },
+   "sourceId": "syscebnl_group_28"
+  },
+  {
+   "prefix": "29",
+   "labels": {
+    "en": "Impairment of fixed assets",
+    "fr": "Dépréciations des immobilisations"
+   },
+   "sourceId": "syscebnl_group_29"
+  },
+  {
+   "prefix": "3",
+   "labels": {
+    "en": "Inventories",
+    "fr": "Comptes de stocks"
+   },
+   "sourceId": "syscebnl_group_3"
+  },
+  {
+   "prefix": "31",
+   "labels": {
+    "en": "Business assets",
+    "fr": "Biens liés à l'activité"
+   },
+   "sourceId": "syscebnl_group_31"
+  },
+  {
+   "prefix": "32",
+   "labels": {
+    "en": "Related goods, raw materials and supplies",
+    "fr": "Marchandises, matières premières et fournitures liées"
+   },
+   "sourceId": "syscebnl_group_32"
+  },
+  {
+   "prefix": "33",
+   "labels": {
+    "en": "Other supplies",
+    "fr": "Autres approvisionnements"
+   },
+   "sourceId": "syscebnl_group_33"
+  },
+  {
+   "prefix": "34",
+   "labels": {
+    "en": "Donations in kind",
+    "fr": "Dons en nature"
+   },
+   "sourceId": "syscebnl_group_34"
+  },
+  {
+   "prefix": "36",
+   "labels": {
+    "en": "Finished goods",
+    "fr": "Produits finis"
+   },
+   "sourceId": "syscebnl_group_36"
+  },
+  {
+   "prefix": "38",
+   "labels": {
+    "en": "Donations in kind H.A.O.",
+    "fr": "Dons en nature H.A.O."
+   },
+   "sourceId": "syscebnl_group_38"
+  },
+  {
+   "prefix": "39",
+   "labels": {
+    "en": "Inventory and work-in-progress write-downs",
+    "fr": "Dépréciations des stocks et des productions en cours"
+   },
+   "sourceId": "syscebnl_group_39"
+  },
+  {
+   "prefix": "4",
+   "labels": {
+    "en": "Third-party accounts",
+    "fr": "Comptes de tiers"
+   },
+   "sourceId": "syscebnl_group_4"
+  },
+  {
+   "prefix": "40",
+   "labels": {
+    "en": "Suppliers and related accounts",
+    "fr": "Fournisseurs et comptes rattachés"
+   },
+   "sourceId": "syscebnl_group_40"
+  },
+  {
+   "prefix": "41",
+   "labels": {
+    "en": "Members, customer-users and related accounts",
+    "fr": "Adhérents, clients-usagers et comptes rattachés"
+   },
+   "sourceId": "syscebnl_group_41"
+  },
+  {
+   "prefix": "42",
+   "labels": {
+    "en": "Employees",
+    "fr": "Personnel"
+   },
+   "sourceId": "syscebnl_group_42"
+  },
+  {
+   "prefix": "43",
+   "labels": {
+    "en": "Social organizations",
+    "fr": "Organismes sociaux"
+   },
+   "sourceId": "syscebnl_group_43"
+  },
+  {
+   "prefix": "44",
+   "labels": {
+    "en": "State and public authorities",
+    "fr": "État et collectivités publiques"
+   },
+   "sourceId": "syscebnl_group_44"
+  },
+  {
+   "prefix": "45",
+   "labels": {
+    "en": "Founders, contributors and current accounts",
+    "fr": "Fondateurs, apporteurs et comptes courants"
+   },
+   "sourceId": "syscebnl_group_45"
+  },
+  {
+   "prefix": "46",
+   "labels": {
+    "en": "Lessors, government and other bodies, administration funds",
+    "fr": "Bailleurs, Etat et autres organismes, fonds d'administration"
+   },
+   "sourceId": "syscebnl_group_46"
+  },
+  {
+   "prefix": "47",
+   "labels": {
+    "en": "Sundry debtors and creditors",
+    "fr": "Débiteurs et créditeurs divers"
+   },
+   "sourceId": "syscebnl_group_47"
+  },
+  {
+   "prefix": "48",
+   "labels": {
+    "en": "Receivables and payables from donations other than ordinary activities (H.A.O.)",
+    "fr": "Créances et dettes dons hors activités ordinaires (H.A.O.)"
+   },
+   "sourceId": "syscebnl_group_48"
+  },
+  {
+   "prefix": "49",
+   "labels": {
+    "en": "Depreciation and provisions for short-term liabilities and charges (third parties)",
+    "fr": "Dépréciations et provisions pour risques et charges à court terme (tiers)"
+   },
+   "sourceId": "syscebnl_group_49"
+  },
+  {
+   "prefix": "5",
+   "labels": {
+    "en": "Cash account",
+    "fr": "Compte de trésorerie"
+   },
+   "sourceId": "syscebnl_group_5"
+  },
+  {
+   "prefix": "50",
+   "labels": {
+    "en": "Marketable securities",
+    "fr": "Titres de placement"
+   },
+   "sourceId": "syscebnl_group_50"
+  },
+  {
+   "prefix": "51",
+   "labels": {
+    "en": "Cash in hand",
+    "fr": "Valeurs à encaisser"
+   },
+   "sourceId": "syscebnl_group_51"
+  },
+  {
+   "prefix": "52",
+   "labels": {
+    "en": "Banks",
+    "fr": "Banques"
+   },
+   "sourceId": "syscebnl_group_52"
+  },
+  {
+   "prefix": "53",
+   "labels": {
+    "en": "Financial institutions and similar",
+    "fr": "Établissements financiers et assimilés"
+   },
+   "sourceId": "syscebnl_group_53"
+  },
+  {
+   "prefix": "55",
+   "labels": {
+    "en": "Electronic money instruments",
+    "fr": "Instruments de monnaie électronique"
+   },
+   "sourceId": "syscebnl_group_55"
+  },
+  {
+   "prefix": "56",
+   "labels": {
+    "en": "Banks, cash and discount credits",
+    "fr": "Banques, crédits de trésorerie et d’escompte"
+   },
+   "sourceId": "syscebnl_group_56"
+  },
+  {
+   "prefix": "57",
+   "labels": {
+    "en": "Cash",
+    "fr": "Caisse"
+   },
+   "sourceId": "syscebnl_group_57"
+  },
+  {
+   "prefix": "58",
+   "labels": {
+    "en": "Internal transfers",
+    "fr": "Virements internes"
+   },
+   "sourceId": "syscebnl_group_58"
+  },
+  {
+   "prefix": "59",
+   "labels": {
+    "en": "Depreciation and provisions for short-term liabilities and charges",
+    "fr": "Dépréciations et provisions pour risques et charges à court terme"
+   },
+   "sourceId": "syscebnl_group_59"
+  },
+  {
+   "prefix": "6",
+   "labels": {
+    "en": "Expense accounts for ordinary activities",
+    "fr": "Comptes de charges des activités ordinaires"
+   },
+   "sourceId": "syscebnl_group_6"
+  },
+  {
+   "prefix": "60",
+   "labels": {
+    "en": "Purchases and changes in inventories",
+    "fr": "Achats et variations de stocks"
+   },
+   "sourceId": "syscebnl_group_60"
+  },
+  {
+   "prefix": "61",
+   "labels": {
+    "en": "Transport",
+    "fr": "Transports"
+   },
+   "sourceId": "syscebnl_group_61"
+  },
+  {
+   "prefix": "62",
+   "labels": {
+    "en": "External services",
+    "fr": "Services extérieurs"
+   },
+   "sourceId": "syscebnl_group_62"
+  },
+  {
+   "prefix": "63",
+   "labels": {
+    "en": "Other external services",
+    "fr": "Autres services extérieurs"
+   },
+   "sourceId": "syscebnl_group_63"
+  },
+  {
+   "prefix": "64",
+   "labels": {
+    "en": "Taxes and duties",
+    "fr": "Impôts et taxes"
+   },
+   "sourceId": "syscebnl_group_64"
+  },
+  {
+   "prefix": "65",
+   "labels": {
+    "en": "Other expenses",
+    "fr": "Autres charges"
+   },
+   "sourceId": "syscebnl_group_65"
+  },
+  {
+   "prefix": "66",
+   "labels": {
+    "en": "Personnel expenses",
+    "fr": "Charges de personnel"
+   },
+   "sourceId": "syscebnl_group_66"
+  },
+  {
+   "prefix": "67",
+   "labels": {
+    "en": "Financial expenses and similar charges",
+    "fr": "Frais financiers et charges assimilées"
+   },
+   "sourceId": "syscebnl_group_67"
+  },
+  {
+   "prefix": "68",
+   "labels": {
+    "en": "Depreciation and amortization",
+    "fr": "Dotations aux amortissements"
+   },
+   "sourceId": "syscebnl_group_68"
+  },
+  {
+   "prefix": "69",
+   "labels": {
+    "en": "Provisions and impairment losses",
+    "fr": "Dotations aux provisions et aux dépréciations"
+   },
+   "sourceId": "syscebnl_group_69"
+  },
+  {
+   "prefix": "7",
+   "labels": {
+    "en": "Income from ordinary activities",
+    "fr": "Comptes de produits des activites ordinaires"
+   },
+   "sourceId": "syscebnl_group_7"
+  },
+  {
+   "prefix": "70",
+   "labels": {
+    "en": "Income",
+    "fr": "Revenus"
+   },
+   "sourceId": "syscebnl_group_70"
+  },
+  {
+   "prefix": "71",
+   "labels": {
+    "en": "Operating subsidies",
+    "fr": "Subventions d'exploitation"
+   },
+   "sourceId": "syscebnl_group_71"
+  },
+  {
+   "prefix": "72",
+   "labels": {
+    "en": "Capitalized production",
+    "fr": "Production immobilisée"
+   },
+   "sourceId": "syscebnl_group_72"
+  },
+  {
+   "prefix": "73",
+   "labels": {
+    "en": "Changes in inventories of goods produced",
+    "fr": "Variations des stocks de biens produits"
+   },
+   "sourceId": "syscebnl_group_73"
+  },
+  {
+   "prefix": "75",
+   "labels": {
+    "en": "Other income",
+    "fr": "Autres produits"
+   },
+   "sourceId": "syscebnl_group_75"
+  },
+  {
+   "prefix": "77",
+   "labels": {
+    "en": "Financial income and similar",
+    "fr": "Revenus financiers et produits assimilés"
+   },
+   "sourceId": "syscebnl_group_77"
+  },
+  {
+   "prefix": "78",
+   "labels": {
+    "en": "Expense transfers",
+    "fr": "Transferts de charges"
+   },
+   "sourceId": "syscebnl_group_78"
+  },
+  {
+   "prefix": "79",
+   "labels": {
+    "en": "Reversals of provisions, impairment and other items",
+    "fr": "Reprises de provisions, de dépréciations et autres"
+   },
+   "sourceId": "syscebnl_group_79"
+  },
+  {
+   "prefix": "8",
+   "labels": {
+    "en": "Other expenses and other income",
+    "fr": "Comptes des autres charges et des autres produits"
+   },
+   "sourceId": "syscebnl_group_8"
+  },
+  {
+   "prefix": "81",
+   "labels": {
+    "en": "Book value of fixed asset disposals",
+    "fr": "Valeurs comptables des cessions d'immobilisations"
+   },
+   "sourceId": "syscebnl_group_81"
+  },
+  {
+   "prefix": "82",
+   "labels": {
+    "en": "Income from fixed asset disposals",
+    "fr": "Produits des cessions d'immobilisations"
+   },
+   "sourceId": "syscebnl_group_82"
+  },
+  {
+   "prefix": "83",
+   "labels": {
+    "en": "Non-operating expenses",
+    "fr": "Charges hors activités ordinaires"
+   },
+   "sourceId": "syscebnl_group_83"
+  },
+  {
+   "prefix": "84",
+   "labels": {
+    "en": "Income from ordinary activities",
+    "fr": "Revenus hors activités ordinaires"
+   },
+   "sourceId": "syscebnl_group_84"
+  },
+  {
+   "prefix": "85",
+   "labels": {
+    "en": "Non-operating allocations",
+    "fr": "Dotations hors activités ordinaires"
+   },
+   "sourceId": "syscebnl_group_85"
+  },
+  {
+   "prefix": "86",
+   "labels": {
+    "en": "Reversals of depreciation, amortization and provisions H.A.O.",
+    "fr": "Reprises d'amortissements, provisions et dépréciations H.A.O."
+   },
+   "sourceId": "syscebnl_group_86"
+  },
+  {
+   "prefix": "87",
+   "labels": {
+    "en": "Changes in inventories of gifts in kind H.A.O.",
+    "fr": "Variations de stocks de dons en nature H.A.O."
+   },
+   "sourceId": "syscebnl_group_87"
+  },
+  {
+   "prefix": "88",
+   "labels": {
+    "en": "Balancing subsidies",
+    "fr": "Subventions d'équilibre"
+   },
+   "sourceId": "syscebnl_group_88"
+  },
+  {
+   "prefix": "9",
+   "labels": {
+    "en": "Voluntary contributions in kind",
+    "fr": "Contributions volontaires en nature"
+   },
+   "sourceId": "syscebnl_group_9"
+  },
+  {
+   "prefix": "90",
+   "labels": {
+    "en": "Use of voluntary contributions in kind",
+    "fr": "Emplois des contributions volontaires en nature"
+   },
+   "sourceId": "syscebnl_group_90"
+  },
+  {
+   "prefix": "91",
+   "labels": {
+    "en": "Voluntary contributions in kind",
+    "fr": "Contributions volontaires en nature"
+   },
+   "sourceId": "syscebnl_group_91"
+  },
+  {
+   "prefix": "92",
+   "labels": {
+    "en": "Reflected accounts",
+    "fr": "Comptes réfléchis"
+   },
+   "sourceId": "syscebnl_group_92"
+  },
+  {
+   "prefix": "93",
+   "labels": {
+    "en": "Reclassification accounts",
+    "fr": "Comptes de reclassements"
+   },
+   "sourceId": "syscebnl_group_93"
+  },
+  {
+   "prefix": "94",
+   "labels": {
+    "en": "Cost accounts",
+    "fr": "Comptes de coûts"
+   },
+   "sourceId": "syscebnl_group_94"
+  },
+  {
+   "prefix": "95",
+   "labels": {
+    "en": "Inventory accounts",
+    "fr": "Comptes de stocks"
+   },
+   "sourceId": "syscebnl_group_95"
+  },
+  {
+   "prefix": "96",
+   "labels": {
+    "en": "Scheduled cost variance accounts",
+    "fr": "Comptes d'écarts sur coûts préétablis"
+   },
+   "sourceId": "syscebnl_group_96"
+  },
+  {
+   "prefix": "97",
+   "labels": {
+    "en": "Differences in accounting treatment",
+    "fr": "Comptes de différences de traitement comptable"
+   },
+   "sourceId": "syscebnl_group_97"
+  },
+  {
+   "prefix": "98",
+   "labels": {
+    "en": "Profit and loss accounts",
+    "fr": "Comptes de résultats"
+   },
+   "sourceId": "syscebnl_group_98"
+  },
+  {
+   "prefix": "99",
+   "labels": {
+    "en": "Internal linkage accounts",
+    "fr": "Comptes de liaisons internes"
+   },
+   "sourceId": "syscebnl_group_99"
+  }
+ ],
+ "accounts": [
+  {
+   "code": "101",
+   "labels": {
+    "en": "Non-consumable endowment with no right of reversal",
+    "fr": "Dotation non consomptible sans droit de reprise"
+   },
+   "type": "equity",
+   "reconcile": false,
+   "sourceId": "syscebnl_101"
+  },
+  {
+   "code": "102",
+   "labels": {
+    "en": "Non-consumable endowment with right of reversal",
+    "fr": "Dotation non consomptible avec droit de reprise"
+   },
+   "type": "equity",
+   "reconcile": false,
+   "sourceId": "syscebnl_102"
+  },
+  {
+   "code": "103",
+   "labels": {
+    "en": "Entrance fee",
+    "fr": "Droit d'entrée"
+   },
+   "type": "equity",
+   "reconcile": false,
+   "sourceId": "syscebnl_103"
+  },
+  {
+   "code": "104",
+   "labels": {
+    "en": "Expendable endowment",
+    "fr": "Dotation consomptible"
+   },
+   "type": "equity",
+   "reconcile": false,
+   "sourceId": "syscebnl_104"
+  },
+  {
+   "code": "106",
+   "labels": {
+    "en": "Revaluation differences",
+    "fr": "Écarts de réévaluation"
+   },
+   "type": "equity",
+   "reconcile": false,
+   "sourceId": "syscebnl_106"
+  },
+  {
+   "code": "112",
+   "labels": {
+    "en": "Statutory or contractual reserves",
+    "fr": "Réserves statutaires ou contractuelles"
+   },
+   "type": "equity",
+   "reconcile": false,
+   "sourceId": "syscebnl_112"
+  },
+  {
+   "code": "118",
+   "labels": {
+    "en": "Other reserves",
+    "fr": "Autres réserves"
+   },
+   "type": "equity",
+   "reconcile": false,
+   "sourceId": "syscebnl_118"
+  },
+  {
+   "code": "121",
+   "labels": {
+    "en": "Retained earnings",
+    "fr": "Report à nouveau des excédents"
+   },
+   "type": "equity",
+   "reconcile": false,
+   "sourceId": "syscebnl_121"
+  },
+  {
+   "code": "128",
+   "labels": {
+    "en": "Net income pending appropriation",
+    "fr": "Résultat net en instance d'affectation"
+   },
+   "type": "equity_unaffected",
+   "reconcile": false,
+   "sourceId": "syscebnl_128"
+  },
+  {
+   "code": "129",
+   "labels": {
+    "en": "Retained earnings carried forward",
+    "fr": "Report à nouveau des déficits"
+   },
+   "type": "equity",
+   "reconcile": false,
+   "sourceId": "syscebnl_129"
+  },
+  {
+   "code": "131",
+   "labels": {
+    "en": "Surplus for the year",
+    "fr": "Excédent de l'exercice"
+   },
+   "type": "equity",
+   "reconcile": false,
+   "sourceId": "syscebnl_131"
+  },
+  {
+   "code": "139",
+   "labels": {
+    "en": "Deficit for the year",
+    "fr": "Déficit de l'exercice"
+   },
+   "type": "equity",
+   "reconcile": false,
+   "sourceId": "syscebnl_139"
+  },
+  {
+   "code": "141",
+   "labels": {
+    "en": "Equipment grants",
+    "fr": "Subventions d'équipment"
+   },
+   "type": "equity",
+   "reconcile": false,
+   "sourceId": "syscebnl_141"
+  },
+  {
+   "code": "148",
+   "labels": {
+    "en": "Other investment grants",
+    "fr": "Autres subventions d'investissement"
+   },
+   "type": "equity",
+   "reconcile": false,
+   "sourceId": "syscebnl_148"
+  },
+  {
+   "code": "154",
+   "labels": {
+    "en": "Special revaluation provisions",
+    "fr": "Provisions spéciales de réevaluation"
+   },
+   "type": "equity",
+   "reconcile": false,
+   "sourceId": "syscebnl_154"
+  },
+  {
+   "code": "158",
+   "labels": {
+    "en": "Other regulated provisions and similar funds",
+    "fr": "Autres provisions réglementées et fonds assimilés"
+   },
+   "type": "equity",
+   "reconcile": false,
+   "sourceId": "syscebnl_158"
+  },
+  {
+   "code": "161",
+   "labels": {
+    "en": "Development project fund - accountable cash advances",
+    "fr": "Fonds projet de développement - avances de fonds à justifier"
+   },
+   "type": "equity",
+   "reconcile": false,
+   "sourceId": "syscebnl_161"
+  },
+  {
+   "code": "162",
+   "labels": {
+    "en": "Funds earmarked for development project investments – donors",
+    "fr": "Fonds affectés aus investissements du projet de développement - bailleurs de fonds"
+   },
+   "type": "equity",
+   "reconcile": false,
+   "sourceId": "syscebnl_162"
+  },
+  {
+   "code": "163",
+   "labels": {
+    "en": "Funds allocated to development project investments - the State",
+    "fr": "Fonds affectés aux investissements du projet de développement - l'État"
+   },
+   "type": "equity",
+   "reconcile": false,
+   "sourceId": "syscebnl_163"
+  },
+  {
+   "code": "164",
+   "labels": {
+    "en": "Funds allocated to investments by other similar financing organizations",
+    "fr": "Fonds affectés aux investissements des autres organismes de financement assimilés"
+   },
+   "type": "equity",
+   "reconcile": false,
+   "sourceId": "syscebnl_164"
+  },
+  {
+   "code": "165",
+   "labels": {
+    "en": "Funds earmarked for a specific project",
+    "fr": "Fonds affectés à un projet spécifique"
+   },
+   "type": "equity",
+   "reconcile": false,
+   "sourceId": "syscebnl_165"
+  },
+  {
+   "code": "167",
+   "labels": {
+    "en": "Funds from gifts and bequests of fixed assets",
+    "fr": "Fonds provenant de dons et legs d'immobilisations"
+   },
+   "type": "equity",
+   "reconcile": false,
+   "sourceId": "syscebnl_167"
+  },
+  {
+   "code": "168",
+   "labels": {
+    "en": "Other restricted funds",
+    "fr": "Autres fonds affectés"
+   },
+   "type": "equity",
+   "reconcile": false,
+   "sourceId": "syscebnl_168"
+  },
+  {
+   "code": "169",
+   "labels": {
+    "en": "Restricted funds receivable",
+    "fr": "Fonds affectés à recevoir"
+   },
+   "type": "equity",
+   "reconcile": false,
+   "sourceId": "syscebnl_169"
+  },
+  {
+   "code": "171",
+   "labels": {
+    "en": "Temporary donation of usufruct",
+    "fr": "Donation temporaire d'usufruit"
+   },
+   "type": "equity",
+   "reconcile": false,
+   "sourceId": "syscebnl_171"
+  },
+  {
+   "code": "172",
+   "labels": {
+    "en": "Donations and bequests not yet received from fixed assets held for sale",
+    "fr": "Donations et legs non encore reçus d'immobilisations destinées à la vente"
+   },
+   "type": "equity",
+   "reconcile": false,
+   "sourceId": "syscebnl_172"
+  },
+  {
+   "code": "178",
+   "labels": {
+    "en": "Other deferred funds",
+    "fr": "Autres fonds reportés"
+   },
+   "type": "equity",
+   "reconcile": false,
+   "sourceId": "syscebnl_178"
+  },
+  {
+   "code": "181",
+   "labels": {
+    "en": "Bond issues",
+    "fr": "Emprunts obligataires"
+   },
+   "type": "liability_non_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_181"
+  },
+  {
+   "code": "182",
+   "labels": {
+    "en": "Borrowings from credit institutions",
+    "fr": "Emprunts et dettes auprès des ètablissements de crédit"
+   },
+   "type": "liability_non_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_182"
+  },
+  {
+   "code": "183",
+   "labels": {
+    "en": "Advances received from the State",
+    "fr": "Avances reçues de l'État"
+   },
+   "type": "liability_non_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_183"
+  },
+  {
+   "code": "185",
+   "labels": {
+    "en": "Deposits and surety bonds",
+    "fr": "Dépôts et cautionnements reçus"
+   },
+   "type": "liability_non_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_185"
+  },
+  {
+   "code": "186",
+   "labels": {
+    "en": "Accrued interest",
+    "fr": "Intérêts courus"
+   },
+   "type": "liability_non_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_186"
+  },
+  {
+   "code": "187",
+   "labels": {
+    "en": "Capital lease liabilities",
+    "fr": "Dettes de location-acquisition"
+   },
+   "type": "liability_non_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_187"
+  },
+  {
+   "code": "188",
+   "labels": {
+    "en": "Other borrowings and debts",
+    "fr": "Autres emprunts et dettes"
+   },
+   "type": "liability_non_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_188"
+  },
+  {
+   "code": "191",
+   "labels": {
+    "en": "Provisions for litigation",
+    "fr": "Provisions pour litiges"
+   },
+   "type": "liability_non_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_191"
+  },
+  {
+   "code": "192",
+   "labels": {
+    "en": "Provisions for charges on gifts and bequests",
+    "fr": "Provisions pour charges sur donations et legs"
+   },
+   "type": "liability_non_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_192"
+  },
+  {
+   "code": "194",
+   "labels": {
+    "en": "Provisions for exchange losses",
+    "fr": "Provisions pour pertes de change"
+   },
+   "type": "liability_non_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_194"
+  },
+  {
+   "code": "196",
+   "labels": {
+    "en": "Provisions for pensions and similar obligations",
+    "fr": "Provisions pour pensions et obligations similaires"
+   },
+   "type": "liability_non_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_196"
+  },
+  {
+   "code": "198",
+   "labels": {
+    "en": "Other provisions for contingencies and charges",
+    "fr": "Autres provisions pour risques et charges"
+   },
+   "type": "liability_non_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_198"
+  },
+  {
+   "code": "201",
+   "labels": {
+    "en": "Intangible assets",
+    "fr": "Immobilisations incorporelles"
+   },
+   "type": "asset_non_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_201"
+  },
+  {
+   "code": "202",
+   "labels": {
+    "en": "Land",
+    "fr": "Terrains"
+   },
+   "type": "asset_non_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_202"
+  },
+  {
+   "code": "203",
+   "labels": {
+    "en": "Buildings",
+    "fr": "Bâtiments"
+   },
+   "type": "asset_non_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_203"
+  },
+  {
+   "code": "204",
+   "labels": {
+    "en": "Equipment",
+    "fr": "Matériels"
+   },
+   "type": "asset_non_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_204"
+  },
+  {
+   "code": "205",
+   "labels": {
+    "en": "Shareholdings",
+    "fr": "Titre de participations"
+   },
+   "type": "asset_non_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_205"
+  },
+  {
+   "code": "212",
+   "labels": {
+    "en": "Patents, licenses, concessions et similar rights",
+    "fr": "Brevets, licences, concessions et droits similaires"
+   },
+   "type": "asset_non_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_212"
+  },
+  {
+   "code": "213",
+   "labels": {
+    "en": "Software and websites",
+    "fr": "Logiciels et sites internet"
+   },
+   "type": "asset_non_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_213"
+  },
+  {
+   "code": "214",
+   "labels": {
+    "en": "Brands",
+    "fr": "Marques"
+   },
+   "type": "asset_non_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_214"
+  },
+  {
+   "code": "218",
+   "labels": {
+    "en": "Other intangible rights and assets",
+    "fr": "Autres droits et valeurs incorporels"
+   },
+   "type": "asset_non_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_218"
+  },
+  {
+   "code": "2193",
+   "labels": {
+    "en": "Software and websites",
+    "fr": "Logiciels et sites internet"
+   },
+   "type": "asset_non_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_2193"
+  },
+  {
+   "code": "2198",
+   "labels": {
+    "en": "Other intangible assets and rights",
+    "fr": "Autres droits et valeurs incorporels"
+   },
+   "type": "asset_non_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_2198"
+  },
+  {
+   "code": "221",
+   "labels": {
+    "en": "Agricultural and forest land",
+    "fr": "Terrains agricole et forestiers"
+   },
+   "type": "asset_fixed",
+   "reconcile": false,
+   "sourceId": "syscebnl_221"
+  },
+  {
+   "code": "222",
+   "labels": {
+    "en": "Bare land",
+    "fr": "Terrains nus"
+   },
+   "type": "asset_fixed",
+   "reconcile": false,
+   "sourceId": "syscebnl_222"
+  },
+  {
+   "code": "223",
+   "labels": {
+    "en": "Built-up land",
+    "fr": "Terrains bâtis"
+   },
+   "type": "asset_fixed",
+   "reconcile": false,
+   "sourceId": "syscebnl_223"
+  },
+  {
+   "code": "224",
+   "labels": {
+    "en": "Land development work",
+    "fr": "Travaux de mise en valeur de terrains"
+   },
+   "type": "asset_fixed",
+   "reconcile": false,
+   "sourceId": "syscebnl_224"
+  },
+  {
+   "code": "226",
+   "labels": {
+    "en": "Developed land",
+    "fr": "Terrains aménagés"
+   },
+   "type": "asset_fixed",
+   "reconcile": false,
+   "sourceId": "syscebnl_226"
+  },
+  {
+   "code": "228",
+   "labels": {
+    "en": "Other lands",
+    "fr": "Autres terrains"
+   },
+   "type": "asset_fixed",
+   "reconcile": false,
+   "sourceId": "syscebnl_228"
+  },
+  {
+   "code": "229",
+   "labels": {
+    "en": "Land development in progress",
+    "fr": "Aménagements de terrains en cours"
+   },
+   "type": "asset_fixed",
+   "reconcile": false,
+   "sourceId": "syscebnl_229"
+  },
+  {
+   "code": "231",
+   "labels": {
+    "en": "Industrial, agricultural, administrative, commercial, religious and other buildings on own land",
+    "fr": "Bâtiments industriels, agricoles, administratifs, commerciaux, religieux et autres sur sol propre"
+   },
+   "type": "asset_fixed",
+   "reconcile": false,
+   "sourceId": "syscebnl_231"
+  },
+  {
+   "code": "232",
+   "labels": {
+    "en": "Industrial, agricultural, administrative, commercial, religious and other buildings on third-party land",
+    "fr": "Bâtiments industriels, agricoles, administratifs, commerciaux, religieux et autres sur sol d'autrui"
+   },
+   "type": "asset_fixed",
+   "reconcile": false,
+   "sourceId": "syscebnl_232"
+  },
+  {
+   "code": "233",
+   "labels": {
+    "en": "Infrastructure works",
+    "fr": "Ouvrages d'infrastructure"
+   },
+   "type": "asset_fixed",
+   "reconcile": false,
+   "sourceId": "syscebnl_233"
+  },
+  {
+   "code": "234",
+   "labels": {
+    "en": "Fixtures, fittings and technical installations",
+    "fr": "Aménagements, agencements et installations techniques"
+   },
+   "type": "asset_fixed",
+   "reconcile": false,
+   "sourceId": "syscebnl_234"
+  },
+  {
+   "code": "235",
+   "labels": {
+    "en": "Office and similar facilities",
+    "fr": "Aménagements de bureaux et assimilés"
+   },
+   "type": "asset_fixed",
+   "reconcile": false,
+   "sourceId": "syscebnl_235"
+  },
+  {
+   "code": "238",
+   "labels": {
+    "en": "Other fixtures and fittings",
+    "fr": "Autres installations et agencements"
+   },
+   "type": "asset_fixed",
+   "reconcile": false,
+   "sourceId": "syscebnl_238"
+  },
+  {
+   "code": "2391",
+   "labels": {
+    "en": "Buildings on own land in progress",
+    "fr": "Bâtiments sur sol propre en cours"
+   },
+   "type": "asset_fixed",
+   "reconcile": false,
+   "sourceId": "syscebnl_2391"
+  },
+  {
+   "code": "2392",
+   "labels": {
+    "en": "Buildings in progress on third-party land",
+    "fr": "Bâtiments sur sol d'autrui en cours"
+   },
+   "type": "asset_fixed",
+   "reconcile": false,
+   "sourceId": "syscebnl_2392"
+  },
+  {
+   "code": "2393",
+   "labels": {
+    "en": "Infrastructure works in progress",
+    "fr": "Ouvrages d'infrastructure en cours"
+   },
+   "type": "asset_fixed",
+   "reconcile": false,
+   "sourceId": "syscebnl_2393"
+  },
+  {
+   "code": "2394",
+   "labels": {
+    "en": "Fittings, fixtures and technical installations in progress",
+    "fr": "Aménagements, agencements et installations techniques en cours"
+   },
+   "type": "asset_fixed",
+   "reconcile": false,
+   "sourceId": "syscebnl_2394"
+  },
+  {
+   "code": "2395",
+   "labels": {
+    "en": "Office developments in progress",
+    "fr": "Aménagements de bureaux en cours"
+   },
+   "type": "asset_fixed",
+   "reconcile": false,
+   "sourceId": "syscebnl_2395"
+  },
+  {
+   "code": "2396",
+   "labels": {
+    "en": "Buildings in progress-investment property",
+    "fr": "Bâtiments en cours-immeubles de placement"
+   },
+   "type": "asset_fixed",
+   "reconcile": false,
+   "sourceId": "syscebnl_2396"
+  },
+  {
+   "code": "2398",
+   "labels": {
+    "en": "Other fixtures and fittings in progress",
+    "fr": "Autres installations et agencements en cours"
+   },
+   "type": "asset_fixed",
+   "reconcile": false,
+   "sourceId": "syscebnl_2398"
+  },
+  {
+   "code": "241",
+   "labels": {
+    "en": "Industrial and commercial machinery and equipment",
+    "fr": "Matériel et outillage industriel et commercial"
+   },
+   "type": "asset_fixed",
+   "reconcile": false,
+   "sourceId": "syscebnl_241"
+  },
+  {
+   "code": "242",
+   "labels": {
+    "en": "Agricultural machinery and equipment",
+    "fr": "Matériel et outillage agricole"
+   },
+   "type": "asset_fixed",
+   "reconcile": false,
+   "sourceId": "syscebnl_242"
+  },
+  {
+   "code": "243",
+   "labels": {
+    "en": "Recyclable and identifiable packaging materials",
+    "fr": "Matériel d'emballage récupérable et identifiable"
+   },
+   "type": "asset_fixed",
+   "reconcile": false,
+   "sourceId": "syscebnl_243"
+  },
+  {
+   "code": "244",
+   "labels": {
+    "en": "Equipment and furniture",
+    "fr": "Matériel et mobilier"
+   },
+   "type": "asset_fixed",
+   "reconcile": false,
+   "sourceId": "syscebnl_244"
+  },
+  {
+   "code": "245",
+   "labels": {
+    "en": "Transport equipment",
+    "fr": "Matériel de transport"
+   },
+   "type": "asset_fixed",
+   "reconcile": false,
+   "sourceId": "syscebnl_245"
+  },
+  {
+   "code": "246",
+   "labels": {
+    "en": "Biological assets",
+    "fr": "Actifs biologiques"
+   },
+   "type": "asset_fixed",
+   "reconcile": false,
+   "sourceId": "syscebnl_246"
+  },
+  {
+   "code": "247",
+   "labels": {
+    "en": "Fixtures and fittings for equipment and biological assets",
+    "fr": "Agencements et aménagements du matériel et des actifs biologiques"
+   },
+   "type": "asset_fixed",
+   "reconcile": false,
+   "sourceId": "syscebnl_247"
+  },
+  {
+   "code": "248",
+   "labels": {
+    "en": "Other equipment and furniture",
+    "fr": "Autres matériels et mobiliers"
+   },
+   "type": "asset_fixed",
+   "reconcile": false,
+   "sourceId": "syscebnl_248"
+  },
+  {
+   "code": "2491",
+   "labels": {
+    "en": "Industrial and commercial machinery and equipment in progress",
+    "fr": "Matériel et outillage industriel et commercial en cours"
+   },
+   "type": "asset_fixed",
+   "reconcile": false,
+   "sourceId": "syscebnl_2491"
+  },
+  {
+   "code": "2492",
+   "labels": {
+    "en": "Agricultural machinery and equipment in progress",
+    "fr": "Matériel et outillage agricole en cours"
+   },
+   "type": "asset_fixed",
+   "reconcile": false,
+   "sourceId": "syscebnl_2492"
+  },
+  {
+   "code": "2493",
+   "labels": {
+    "en": "Recyclable and identifiable packaging materials in progress",
+    "fr": "Matériel d'emballage récupérable et identifiable en cours"
+   },
+   "type": "asset_fixed",
+   "reconcile": false,
+   "sourceId": "syscebnl_2493"
+  },
+  {
+   "code": "2494",
+   "labels": {
+    "en": "Office equipment and furniture in progress",
+    "fr": "Matériel et mobilier de bureau en cours"
+   },
+   "type": "asset_fixed",
+   "reconcile": false,
+   "sourceId": "syscebnl_2494"
+  },
+  {
+   "code": "2495",
+   "labels": {
+    "en": "Transport equipment in progress",
+    "fr": "Matériel de transport en cours"
+   },
+   "type": "asset_fixed",
+   "reconcile": false,
+   "sourceId": "syscebnl_2495"
+  },
+  {
+   "code": "2496",
+   "labels": {
+    "en": "Biological assets in progress",
+    "fr": "Actifs biologiques en cours"
+   },
+   "type": "asset_fixed",
+   "reconcile": false,
+   "sourceId": "syscebnl_2496"
+  },
+  {
+   "code": "2497",
+   "labels": {
+    "en": "Fixtures and fittings for equipment and biological assets in progress",
+    "fr": "Agencements et aménagements du matériel et des actifs biologiques en cours"
+   },
+   "type": "asset_fixed",
+   "reconcile": false,
+   "sourceId": "syscebnl_2497"
+  },
+  {
+   "code": "2498",
+   "labels": {
+    "en": "Other biological materials and assets in progress",
+    "fr": "Autres matériels et actifs biologiques en cours"
+   },
+   "type": "asset_fixed",
+   "reconcile": false,
+   "sourceId": "syscebnl_2498"
+  },
+  {
+   "code": "251",
+   "labels": {
+    "en": "Advances and deposits paid on intangible assets",
+    "fr": "Avances et acomptes versés sur immobilisations incorporelles"
+   },
+   "type": "asset_non_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_251"
+  },
+  {
+   "code": "252",
+   "labels": {
+    "en": "Advances and deposits paid on property, plant and equipment",
+    "fr": "Avances et acomptes versés sur immobilisations corporelles"
+   },
+   "type": "asset_fixed",
+   "reconcile": false,
+   "sourceId": "syscebnl_252"
+  },
+  {
+   "code": "261",
+   "labels": {
+    "en": "Equity interests",
+    "fr": "Titres de participation"
+   },
+   "type": "asset_non_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_261"
+  },
+  {
+   "code": "265",
+   "labels": {
+    "en": "Shareholdings in professional bodies",
+    "fr": "Participations dans des organismes professionnels"
+   },
+   "type": "asset_non_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_265"
+  },
+  {
+   "code": "266",
+   "labels": {
+    "en": "Shares in economic interest groups (E.I.G.)",
+    "fr": "Parts dans des groupements d'intérêt économique (G.L.E.)"
+   },
+   "type": "asset_non_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_266"
+  },
+  {
+   "code": "268",
+   "labels": {
+    "en": "Other equity interests",
+    "fr": "Autres titres de participation"
+   },
+   "type": "asset_non_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_268"
+  },
+  {
+   "code": "271",
+   "labels": {
+    "en": "Loans and receivables",
+    "fr": "Prêts et créances"
+   },
+   "type": "asset_non_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_271"
+  },
+  {
+   "code": "272",
+   "labels": {
+    "en": "Employee loans",
+    "fr": "Prêts au personnel"
+   },
+   "type": "asset_non_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_272"
+  },
+  {
+   "code": "273",
+   "labels": {
+    "en": "Receivables from the State",
+    "fr": "Créances sur l'Etat"
+   },
+   "type": "asset_non_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_273"
+  },
+  {
+   "code": "274",
+   "labels": {
+    "en": "Long-term investments",
+    "fr": "Titres immobilisés"
+   },
+   "type": "asset_non_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_274"
+  },
+  {
+   "code": "275",
+   "labels": {
+    "en": "Deposits and guarantees paid",
+    "fr": "Dépôts et cautionnements versés"
+   },
+   "type": "asset_non_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_275"
+  },
+  {
+   "code": "276",
+   "labels": {
+    "en": "Accrued interest",
+    "fr": "Intérêts courus"
+   },
+   "type": "asset_non_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_276"
+  },
+  {
+   "code": "278",
+   "labels": {
+    "en": "Miscellaneous financial assets",
+    "fr": "Immobilisations financières diverses"
+   },
+   "type": "asset_non_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_278"
+  },
+  {
+   "code": "280",
+   "labels": {
+    "en": "Depreciation of temporary usufruct",
+    "fr": "Amortissements d'usufruit temporaire"
+   },
+   "type": "asset_non_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_280"
+  },
+  {
+   "code": "2812",
+   "labels": {
+    "en": "Depreciation of patents, licenses, concessions and similar rights",
+    "fr": "Amortissements des brevets, licences, concessions et droits similaires"
+   },
+   "type": "asset_non_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_2812"
+  },
+  {
+   "code": "2813",
+   "labels": {
+    "en": "Depreciation of software and websites",
+    "fr": "Amortissements des logiciels et sites internet"
+   },
+   "type": "asset_non_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_2813"
+  },
+  {
+   "code": "2814",
+   "labels": {
+    "en": "Depreciation of brands",
+    "fr": "Amortissements des marques"
+   },
+   "type": "asset_non_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_2814"
+  },
+  {
+   "code": "2817",
+   "labels": {
+    "en": "Depreciation of player transfer compensation",
+    "fr": "Amortissements des Indemnités de transfert aux joueurs"
+   },
+   "type": "asset_non_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_2817"
+  },
+  {
+   "code": "2818",
+   "labels": {
+    "en": "Depreciation of other intangible assets and rights",
+    "fr": "Amortissements des autres droits et valeurs incorporels"
+   },
+   "type": "asset_non_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_2818"
+  },
+  {
+   "code": "282",
+   "labels": {
+    "en": "Depreciation of land",
+    "fr": "Amortissements des terrains"
+   },
+   "type": "asset_fixed",
+   "reconcile": false,
+   "sourceId": "syscebnl_282"
+  },
+  {
+   "code": "2831",
+   "labels": {
+    "en": "Depreciation of industrial, agricultural, administrative, commercial, religious and other buildings on own land",
+    "fr": "Amortissements des bâtiments industriels, agricoles, administratifs, commerciaux, religieux et autres sur sol propre"
+   },
+   "type": "asset_fixed",
+   "reconcile": false,
+   "sourceId": "syscebnl_2831"
+  },
+  {
+   "code": "2832",
+   "labels": {
+    "en": "Depreciation of industrial, agricultural, administrative, commercial, religious and other buildings on third-party land",
+    "fr": "Amortissements des bâtiments industriels, agricoles, administratifs, commerciaux,religieux et autres sur sol d'autrui"
+   },
+   "type": "asset_fixed",
+   "reconcile": false,
+   "sourceId": "syscebnl_2832"
+  },
+  {
+   "code": "2833",
+   "labels": {
+    "en": "Depreciation of infrastructure works",
+    "fr": "Amortissements des ouvrages d'infrastructure"
+   },
+   "type": "asset_fixed",
+   "reconcile": false,
+   "sourceId": "syscebnl_2833"
+  },
+  {
+   "code": "2834",
+   "labels": {
+    "en": "Depreciation of fixtures, fittings and technical installations",
+    "fr": "Amortissements des aménagements, agencements et installations techniques"
+   },
+   "type": "asset_fixed",
+   "reconcile": false,
+   "sourceId": "syscebnl_2834"
+  },
+  {
+   "code": "2835",
+   "labels": {
+    "en": "Depreciation of office fittings",
+    "fr": "Amortissements des aménagements de bureaux"
+   },
+   "type": "asset_fixed",
+   "reconcile": false,
+   "sourceId": "syscebnl_2835"
+  },
+  {
+   "code": "2838",
+   "labels": {
+    "en": "Depreciation of other fixtures and fittings",
+    "fr": "Amortissements des autres installations et agencements"
+   },
+   "type": "asset_fixed",
+   "reconcile": false,
+   "sourceId": "syscebnl_2838"
+  },
+  {
+   "code": "2841",
+   "labels": {
+    "en": "Depreciation of industrial and commercial machinery and equipment",
+    "fr": "Amortissements du matériel et de l'outillage industriel et commercial"
+   },
+   "type": "asset_fixed",
+   "reconcile": false,
+   "sourceId": "syscebnl_2841"
+  },
+  {
+   "code": "2842",
+   "labels": {
+    "en": "Depreciation of farm machinery and equipment",
+    "fr": "Amortissements du matériel et de l'outillage agricole"
+   },
+   "type": "asset_fixed",
+   "reconcile": false,
+   "sourceId": "syscebnl_2842"
+  },
+  {
+   "code": "2843",
+   "labels": {
+    "en": "Depreciation of recoverable and identifiable packaging materials",
+    "fr": "Amortissements du matériel d'emballage récupérable et identifiable"
+   },
+   "type": "asset_fixed",
+   "reconcile": false,
+   "sourceId": "syscebnl_2843"
+  },
+  {
+   "code": "2844",
+   "labels": {
+    "en": "Depreciation of equipment and furniture",
+    "fr": "Amortissements du matériel et du mobilier"
+   },
+   "type": "asset_fixed",
+   "reconcile": false,
+   "sourceId": "syscebnl_2844"
+  },
+  {
+   "code": "2845",
+   "labels": {
+    "en": "Depreciation of transport equipment",
+    "fr": "Amortissements du matériel de transport"
+   },
+   "type": "asset_fixed",
+   "reconcile": false,
+   "sourceId": "syscebnl_2845"
+  },
+  {
+   "code": "2846",
+   "labels": {
+    "en": "Depreciation of biological assets",
+    "fr": "Amortissements des actifs biologiques"
+   },
+   "type": "asset_fixed",
+   "reconcile": false,
+   "sourceId": "syscebnl_2846"
+  },
+  {
+   "code": "2847",
+   "labels": {
+    "en": "Depreciation of fixtures and fittings, equipment and biological assets",
+    "fr": "Amortissements des agencements et aménagements du matériel et des actifs biologiques"
+   },
+   "type": "asset_fixed",
+   "reconcile": false,
+   "sourceId": "syscebnl_2847"
+  },
+  {
+   "code": "2848",
+   "labels": {
+    "en": "Depreciation of other equipment",
+    "fr": "Amortissements des autres matériels"
+   },
+   "type": "asset_fixed",
+   "reconcile": false,
+   "sourceId": "syscebnl_2848"
+  },
+  {
+   "code": "2901",
+   "labels": {
+    "en": "Impairment of temporary usufruct",
+    "fr": "Dépréciations d'usufruit temporaire"
+   },
+   "type": "asset_non_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_2901"
+  },
+  {
+   "code": "2902",
+   "labels": {
+    "en": "Impairment of assets held for sale arising from gifts and bequests not yet received",
+    "fr": "Dépréciations des immobilisations destinées à la vente provenant de dons et legs non encore reçus"
+   },
+   "type": "asset_non_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_2902"
+  },
+  {
+   "code": "2912",
+   "labels": {
+    "en": "Impairment of patents, licenses, concessions and similar rights",
+    "fr": "Dépréciations des brevets, licences, concessions et droits similaires"
+   },
+   "type": "asset_non_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_2912"
+  },
+  {
+   "code": "2913",
+   "labels": {
+    "en": "Impairment of software and websites",
+    "fr": "Dépréciations des logiciels et sites internet"
+   },
+   "type": "asset_non_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_2913"
+  },
+  {
+   "code": "2914",
+   "labels": {
+    "en": "Impairment of brands",
+    "fr": "Dépréciations des marques"
+   },
+   "type": "asset_non_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_2914"
+  },
+  {
+   "code": "2918",
+   "labels": {
+    "en": "Impairment of other intangible assets and rights",
+    "fr": "Dépréciations des autres droits et valeurs incorporels"
+   },
+   "type": "asset_non_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_2918"
+  },
+  {
+   "code": "2919",
+   "labels": {
+    "en": "Impairment of intangible assets in progress",
+    "fr": "Dépréciations des immobilisations incorporelles en cours"
+   },
+   "type": "asset_non_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_2919"
+  },
+  {
+   "code": "292",
+   "labels": {
+    "en": "Impairment of land",
+    "fr": "Dépréciations des terrains"
+   },
+   "type": "asset_fixed",
+   "reconcile": false,
+   "sourceId": "syscebnl_292"
+  },
+  {
+   "code": "2931",
+   "labels": {
+    "en": "Depreciation of industrial, agricultural, administrative, commercial, religious and other buildings on own land",
+    "fr": "Dépréciations des bâtiments industriels, agricoles, administratifs, commerciaux, religieux et autres sur sol propre"
+   },
+   "type": "asset_fixed",
+   "reconcile": false,
+   "sourceId": "syscebnl_2931"
+  },
+  {
+   "code": "2932",
+   "labels": {
+    "en": "Depreciation of industrial, agricultural, administrative, commercial, religious and other buildings on third-party land",
+    "fr": "Dépréciations des bâtiments industriels, agricoles, administratifs, commerciaux,religieux et autres sur sol d'autrui"
+   },
+   "type": "asset_fixed",
+   "reconcile": false,
+   "sourceId": "syscebnl_2932"
+  },
+  {
+   "code": "2933",
+   "labels": {
+    "en": "Impairment of infrastructure structures",
+    "fr": "Dépréciations des ouvrages d'infrastructures"
+   },
+   "type": "asset_fixed",
+   "reconcile": false,
+   "sourceId": "syscebnl_2933"
+  },
+  {
+   "code": "2934",
+   "labels": {
+    "en": "Impairment of fixtures, fittings and technical installations",
+    "fr": "Dépréciations des aménagements, agencements et installations techniques"
+   },
+   "type": "asset_fixed",
+   "reconcile": false,
+   "sourceId": "syscebnl_2934"
+  },
+  {
+   "code": "2935",
+   "labels": {
+    "en": "Impairment of office fixtures and fittings",
+    "fr": "Dépréciations des aménagements de bureaux"
+   },
+   "type": "asset_fixed",
+   "reconcile": false,
+   "sourceId": "syscebnl_2935"
+  },
+  {
+   "code": "2938",
+   "labels": {
+    "en": "Impairment of other fixtures and fittings",
+    "fr": "Dépréciations des autres installations et agencements"
+   },
+   "type": "asset_fixed",
+   "reconcile": false,
+   "sourceId": "syscebnl_2938"
+  },
+  {
+   "code": "2939",
+   "labels": {
+    "en": "Impairment of buildings and installations in progress",
+    "fr": "Dépréciations des bâtiments et installations en cours"
+   },
+   "type": "asset_fixed",
+   "reconcile": false,
+   "sourceId": "syscebnl_2939"
+  },
+  {
+   "code": "2941",
+   "labels": {
+    "en": "Impairment of industrial and commercial machinery and equipment",
+    "fr": "Dépréciations du matériel et de l'outillage industriel et commercial"
+   },
+   "type": "asset_fixed",
+   "reconcile": false,
+   "sourceId": "syscebnl_2941"
+  },
+  {
+   "code": "2942",
+   "labels": {
+    "en": "Depreciation of farm machinery and equipment",
+    "fr": "Dépréciations du matériel et de l'outillage agricole"
+   },
+   "type": "asset_fixed",
+   "reconcile": false,
+   "sourceId": "syscebnl_2942"
+  },
+  {
+   "code": "2943",
+   "labels": {
+    "en": "Impairment of agricultural machinery and equipment Impairment of recoverable and identifiable packaging materials",
+    "fr": "Dépréciations du matériel et de l'outillage agricole Dépréciations du matériel d'emballage récupérable et identifiable"
+   },
+   "type": "asset_fixed",
+   "reconcile": false,
+   "sourceId": "syscebnl_2943"
+  },
+  {
+   "code": "2944",
+   "labels": {
+    "en": "Depreciation of equipment and furniture",
+    "fr": "Dépréciations du matériel et du mobilier"
+   },
+   "type": "asset_fixed",
+   "reconcile": false,
+   "sourceId": "syscebnl_2944"
+  },
+  {
+   "code": "2945",
+   "labels": {
+    "en": "Impairment of transport equipment",
+    "fr": "Dépréciations du matériel de transport"
+   },
+   "type": "asset_fixed",
+   "reconcile": false,
+   "sourceId": "syscebnl_2945"
+  },
+  {
+   "code": "2946",
+   "labels": {
+    "en": "Impairment of biological assets",
+    "fr": "Dépréciations des actifs biologiques"
+   },
+   "type": "asset_fixed",
+   "reconcile": false,
+   "sourceId": "syscebnl_2946"
+  },
+  {
+   "code": "2947",
+   "labels": {
+    "en": "Impairment of fixtures and fittings, equipment and biological assets",
+    "fr": "Dépréciations des aménagements et agencements du matériel et des actifs biologiques"
+   },
+   "type": "asset_fixed",
+   "reconcile": false,
+   "sourceId": "syscebnl_2947"
+  },
+  {
+   "code": "2948",
+   "labels": {
+    "en": "Impairment of other equipment",
+    "fr": "Dépréciations des autres matériels"
+   },
+   "type": "asset_fixed",
+   "reconcile": false,
+   "sourceId": "syscebnl_2948"
+  },
+  {
+   "code": "2949",
+   "labels": {
+    "en": "Impairment of equipment in progress",
+    "fr": "Dépréciations de matériel en cours"
+   },
+   "type": "asset_fixed",
+   "reconcile": false,
+   "sourceId": "syscebnl_2949"
+  },
+  {
+   "code": "2951",
+   "labels": {
+    "en": "Impairment of advance payments on intangible assets",
+    "fr": "Dépréciations des avances et acomptes versés sur immobilisations incorporelles"
+   },
+   "type": "asset_non_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_2951"
+  },
+  {
+   "code": "2952",
+   "labels": {
+    "en": "Impairment of advance payments on tangible assets",
+    "fr": "Dépréciations des avances et acomptes versés sur immobilisations corporelles"
+   },
+   "type": "asset_fixed",
+   "reconcile": false,
+   "sourceId": "syscebnl_2952"
+  },
+  {
+   "code": "296",
+   "labels": {
+    "en": "Impairment of equity investments",
+    "fr": "Dépréciations des titres de participation"
+   },
+   "type": "asset_non_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_296"
+  },
+  {
+   "code": "297",
+   "labels": {
+    "en": "Impairment of other non-current financial assets",
+    "fr": "Dépréciations des autres immobilisations financières"
+   },
+   "type": "asset_non_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_297"
+  },
+  {
+   "code": "311",
+   "labels": {
+    "en": "Assets related to business A",
+    "fr": "Biens liés à l'activité A"
+   },
+   "type": "asset_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_311"
+  },
+  {
+   "code": "312",
+   "labels": {
+    "en": "Assets related to business B",
+    "fr": "Biens liés à l'activité B"
+   },
+   "type": "asset_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_312"
+  },
+  {
+   "code": "321",
+   "labels": {
+    "en": "Goods A",
+    "fr": "Marchandises A"
+   },
+   "type": "asset_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_321"
+  },
+  {
+   "code": "322",
+   "labels": {
+    "en": "Goods B",
+    "fr": "Marchandises B"
+   },
+   "type": "asset_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_322"
+  },
+  {
+   "code": "323",
+   "labels": {
+    "en": "Materials A",
+    "fr": "Matières A"
+   },
+   "type": "asset_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_323"
+  },
+  {
+   "code": "324",
+   "labels": {
+    "en": "Materials B",
+    "fr": "Matières B"
+   },
+   "type": "asset_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_324"
+  },
+  {
+   "code": "325",
+   "labels": {
+    "en": "Related supplies (A, B)",
+    "fr": "Fournitures liées (A, B)"
+   },
+   "type": "asset_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_325"
+  },
+  {
+   "code": "331",
+   "labels": {
+    "en": "Consumables",
+    "fr": "Matières consommables"
+   },
+   "type": "asset_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_331"
+  },
+  {
+   "code": "333",
+   "labels": {
+    "en": "Store supplies",
+    "fr": "Fournitures de magasin"
+   },
+   "type": "asset_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_333"
+  },
+  {
+   "code": "334",
+   "labels": {
+    "en": "Office supplies",
+    "fr": "Fournitures de bureau"
+   },
+   "type": "asset_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_334"
+  },
+  {
+   "code": "335",
+   "labels": {
+    "en": "Packaging",
+    "fr": "Emballages"
+   },
+   "type": "asset_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_335"
+  },
+  {
+   "code": "338",
+   "labels": {
+    "en": "Other materials",
+    "fr": "Autres matières"
+   },
+   "type": "asset_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_338"
+  },
+  {
+   "code": "341",
+   "labels": {
+    "en": "Unallocated gifts in kind",
+    "fr": "Dons en nature non affectés"
+   },
+   "type": "asset_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_341"
+  },
+  {
+   "code": "345",
+   "labels": {
+    "en": "Allocated donations in kind",
+    "fr": "Dons en nature affectés"
+   },
+   "type": "asset_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_345"
+  },
+  {
+   "code": "361",
+   "labels": {
+    "en": "Finished products A",
+    "fr": "Produits finis A"
+   },
+   "type": "asset_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_361"
+  },
+  {
+   "code": "362",
+   "labels": {
+    "en": "Finished products B",
+    "fr": "Produits finis B"
+   },
+   "type": "asset_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_362"
+  },
+  {
+   "code": "363",
+   "labels": {
+    "en": "Biologic assets",
+    "fr": "Actifs biologiques"
+   },
+   "type": "asset_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_363"
+  },
+  {
+   "code": "367",
+   "labels": {
+    "en": "Intermediate and residual products",
+    "fr": "Produits intermédiaires et résiduels"
+   },
+   "type": "asset_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_367"
+  },
+  {
+   "code": "371",
+   "labels": {
+    "en": "Goods linked to the activity en route",
+    "fr": "Biens liés à l'activité en cours de route"
+   },
+   "type": "asset_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_371"
+  },
+  {
+   "code": "372",
+   "labels": {
+    "en": "Goods, raw materials and supplies tied up en route",
+    "fr": "Marchandises, matières premières et fournitures liés en cours de route"
+   },
+   "type": "asset_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_372"
+  },
+  {
+   "code": "373",
+   "labels": {
+    "en": "Other supplies en route",
+    "fr": "Autres approvisionnements en cours de route"
+   },
+   "type": "asset_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_373"
+  },
+  {
+   "code": "376",
+   "labels": {
+    "en": "Finished products en route",
+    "fr": "Produits finis en cours de route"
+   },
+   "type": "asset_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_376"
+  },
+  {
+   "code": "377",
+   "labels": {
+    "en": "Stock on consignment or on deposit",
+    "fr": "Stock en consignation ou en dépôt"
+   },
+   "type": "asset_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_377"
+  },
+  {
+   "code": "378",
+   "labels": {
+    "en": "Stock from retired or scrapped fixed assets",
+    "fr": "Stock provenant d'immobilisations mises hors services ou au rebut"
+   },
+   "type": "asset_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_378"
+  },
+  {
+   "code": "381",
+   "labels": {
+    "en": "unallocated",
+    "fr": "non affectés"
+   },
+   "type": "asset_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_381"
+  },
+  {
+   "code": "385",
+   "labels": {
+    "en": "allocated",
+    "fr": "affectés"
+   },
+   "type": "asset_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_385"
+  },
+  {
+   "code": "391",
+   "labels": {
+    "en": "Impairment of inventories of goods used in operations",
+    "fr": "Dépréciations des stocks de biens liés à l'activité"
+   },
+   "type": "asset_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_391"
+  },
+  {
+   "code": "392",
+   "labels": {
+    "en": "Impairment of inventories of merchandise, raw materials and related supplies",
+    "fr": "Dépréciations des stocks de marchandises, et matières premières et fournitures liées"
+   },
+   "type": "asset_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_392"
+  },
+  {
+   "code": "393",
+   "labels": {
+    "en": "Impairment of inventories of other supplies",
+    "fr": "Dépréciations des stocks d'autres approvisionnements"
+   },
+   "type": "asset_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_393"
+  },
+  {
+   "code": "396",
+   "labels": {
+    "en": "Impairment of inventories of finished goods, intermediate products and residuals",
+    "fr": "Dépréciations des stocks de produits finis, produits intermédiaires et résiduels"
+   },
+   "type": "asset_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_396"
+  },
+  {
+   "code": "397",
+   "labels": {
+    "en": "Depreciation of inventories in transit, on consignment or on deposit",
+    "fr": "Dépréciations des stocks en cours de route, en consignation ou en dépôt"
+   },
+   "type": "asset_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_397"
+  },
+  {
+   "code": "401",
+   "labels": {
+    "en": "Trade payables",
+    "fr": "Fournisseurs, dettes en compte"
+   },
+   "type": "liability_payable",
+   "reconcile": true,
+   "sourceId": "syscebnl_401"
+  },
+  {
+   "code": "402",
+   "labels": {
+    "en": "Suppliers, bills payable",
+    "fr": "Fournisseurs, effets à payer"
+   },
+   "type": "liability_payable",
+   "reconcile": true,
+   "sourceId": "syscebnl_402"
+  },
+  {
+   "code": "408",
+   "labels": {
+    "en": "Suppliers, invoices not yet received",
+    "fr": "Fournisseurs, factures non parvenues"
+   },
+   "type": "liability_payable",
+   "reconcile": true,
+   "sourceId": "syscebnl_408"
+  },
+  {
+   "code": "409",
+   "labels": {
+    "en": "Trade accounts receivable",
+    "fr": "Fournisseurs débiteurs"
+   },
+   "type": "asset_receivable",
+   "reconcile": true,
+   "sourceId": "syscebnl_409"
+  },
+  {
+   "code": "411",
+   "labels": {
+    "en": "Members",
+    "fr": "Adhérents"
+   },
+   "type": "asset_receivable",
+   "reconcile": true,
+   "sourceId": "syscebnl_411"
+  },
+  {
+   "code": "412",
+   "labels": {
+    "en": "Customers-users",
+    "fr": "Clients-usagers"
+   },
+   "type": "asset_receivable",
+   "reconcile": true,
+   "sourceId": "syscebnl_412"
+  },
+  {
+   "code": "413",
+   "labels": {
+    "en": "Members, customer-users, unpaid cheques, bills and other valuables",
+    "fr": "Adhérents, Clients-usagers, chèques, effets et autres valeurs impayés"
+   },
+   "type": "asset_receivable",
+   "reconcile": true,
+   "sourceId": "syscebnl_413"
+  },
+  {
+   "code": "416",
+   "labels": {
+    "en": "Doubtful or disputed receivables, members, customer-users",
+    "fr": "Créances, adhérents, clients-usagers litigieuses ou douteuses"
+   },
+   "type": "asset_receivable",
+   "reconcile": true,
+   "sourceId": "syscebnl_416"
+  },
+  {
+   "code": "418",
+   "labels": {
+    "en": "Members, customer-users products to receive",
+    "fr": "Adhérents, clients-usagers produits à recevoir"
+   },
+   "type": "asset_receivable",
+   "reconcile": true,
+   "sourceId": "syscebnl_418"
+  },
+  {
+   "code": "419",
+   "labels": {
+    "en": "Members, Customer-users creditors",
+    "fr": "Adhérents, Clients-usagers créditeurs"
+   },
+   "type": "liability_payable",
+   "reconcile": true,
+   "sourceId": "syscebnl_419"
+  },
+  {
+   "code": "421",
+   "labels": {
+    "en": "Personnel, advances and deposits",
+    "fr": "Personnel, avances et acomptes"
+   },
+   "type": "asset_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_421"
+  },
+  {
+   "code": "422",
+   "labels": {
+    "en": "Personnel, remuneration due",
+    "fr": "Personnel, rémunérations dues"
+   },
+   "type": "asset_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_422"
+  },
+  {
+   "code": "423",
+   "labels": {
+    "en": "Personnel, objections and seizures",
+    "fr": "Personnel, oppositions et saisies arrêts"
+   },
+   "type": "asset_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_423"
+  },
+  {
+   "code": "424",
+   "labels": {
+    "en": "Personnel, internal social works",
+    "fr": "Personnel, œuvres sociales internes"
+   },
+   "type": "asset_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_424"
+  },
+  {
+   "code": "425",
+   "labels": {
+    "en": "Personnel representatives",
+    "fr": "Représentants du personnel"
+   },
+   "type": "asset_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_425"
+  },
+  {
+   "code": "427",
+   "labels": {
+    "en": "Personnel – deposits",
+    "fr": "Personnel - dépôts"
+   },
+   "type": "asset_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_427"
+  },
+  {
+   "code": "428",
+   "labels": {
+    "en": "Personnel, accrued expenses and receivables",
+    "fr": "Personnel, charges à payer et produits à recevoir"
+   },
+   "type": "asset_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_428"
+  },
+  {
+   "code": "431",
+   "labels": {
+    "en": "Social security",
+    "fr": "Sécurité sociale"
+   },
+   "type": "asset_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_431"
+  },
+  {
+   "code": "432",
+   "labels": {
+    "en": "Pension fund",
+    "fr": "Caisse de retraite"
+   },
+   "type": "asset_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_432"
+  },
+  {
+   "code": "433",
+   "labels": {
+    "en": "Other social organizations",
+    "fr": "Autres organismes sociaux"
+   },
+   "type": "asset_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_433"
+  },
+  {
+   "code": "438",
+   "labels": {
+    "en": "Social security, accrued expenses and accrued income",
+    "fr": "Organismes sociaux, charges à payer et produits à recevoir"
+   },
+   "type": "asset_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_438"
+  },
+  {
+   "code": "442",
+   "labels": {
+    "en": "State, other taxes and duties",
+    "fr": "État, autres impôts et taxes"
+   },
+   "type": "asset_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_442"
+  },
+  {
+   "code": "443",
+   "labels": {
+    "en": "State, VAT invoiced",
+    "fr": "État, T.V.A. Facturée"
+   },
+   "type": "liability_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_443"
+  },
+  {
+   "code": "444",
+   "labels": {
+    "en": "State, VAT due",
+    "fr": "État, T.V.A. due"
+   },
+   "type": "liability_payable",
+   "reconcile": true,
+   "sourceId": "syscebnl_444",
+   "nonTrade": true
+  },
+  {
+   "code": "4441",
+   "labels": {
+    "en": "State, VAT credit",
+    "fr": "État, crédit de T.V.A."
+   },
+   "type": "asset_receivable",
+   "reconcile": true,
+   "sourceId": "syscebnl_4441",
+   "nonTrade": true
+  },
+  {
+   "code": "445",
+   "labels": {
+    "en": "State, V.A.T. recoverable",
+    "fr": "État, T.V.A. Récupérable"
+   },
+   "type": "asset_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_445"
+  },
+  {
+   "code": "446",
+   "labels": {
+    "en": "State, other sales taxes",
+    "fr": "État, autres taxes sur le chiffre d'affaires"
+   },
+   "type": "liability_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_446"
+  },
+  {
+   "code": "447",
+   "labels": {
+    "en": "State, withholding taxes",
+    "fr": "État, impôts retenus à la source"
+   },
+   "type": "asset_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_447"
+  },
+  {
+   "code": "448",
+   "labels": {
+    "en": "State, accrued expenses and receivables",
+    "fr": "État, charges à payer et produits à recevoir"
+   },
+   "type": "asset_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_448"
+  },
+  {
+   "code": "449",
+   "labels": {
+    "en": "Government, sundry receivables and payables",
+    "fr": "État, créances et dettes diverses"
+   },
+   "type": "asset_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_449"
+  },
+  {
+   "code": "451",
+   "labels": {
+    "en": "Associations and similar",
+    "fr": "Associations et assimilées"
+   },
+   "type": "asset_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_451"
+  },
+  {
+   "code": "452",
+   "labels": {
+    "en": "Foundations and similar",
+    "fr": "Fondations et assimilées"
+   },
+   "type": "asset_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_452"
+  },
+  {
+   "code": "453",
+   "labels": {
+    "en": "Professional orders",
+    "fr": "Ordres professionnels"
+   },
+   "type": "asset_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_453"
+  },
+  {
+   "code": "454",
+   "labels": {
+    "en": "Political organizations",
+    "fr": "Organisations politiques"
+   },
+   "type": "asset_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_454"
+  },
+  {
+   "code": "455",
+   "labels": {
+    "en": "Trade unions",
+    "fr": "Organisations syndicales"
+   },
+   "type": "asset_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_455"
+  },
+  {
+   "code": "456",
+   "labels": {
+    "en": "Religious organizations, contributors",
+    "fr": "Organisations religieuses, apporteurs"
+   },
+   "type": "asset_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_456"
+  },
+  {
+   "code": "457",
+   "labels": {
+    "en": "Patrons and volunteers",
+    "fr": "Mécènes, bénévoles et assimilés"
+   },
+   "type": "asset_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_457"
+  },
+  {
+   "code": "458",
+   "labels": {
+    "en": "Other founders and contributors",
+    "fr": "Autres fondateurs et apporteurs"
+   },
+   "type": "asset_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_458"
+  },
+  {
+   "code": "462",
+   "labels": {
+    "en": "Donors-development projects, administration funds",
+    "fr": "Bailleurs-projet de développement, Fonds d'administration"
+   },
+   "type": "asset_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_462"
+  },
+  {
+   "code": "463",
+   "labels": {
+    "en": "State development project, administration fund",
+    "fr": "État-projet de développement, Fonds d'administration"
+   },
+   "type": "asset_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_463"
+  },
+  {
+   "code": "464",
+   "labels": {
+    "en": "Other third parties or similar funding bodies-development projects, administration funds",
+    "fr": "Autres tiers ou organismes de financement assimilés-projet de développement, Fonds d'administration"
+   },
+   "type": "asset_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_464"
+  },
+  {
+   "code": "469",
+   "labels": {
+    "en": "Administration funds receivable",
+    "fr": "Fonds d'administration à recevoir"
+   },
+   "type": "asset_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_469"
+  },
+  {
+   "code": "4711",
+   "labels": {
+    "en": "Sundry debtors",
+    "fr": "Débiteurs divers"
+   },
+   "type": "asset_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_4711"
+  },
+  {
+   "code": "4712",
+   "labels": {
+    "en": "Sundry creditors",
+    "fr": "Créditeurs divers"
+   },
+   "type": "liability_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_4712"
+  },
+  {
+   "code": "4713",
+   "labels": {
+    "en": "Accounts payable, current unused donations in kind",
+    "fr": "Créditeurs, dons en nature courants non consommés"
+   },
+   "type": "liability_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_4713"
+  },
+  {
+   "code": "4717",
+   "labels": {
+    "en": "Sundry debtors-guarantee retentions",
+    "fr": "Débiteurs divers-retenues de garantie"
+   },
+   "type": "asset_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_4717"
+  },
+  {
+   "code": "4719",
+   "labels": {
+    "en": "Stock and bond warrants",
+    "fr": "Bons de souscription d'actions et d'obligations"
+   },
+   "type": "asset_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_4719"
+  },
+  {
+   "code": "4721",
+   "labels": {
+    "en": "Receivables on disposals of marketable securities",
+    "fr": "Créances sur cessions de titres de placement"
+   },
+   "type": "asset_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_4721"
+  },
+  {
+   "code": "4726",
+   "labels": {
+    "en": "Payments outstanding on unpaid investment securities",
+    "fr": "Versements restant à effectuer sur titres de placement non libérés"
+   },
+   "type": "asset_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_4726"
+  },
+  {
+   "code": "4731",
+   "labels": {
+    "en": "Investment grants receivable",
+    "fr": "Subventions d'investissement à recevoir"
+   },
+   "type": "asset_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_4731"
+  },
+  {
+   "code": "4732",
+   "labels": {
+    "en": "Operating subsidies receivable",
+    "fr": "Subventions d'exploitation à recevoir"
+   },
+   "type": "asset_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_4732"
+  },
+  {
+   "code": "4733",
+   "labels": {
+    "en": "Balancing subsidies receivable",
+    "fr": "Subventions d'équilibre à recevoir"
+   },
+   "type": "asset_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_4733"
+  },
+  {
+   "code": "4738",
+   "labels": {
+    "en": "Other grants receivable",
+    "fr": "Autres subventions à recevoir"
+   },
+   "type": "asset_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_4738"
+  },
+  {
+   "code": "4739",
+   "labels": {
+    "en": "Grants repayable",
+    "fr": "Subventions à reverser"
+   },
+   "type": "liability_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_4739"
+  },
+  {
+   "code": "4746",
+   "labels": {
+    "en": "Periodic expense allocation account",
+    "fr": "Compte de répartition périodique des charges"
+   },
+   "type": "liability_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_4746"
+  },
+  {
+   "code": "4747",
+   "labels": {
+    "en": "Periodic income allocation account",
+    "fr": "Compte de répartition périodique des produits"
+   },
+   "type": "asset_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_4747"
+  },
+  {
+   "code": "475",
+   "labels": {
+    "en": "Financial generosity receivable",
+    "fr": "Générosités financières à recevoir"
+   },
+   "type": "asset_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_475"
+  },
+  {
+   "code": "476",
+   "labels": {
+    "en": "Prepaid expenses",
+    "fr": "Charges constatés d'avance"
+   },
+   "type": "asset_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_476"
+  },
+  {
+   "code": "477",
+   "labels": {
+    "en": "Deferred income",
+    "fr": "Produits constatés d'avance"
+   },
+   "type": "liability_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_477"
+  },
+  {
+   "code": "478",
+   "labels": {
+    "en": "Exchange differences - active",
+    "fr": "Écarts de conversion - actif"
+   },
+   "type": "asset_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_478"
+  },
+  {
+   "code": "479",
+   "labels": {
+    "en": "Exchange differences - passive",
+    "fr": "Écarts de conversion - passif"
+   },
+   "type": "liability_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_479"
+  },
+  {
+   "code": "4811",
+   "labels": {
+    "en": "Suppliers of assets",
+    "fr": "Fournisseurs d'immobilisations"
+   },
+   "type": "liability_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_481"
+  },
+  {
+   "code": "484",
+   "labels": {
+    "en": "Other liabilities outside ordinary activities (H.A.O.)",
+    "fr": "Autres dettes hors activités ordinaires (H.A.O.)"
+   },
+   "type": "liability_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_484"
+  },
+  {
+   "code": "485",
+   "labels": {
+    "en": "Receivables on fixed asset disposals,",
+    "fr": "Créances sur cession d'immobilisations"
+   },
+   "type": "asset_receivable",
+   "reconcile": true,
+   "sourceId": "syscebnl_485"
+  },
+  {
+   "code": "4861",
+   "labels": {
+    "en": "Debts on fixed asset donations and bequests",
+    "fr": "Dettes des dons et legs d'immobilisations"
+   },
+   "type": "liability_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_4861"
+  },
+  {
+   "code": "4865",
+   "labels": {
+    "en": "Receivables from fixed asset donations and bequests",
+    "fr": "Créances reçues sur dons et legs d'immobilisations"
+   },
+   "type": "asset_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_4865"
+  },
+  {
+   "code": "488",
+   "labels": {
+    "en": "Other debts outside ordinary activities (H.A.O.)",
+    "fr": "Autres créances hors activités ordinaires (H.A.O.)"
+   },
+   "type": "liability_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_488"
+  },
+  {
+   "code": "490",
+   "labels": {
+    "en": "Impairment of trade payables",
+    "fr": "Dépréciations des comptes fournisseurs"
+   },
+   "type": "asset_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_490"
+  },
+  {
+   "code": "491",
+   "labels": {
+    "en": "Impairment of member and customer accounts",
+    "fr": "Dépréciations des comptes adhérents et clients-usagers"
+   },
+   "type": "asset_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_491"
+  },
+  {
+   "code": "492",
+   "labels": {
+    "en": "Impairment of personnel accounts",
+    "fr": "Dépréciations des comptes personnel"
+   },
+   "type": "asset_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_492"
+  },
+  {
+   "code": "493",
+   "labels": {
+    "en": "Impairment of social security accounts",
+    "fr": "Dépréciations des comptes organismes sociaux"
+   },
+   "type": "asset_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_493"
+  },
+  {
+   "code": "494",
+   "labels": {
+    "en": "Impairment of government and public authority accounts",
+    "fr": "Dépréciations des comptes État et Collectivités publiques"
+   },
+   "type": "asset_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_494"
+  },
+  {
+   "code": "497",
+   "labels": {
+    "en": "Impairment of sundry debtors",
+    "fr": "Dépréciations des comptes débiteurs divers"
+   },
+   "type": "asset_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_497"
+  },
+  {
+   "code": "498",
+   "labels": {
+    "en": "Impairment of receivables accounts",
+    "fr": "Dépréciations des comptes de créances H.A.O."
+   },
+   "type": "asset_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_498"
+  },
+  {
+   "code": "4991",
+   "labels": {
+    "en": "Provisions for risks on operating transactions",
+    "fr": "Provisions pour risques sur opérations d'exploitation"
+   },
+   "type": "liability_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_4991"
+  },
+  {
+   "code": "4998",
+   "labels": {
+    "en": "Provisions for risks on H.A.O. operations",
+    "fr": "Provisions pour risques sur operations H.A.O"
+   },
+   "type": "liability_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_4998"
+  },
+  {
+   "code": "501",
+   "labels": {
+    "en": "Short-term treasury securities and saving bonds",
+    "fr": "Titres du trésor et bons de caisse à court terme"
+   },
+   "type": "asset_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_501"
+  },
+  {
+   "code": "502",
+   "labels": {
+    "en": "Shares",
+    "fr": "Actions"
+   },
+   "type": "asset_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_502"
+  },
+  {
+   "code": "503",
+   "labels": {
+    "en": "Bonds",
+    "fr": "Obligations"
+   },
+   "type": "asset_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_503"
+  },
+  {
+   "code": "504",
+   "labels": {
+    "en": "Warrants",
+    "fr": "Bons de souscription"
+   },
+   "type": "asset_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_504"
+  },
+  {
+   "code": "505",
+   "labels": {
+    "en": "Marketable securities outside the Region",
+    "fr": "Titres négociables hors Région"
+   },
+   "type": "asset_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_505"
+  },
+  {
+   "code": "506",
+   "labels": {
+    "en": "Accrued interest",
+    "fr": "Intérêts courus"
+   },
+   "type": "asset_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_506"
+  },
+  {
+   "code": "508",
+   "labels": {
+    "en": "Other investment securities and similar receivables",
+    "fr": "Autres titres de placement et créances assimilées"
+   },
+   "type": "asset_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_508"
+  },
+  {
+   "code": "513",
+   "labels": {
+    "en": "Cheques to be cashed",
+    "fr": "Chèques à encaisser"
+   },
+   "type": "asset_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_513"
+  },
+  {
+   "code": "514",
+   "labels": {
+    "en": "Cheques for collection",
+    "fr": "Chèques à l'encaissement"
+   },
+   "type": "asset_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_514"
+  },
+  {
+   "code": "515",
+   "labels": {
+    "en": "Credit cards for collection",
+    "fr": "Cartes de crédit à encaisser"
+   },
+   "type": "asset_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_515"
+  },
+  {
+   "code": "518",
+   "labels": {
+    "en": "Other receivables",
+    "fr": "Autres valeurs à l'encaissement"
+   },
+   "type": "asset_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_518"
+  },
+  {
+   "code": "521",
+   "labels": {
+    "en": "Local banks",
+    "fr": "Banques locales"
+   },
+   "type": "asset_cash",
+   "reconcile": false,
+   "sourceId": "syscebnl_521"
+  },
+  {
+   "code": "522",
+   "labels": {
+    "en": "Banks in other countries, Region",
+    "fr": "Banques autres États Région"
+   },
+   "type": "asset_cash",
+   "reconcile": false,
+   "sourceId": "syscebnl_522"
+  },
+  {
+   "code": "523",
+   "labels": {
+    "en": "Banks in other States, Monetary zone",
+    "fr": "Banques autres États zone monétaire"
+   },
+   "type": "asset_cash",
+   "reconcile": false,
+   "sourceId": "syscebnl_523"
+  },
+  {
+   "code": "524",
+   "labels": {
+    "en": "Banks outside the monetary zone",
+    "fr": "Banques hors zone monétaire"
+   },
+   "type": "asset_cash",
+   "reconcile": false,
+   "sourceId": "syscebnl_524"
+  },
+  {
+   "code": "525",
+   "labels": {
+    "en": "Banks term deposits and similar transactions",
+    "fr": "Banques dépôt à terme et opérations assimilées"
+   },
+   "type": "asset_cash",
+   "reconcile": false,
+   "sourceId": "syscebnl_525"
+  },
+  {
+   "code": "526",
+   "labels": {
+    "en": "Bank, accrued interest",
+    "fr": "Banque, intérêts courus"
+   },
+   "type": "asset_cash",
+   "reconcile": false,
+   "sourceId": "syscebnl_526"
+  },
+  {
+   "code": "531",
+   "labels": {
+    "en": "Postal banks",
+    "fr": "Banques postales"
+   },
+   "type": "asset_cash",
+   "reconcile": false,
+   "sourceId": "syscebnl_531"
+  },
+  {
+   "code": "532",
+   "labels": {
+    "en": "Treasury",
+    "fr": "Trésor"
+   },
+   "type": "asset_cash",
+   "reconcile": false,
+   "sourceId": "syscebnl_532"
+  },
+  {
+   "code": "533",
+   "labels": {
+    "en": "Management and intermediation companies (S.G.L.)",
+    "fr": "Sociétés de gestion et d'intermédiation (S.G.L.)"
+   },
+   "type": "asset_cash",
+   "reconcile": false,
+   "sourceId": "syscebnl_533"
+  },
+  {
+   "code": "536",
+   "labels": {
+    "en": "Financial institutions, accrued interest",
+    "fr": "Établissements financiers, intérêts courus"
+   },
+   "type": "asset_cash",
+   "reconcile": false,
+   "sourceId": "syscebnl_536"
+  },
+  {
+   "code": "538",
+   "labels": {
+    "en": "Other financial institutions",
+    "fr": "Autres organismes financiers"
+   },
+   "type": "asset_cash",
+   "reconcile": false,
+   "sourceId": "syscebnl_538"
+  },
+  {
+   "code": "551",
+   "labels": {
+    "en": "Electronic money - fuel card",
+    "fr": "Monnaie électronique-carte carburant"
+   },
+   "type": "asset_cash",
+   "reconcile": false,
+   "sourceId": "syscebnl_551"
+  },
+  {
+   "code": "552",
+   "labels": {
+    "en": "Electronic money - cell phone",
+    "fr": "Monnaie électronique- téléphone portable"
+   },
+   "type": "asset_cash",
+   "reconcile": false,
+   "sourceId": "syscebnl_552"
+  },
+  {
+   "code": "553",
+   "labels": {
+    "en": "Electronic money - toll card",
+    "fr": "Monnaie électronique - carte péage"
+   },
+   "type": "asset_cash",
+   "reconcile": false,
+   "sourceId": "syscebnl_553"
+  },
+  {
+   "code": "554",
+   "labels": {
+    "en": "Electronic purse",
+    "fr": "Porte-monnaie électronique"
+   },
+   "type": "asset_cash",
+   "reconcile": false,
+   "sourceId": "syscebnl_554"
+  },
+  {
+   "code": "558",
+   "labels": {
+    "en": "Other electronic money instruments",
+    "fr": "Autres instruments de monnaie électronique"
+   },
+   "type": "asset_cash",
+   "reconcile": false,
+   "sourceId": "syscebnl_558"
+  },
+  {
+   "code": "561",
+   "labels": {
+    "en": "Cash credits",
+    "fr": "Crédits de trésorerie"
+   },
+   "type": "liability_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_561"
+  },
+  {
+   "code": "565",
+   "labels": {
+    "en": "Discounting of ordinary loans",
+    "fr": "Escompte de crédits ordinaires"
+   },
+   "type": "liability_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_565"
+  },
+  {
+   "code": "566",
+   "labels": {
+    "en": "Bank overdrafts, accrued interest",
+    "fr": "Banques, crédits de trésorerie, intérêts courus"
+   },
+   "type": "liability_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_566"
+  },
+  {
+   "code": "571",
+   "labels": {
+    "en": "Cash in local currency",
+    "fr": "Caisse en monnaie nationale"
+   },
+   "type": "asset_cash",
+   "reconcile": false,
+   "sourceId": "syscebnl_571"
+  },
+  {
+   "code": "572",
+   "labels": {
+    "en": "Cash in foreign currencies",
+    "fr": "Caisse en devises"
+   },
+   "type": "asset_cash",
+   "reconcile": false,
+   "sourceId": "syscebnl_572"
+  },
+  {
+   "code": "585",
+   "labels": {
+    "en": "Transfers of funds",
+    "fr": "Virements de fonds"
+   },
+   "type": "asset_cash",
+   "reconcile": false,
+   "sourceId": "syscebnl_585"
+  },
+  {
+   "code": "588",
+   "labels": {
+    "en": "Other internal transfers",
+    "fr": "Autres virements internes"
+   },
+   "type": "asset_cash",
+   "reconcile": false,
+   "sourceId": "syscebnl_588"
+  },
+  {
+   "code": "590",
+   "labels": {
+    "en": "Impairment of marketable securities",
+    "fr": "Dépréciations des titres de placement"
+   },
+   "type": "asset_cash",
+   "reconcile": false,
+   "sourceId": "syscebnl_590"
+  },
+  {
+   "code": "591",
+   "labels": {
+    "en": "Impairment of securities and receivables",
+    "fr": "Dépréciations des titres et valeurs à encaisser"
+   },
+   "type": "asset_cash",
+   "reconcile": false,
+   "sourceId": "syscebnl_591"
+  },
+  {
+   "code": "592",
+   "labels": {
+    "en": "Impairment of bank accounts",
+    "fr": "Dépréciations des comptes banques"
+   },
+   "type": "asset_cash",
+   "reconcile": false,
+   "sourceId": "syscebnl_592"
+  },
+  {
+   "code": "593",
+   "labels": {
+    "en": "Impairment of financial institution and similar accounts",
+    "fr": "Dépréciations des comptes établissements financiers et assimilés"
+   },
+   "type": "asset_cash",
+   "reconcile": false,
+   "sourceId": "syscebnl_593"
+  },
+  {
+   "code": "595",
+   "labels": {
+    "en": "Impairment of electronic money accounts",
+    "fr": "Dépréciations des comptes d'instruments de monnaie électronique"
+   },
+   "type": "asset_cash",
+   "reconcile": false,
+   "sourceId": "syscebnl_595"
+  },
+  {
+   "code": "599",
+   "labels": {
+    "en": "Provisions for short-term financial risks and charges",
+    "fr": "Provisions pour risque et charges à court terme à caractère financier"
+   },
+   "type": "liability_current",
+   "reconcile": false,
+   "sourceId": "syscebnl_599"
+  },
+  {
+   "code": "601",
+   "labels": {
+    "en": "Purchases of goods and services related to the activity",
+    "fr": "Achats de biens et services liés à l'activité"
+   },
+   "type": "expense_direct_cost",
+   "reconcile": false,
+   "sourceId": "syscebnl_601"
+  },
+  {
+   "code": "602",
+   "labels": {
+    "en": "Purchases of goods, raw materials and related supplies",
+    "fr": "Achats de marchandises, matières premières et fournitures liées"
+   },
+   "type": "expense_direct_cost",
+   "reconcile": false,
+   "sourceId": "syscebnl_602"
+  },
+  {
+   "code": "6031",
+   "labels": {
+    "en": "Changes in inventories of goods and services related to operations",
+    "fr": "Variations des stocks de biens et services liés à l'activité"
+   },
+   "type": "expense",
+   "reconcile": false,
+   "sourceId": "syscebnl_6031"
+  },
+  {
+   "code": "6032",
+   "labels": {
+    "en": "Changes in inventories of goods",
+    "fr": "Variations des stocks de marchandises"
+   },
+   "type": "expense",
+   "reconcile": false,
+   "sourceId": "syscebnl_6032"
+  },
+  {
+   "code": "6033",
+   "labels": {
+    "en": "Changes in inventories of raw materials and related supplies",
+    "fr": "Variations des stocks de matières premières et fournitures liées"
+   },
+   "type": "expense",
+   "reconcile": false,
+   "sourceId": "syscebnl_6033"
+  },
+  {
+   "code": "6034",
+   "labels": {
+    "en": "Changes in inventories of other supplies",
+    "fr": "Variations des stocks d'autres approvisionnements"
+   },
+   "type": "expense",
+   "reconcile": false,
+   "sourceId": "syscebnl_6034"
+  },
+  {
+   "code": "6035",
+   "labels": {
+    "en": "Changes in inventories of gifts in kind to be distributed",
+    "fr": "Variations de stocks de dons en nature à distribuer"
+   },
+   "type": "expense",
+   "reconcile": false,
+   "sourceId": "syscebnl_6035"
+  },
+  {
+   "code": "604",
+   "labels": {
+    "en": "Purchases of consumable materials and supplies",
+    "fr": "Achats stockés de matières et fournitures consommables"
+   },
+   "type": "expense_direct_cost",
+   "reconcile": false,
+   "sourceId": "syscebnl_604"
+  },
+  {
+   "code": "605",
+   "labels": {
+    "en": "Other purchases",
+    "fr": "Autres achats"
+   },
+   "type": "expense",
+   "reconcile": false,
+   "sourceId": "syscebnl_605"
+  },
+  {
+   "code": "606",
+   "labels": {
+    "en": "Purchases for other activities",
+    "fr": "Achats autres activités"
+   },
+   "type": "expense",
+   "reconcile": false,
+   "sourceId": "syscebnl_606"
+  },
+  {
+   "code": "608",
+   "labels": {
+    "en": "Purchases of packaging",
+    "fr": "Achats d'emballages"
+   },
+   "type": "expense",
+   "reconcile": false,
+   "sourceId": "syscebnl_608"
+  },
+  {
+   "code": "612",
+   "labels": {
+    "en": "Transport on sales",
+    "fr": "Transports sur ventes"
+   },
+   "type": "expense",
+   "reconcile": false,
+   "sourceId": "syscebnl_612"
+  },
+  {
+   "code": "613",
+   "labels": {
+    "en": "Transport on behalf of third parties",
+    "fr": "Transports pour le compte de tiers"
+   },
+   "type": "expense",
+   "reconcile": false,
+   "sourceId": "syscebnl_613"
+  },
+  {
+   "code": "614",
+   "labels": {
+    "en": "Staff transport",
+    "fr": "Transports du personnel"
+   },
+   "type": "expense",
+   "reconcile": false,
+   "sourceId": "syscebnl_614"
+  },
+  {
+   "code": "616",
+   "labels": {
+    "en": "Transport of mail",
+    "fr": "Transports de plis"
+   },
+   "type": "expense",
+   "reconcile": false,
+   "sourceId": "syscebnl_616"
+  },
+  {
+   "code": "618",
+   "labels": {
+    "en": "Other transport costs",
+    "fr": "Autres frais de transport"
+   },
+   "type": "expense",
+   "reconcile": false,
+   "sourceId": "syscebnl_618"
+  },
+  {
+   "code": "619",
+   "labels": {
+    "en": "Discounts and rebates obtained (not broken down)",
+    "fr": "Rabais, Remises et Ristournes Obtenus (non ventilés)"
+   },
+   "type": "expense",
+   "reconcile": false,
+   "sourceId": "syscebnl_619"
+  },
+  {
+   "code": "621",
+   "labels": {
+    "en": "General sub-contracting",
+    "fr": "Sous-traitance générale"
+   },
+   "type": "expense",
+   "reconcile": false,
+   "sourceId": "syscebnl_621"
+  },
+  {
+   "code": "622",
+   "labels": {
+    "en": "Rentals and service charges",
+    "fr": "Locations, charges locatives"
+   },
+   "type": "expense",
+   "reconcile": false,
+   "sourceId": "syscebnl_622"
+  },
+  {
+   "code": "6232",
+   "labels": {
+    "en": "Capital lease payments",
+    "fr": "Redevances de location-acquisition"
+   },
+   "type": "expense",
+   "reconcile": false,
+   "sourceId": "syscebnl_623"
+  },
+  {
+   "code": "624",
+   "labels": {
+    "en": "Servicing, repair, overhaul and maintenance",
+    "fr": "Entretien, réparation, remise en état et maintenance"
+   },
+   "type": "expense",
+   "reconcile": false,
+   "sourceId": "syscebnl_624"
+  },
+  {
+   "code": "625",
+   "labels": {
+    "en": "Insurance premiums",
+    "fr": "Primes d'assurances"
+   },
+   "type": "expense",
+   "reconcile": false,
+   "sourceId": "syscebnl_625"
+  },
+  {
+   "code": "626",
+   "labels": {
+    "en": "Studies, research and documentation",
+    "fr": "Études, recherches et documentation"
+   },
+   "type": "expense",
+   "reconcile": false,
+   "sourceId": "syscebnl_626"
+  },
+  {
+   "code": "627",
+   "labels": {
+    "en": "Advertising, publications, public relations",
+    "fr": "Publicité, publications, relations publiques"
+   },
+   "type": "expense",
+   "reconcile": false,
+   "sourceId": "syscebnl_627"
+  },
+  {
+   "code": "628",
+   "labels": {
+    "en": "Telecommunications costs",
+    "fr": "Frais de télécommunications"
+   },
+   "type": "expense",
+   "reconcile": false,
+   "sourceId": "syscebnl_628"
+  },
+  {
+   "code": "631",
+   "labels": {
+    "en": "Bank charges",
+    "fr": "Frais bancaires"
+   },
+   "type": "expense",
+   "reconcile": false,
+   "sourceId": "syscebnl_631"
+  },
+  {
+   "code": "632",
+   "labels": {
+    "en": "Remuneration of intermediaries and consultants",
+    "fr": "Rémunérations d'intermédiaires et de conseils"
+   },
+   "type": "expense",
+   "reconcile": false,
+   "sourceId": "syscebnl_632"
+  },
+  {
+   "code": "633",
+   "labels": {
+    "en": "Training costs",
+    "fr": "Frais de formation"
+   },
+   "type": "expense",
+   "reconcile": false,
+   "sourceId": "syscebnl_633"
+  },
+  {
+   "code": "634",
+   "labels": {
+    "en": "Royalties for patents, licences, software, websites, concessions, rights and similar entitlements",
+    "fr": "Redevances pour brevets, licences, logiciels, sites internet, concessions et droits et valeurs similaires"
+   },
+   "type": "expense",
+   "reconcile": false,
+   "sourceId": "syscebnl_634"
+  },
+  {
+   "code": "635",
+   "labels": {
+    "en": "Contributions",
+    "fr": "Cotisations"
+   },
+   "type": "expense",
+   "reconcile": false,
+   "sourceId": "syscebnl_635"
+  },
+  {
+   "code": "636",
+   "labels": {
+    "en": "Fundraising expenses",
+    "fr": "Frais de recherche de fonds"
+   },
+   "type": "expense",
+   "reconcile": false,
+   "sourceId": "syscebnl_636"
+  },
+  {
+   "code": "637",
+   "labels": {
+    "en": "Remuneration of external staff",
+    "fr": "Rémunérations de personnel extérieur à l'entité"
+   },
+   "type": "expense",
+   "reconcile": false,
+   "sourceId": "syscebnl_637"
+  },
+  {
+   "code": "638",
+   "labels": {
+    "en": "Other external charges",
+    "fr": "Autres charges externes"
+   },
+   "type": "expense",
+   "reconcile": false,
+   "sourceId": "syscebnl_638"
+  },
+  {
+   "code": "641",
+   "labels": {
+    "en": "Direct taxes and duties",
+    "fr": "Impôts et taxes directs"
+   },
+   "type": "expense",
+   "reconcile": false,
+   "sourceId": "syscebnl_641"
+  },
+  {
+   "code": "645",
+   "labels": {
+    "en": "Indirect taxes and duties",
+    "fr": "Impôts et taxes indirects"
+   },
+   "type": "expense",
+   "reconcile": false,
+   "sourceId": "syscebnl_645"
+  },
+  {
+   "code": "646",
+   "labels": {
+    "en": "Registration duties",
+    "fr": "Droits d'enregistrement"
+   },
+   "type": "expense",
+   "reconcile": false,
+   "sourceId": "syscebnl_646"
+  },
+  {
+   "code": "647",
+   "labels": {
+    "en": "Penalties and tax fines",
+    "fr": "Pénalités et amendes fiscales"
+   },
+   "type": "expense",
+   "reconcile": false,
+   "sourceId": "syscebnl_647"
+  },
+  {
+   "code": "648",
+   "labels": {
+    "en": "Other taxes",
+    "fr": "Autres impôts et taxes"
+   },
+   "type": "expense",
+   "reconcile": false,
+   "sourceId": "syscebnl_648"
+  },
+  {
+   "code": "649",
+   "labels": {
+    "en": "Tax relief and cancellations",
+    "fr": "Dégrèvements et annulations des impôts et taxes"
+   },
+   "type": "expense",
+   "reconcile": false,
+   "sourceId": "syscebnl_649"
+  },
+  {
+   "code": "651",
+   "labels": {
+    "en": "Losses on trade and other receivables",
+    "fr": "Pertes sur créances adhérents clients, et autres débiteurs"
+   },
+   "type": "expense",
+   "reconcile": false,
+   "sourceId": "syscebnl_651"
+  },
+  {
+   "code": "652",
+   "labels": {
+    "en": "Subsidies granted by the entity",
+    "fr": "Subventions accordées par l'entité"
+   },
+   "type": "expense",
+   "reconcile": false,
+   "sourceId": "syscebnl_652"
+  },
+  {
+   "code": "654",
+   "labels": {
+    "en": "Current donations in kind for distribution",
+    "fr": "Dons en nature courants à distribuer"
+   },
+   "type": "expense",
+   "reconcile": false,
+   "sourceId": "syscebnl_654"
+  },
+  {
+   "code": "657",
+   "labels": {
+    "en": "Penalties and fines",
+    "fr": "Pénalités et amendes pénales"
+   },
+   "type": "expense",
+   "reconcile": false,
+   "sourceId": "syscebnl_657"
+  },
+  {
+   "code": "658",
+   "labels": {
+    "en": "Sundry expenses",
+    "fr": "Charges diverses"
+   },
+   "type": "expense",
+   "reconcile": false,
+   "sourceId": "syscebnl_658"
+  },
+  {
+   "code": "659",
+   "labels": {
+    "en": "Impairment charges and provisions for short-term operating risks",
+    "fr": "Charges pour dépréciations et provisions pour risques à court terme d'exploitation"
+   },
+   "type": "expense",
+   "reconcile": false,
+   "sourceId": "syscebnl_659"
+  },
+  {
+   "code": "661",
+   "labels": {
+    "en": "Direct remuneration paid to national staff",
+    "fr": "Rémunérations directes versées au personnel national"
+   },
+   "type": "expense",
+   "reconcile": false,
+   "sourceId": "syscebnl_661"
+  },
+  {
+   "code": "662",
+   "labels": {
+    "en": "Direct remuneration paid to non-national staff",
+    "fr": "Rémunérations directes versées au personnel non national"
+   },
+   "type": "expense",
+   "reconcile": false,
+   "sourceId": "syscebnl_662"
+  },
+  {
+   "code": "663",
+   "labels": {
+    "en": "Flat-rate allowances paid to staff",
+    "fr": "Indemnités forfaitaires versées au personnel"
+   },
+   "type": "expense",
+   "reconcile": false,
+   "sourceId": "syscebnl_663"
+  },
+  {
+   "code": "664",
+   "labels": {
+    "en": "Social security contributions",
+    "fr": "Charges sociales"
+   },
+   "type": "expense",
+   "reconcile": false,
+   "sourceId": "syscebnl_664"
+  },
+  {
+   "code": "665",
+   "labels": {
+    "en": "Staff clothing and equipment",
+    "fr": "Habillement et équipement du personnel"
+   },
+   "type": "expense",
+   "reconcile": false,
+   "sourceId": "syscebnl_665"
+  },
+  {
+   "code": "667",
+   "labels": {
+    "en": "Remuneration transferred from outside personnel",
+    "fr": "Rémunération transférée de personnel extérieur"
+   },
+   "type": "expense",
+   "reconcile": false,
+   "sourceId": "syscebnl_667"
+  },
+  {
+   "code": "668",
+   "labels": {
+    "en": "Other social security charges",
+    "fr": "Autres charges sociales"
+   },
+   "type": "expense",
+   "reconcile": false,
+   "sourceId": "syscebnl_668"
+  },
+  {
+   "code": "669",
+   "labels": {
+    "en": "Waivers and cancellations of social security contributions",
+    "fr": "Dégrèvements et annulations des charges sociales"
+   },
+   "type": "expense",
+   "reconcile": false,
+   "sourceId": "syscebnl_669"
+  },
+  {
+   "code": "671",
+   "labels": {
+    "en": "Interest on borrowings",
+    "fr": "Intérêts des emprunts"
+   },
+   "type": "expense",
+   "reconcile": false,
+   "sourceId": "syscebnl_671"
+  },
+  {
+   "code": "672",
+   "labels": {
+    "en": "Interest in capital leases",
+    "fr": "Intérêts dans loyers de location-acquisition"
+   },
+   "type": "expense",
+   "reconcile": false,
+   "sourceId": "syscebnl_672"
+  },
+  {
+   "code": "673",
+   "labels": {
+    "en": "Discounts granted",
+    "fr": "Escomptes accordés"
+   },
+   "type": "expense",
+   "reconcile": false,
+   "sourceId": "syscebnl_673"
+  },
+  {
+   "code": "674",
+   "labels": {
+    "en": "Other interests",
+    "fr": "Autres intérêts"
+   },
+   "type": "expense",
+   "reconcile": false,
+   "sourceId": "syscebnl_674"
+  },
+  {
+   "code": "676",
+   "labels": {
+    "en": "Financial exchange losses",
+    "fr": "Pertes de change financières"
+   },
+   "type": "expense",
+   "reconcile": false,
+   "sourceId": "syscebnl_676"
+  },
+  {
+   "code": "677",
+   "labels": {
+    "en": "Losses on marketable securities",
+    "fr": "Pertes sur titres de placement"
+   },
+   "type": "expense",
+   "reconcile": false,
+   "sourceId": "syscebnl_677"
+  },
+  {
+   "code": "678",
+   "labels": {
+    "en": "Losses and expenses on financial risks",
+    "fr": "Pertes et charges sur risques financiers"
+   },
+   "type": "expense",
+   "reconcile": false,
+   "sourceId": "syscebnl_678"
+  },
+  {
+   "code": "679",
+   "labels": {
+    "en": "Charges for impairment and provisions for short-term financial risks",
+    "fr": "Charges pour dépréciations et provisions pour risques à court terme financières"
+   },
+   "type": "expense",
+   "reconcile": false,
+   "sourceId": "syscebnl_679"
+  },
+  {
+   "code": "680",
+   "labels": {
+    "en": "Allocations to depreciation of temporary usufruct",
+    "fr": "Dotations aux amortissements d'usufruit temporaire"
+   },
+   "type": "expense",
+   "reconcile": false,
+   "sourceId": "syscebnl_680"
+  },
+  {
+   "code": "681",
+   "labels": {
+    "en": "Allocations to operating depreciation",
+    "fr": "Dotations aux amortissements d'exploitation"
+   },
+   "type": "expense",
+   "reconcile": false,
+   "sourceId": "syscebnl_681"
+  },
+  {
+   "code": "691",
+   "labels": {
+    "en": "Allocations to provisions and operating depreciation",
+    "fr": "Dotations aux provisions et aux dépréciations d'exploitation"
+   },
+   "type": "expense",
+   "reconcile": false,
+   "sourceId": "syscebnl_691"
+  },
+  {
+   "code": "695",
+   "labels": {
+    "en": "Allocations for impairment in value of fixed assets held for sale arising from gifts and bequests not yet received and from temporary usufruct",
+    "fr": "Dotations aux dépréciations d'immobilisations destinées à la vente provenant des dons et legs non encore reçus et d'usufruit temporaire"
+   },
+   "type": "expense",
+   "reconcile": false,
+   "sourceId": "syscebnl_695"
+  },
+  {
+   "code": "697",
+   "labels": {
+    "en": "Allocations to provisions and impairment losses",
+    "fr": "Dotations aux provisions et aux dépréciations financières"
+   },
+   "type": "expense",
+   "reconcile": false,
+   "sourceId": "syscebnl_697"
+  },
+  {
+   "code": "701",
+   "labels": {
+    "en": "Membership fees",
+    "fr": "Cotisations des adhérents"
+   },
+   "type": "income_other",
+   "reconcile": false,
+   "sourceId": "syscebnl_701"
+  },
+  {
+   "code": "702",
+   "labels": {
+    "en": "Share of administrative funds transferred",
+    "fr": "Quote-part de fonds d'administration transférés"
+   },
+   "type": "income_other",
+   "reconcile": false,
+   "sourceId": "syscebnl_702"
+  },
+  {
+   "code": "703",
+   "labels": {
+    "en": "Share of consumable endowment transferred",
+    "fr": "Quote-part de dotation consomptible transférée"
+   },
+   "type": "income_other",
+   "reconcile": false,
+   "sourceId": "syscebnl_703"
+  },
+  {
+   "code": "704",
+   "labels": {
+    "en": "Income from generosity",
+    "fr": "Revenus liés à la générosité"
+   },
+   "type": "income_other",
+   "reconcile": false,
+   "sourceId": "syscebnl_704"
+  },
+  {
+   "code": "7051",
+   "labels": {
+    "en": "Sales of goods",
+    "fr": "Ventes marchandises"
+   },
+   "type": "income",
+   "reconcile": false,
+   "sourceId": "syscebnl_7051"
+  },
+  {
+   "code": "7052",
+   "labels": {
+    "en": "Services sold",
+    "fr": "Services vendus"
+   },
+   "type": "income",
+   "reconcile": false,
+   "sourceId": "syscebnl_7052"
+  },
+  {
+   "code": "7053",
+   "labels": {
+    "en": "Sales of finished goods",
+    "fr": "Ventes de produits finis"
+   },
+   "type": "income",
+   "reconcile": false,
+   "sourceId": "syscebnl_7053"
+  },
+  {
+   "code": "7054",
+   "labels": {
+    "en": "Sales of intermediate products",
+    "fr": "Ventes de produits intermédiaires"
+   },
+   "type": "income",
+   "reconcile": false,
+   "sourceId": "syscebnl_7054"
+  },
+  {
+   "code": "7055",
+   "labels": {
+    "en": "Sales of residual products",
+    "fr": "Ventes de produits résiduels"
+   },
+   "type": "income",
+   "reconcile": false,
+   "sourceId": "syscebnl_7055"
+  },
+  {
+   "code": "706",
+   "labels": {
+    "en": "Income from events",
+    "fr": "Revenus des manifestations"
+   },
+   "type": "income_other",
+   "reconcile": false,
+   "sourceId": "syscebnl_706"
+  },
+  {
+   "code": "707",
+   "labels": {
+    "en": "Ancillary revenue",
+    "fr": "Produits accessoires"
+   },
+   "type": "income_other",
+   "reconcile": false,
+   "sourceId": "syscebnl_707"
+  },
+  {
+   "code": "708",
+   "labels": {
+    "en": "Other income",
+    "fr": "Autres revenus"
+   },
+   "type": "income_other",
+   "reconcile": false,
+   "sourceId": "syscebnl_708"
+  },
+  {
+   "code": "711",
+   "labels": {
+    "en": "Operating grants from the State and local authorities",
+    "fr": "Subventions d'exploitation versées par l'État et les Collectivités publiques"
+   },
+   "type": "income_other",
+   "reconcile": false,
+   "sourceId": "syscebnl_711"
+  },
+  {
+   "code": "713",
+   "labels": {
+    "en": "Operating grants from national and international bodies",
+    "fr": "Subventions d'exploitation versées par les organismes nationaux et internationaux"
+   },
+   "type": "income_other",
+   "reconcile": false,
+   "sourceId": "syscebnl_713"
+  },
+  {
+   "code": "718",
+   "labels": {
+    "en": "Other operating grants",
+    "fr": "Autres subventions d'exploitation"
+   },
+   "type": "income_other",
+   "reconcile": false,
+   "sourceId": "syscebnl_718"
+  },
+  {
+   "code": "721",
+   "labels": {
+    "en": "Capitalised production, intangible fixed assets",
+    "fr": "Production immobilisée, immobilisations incorporelles"
+   },
+   "type": "income_other",
+   "reconcile": false,
+   "sourceId": "syscebnl_721"
+  },
+  {
+   "code": "722",
+   "labels": {
+    "en": "Capitalised production, tangible fixed assets",
+    "fr": "Production immobilisée, immobilisations corporelles"
+   },
+   "type": "income_other",
+   "reconcile": false,
+   "sourceId": "syscebnl_722"
+  },
+  {
+   "code": "724",
+   "labels": {
+    "en": "Own consumption",
+    "fr": "Production auto-consommée"
+   },
+   "type": "income_other",
+   "reconcile": false,
+   "sourceId": "syscebnl_724"
+  },
+  {
+   "code": "726",
+   "labels": {
+    "en": "Capitalised production, financial fixed assets",
+    "fr": "Production immobilisée, immobilisations financières"
+   },
+   "type": "income_other",
+   "reconcile": false,
+   "sourceId": "syscebnl_726"
+  },
+  {
+   "code": "735",
+   "labels": {
+    "en": "Changes in inventories of finished goods and services in progress",
+    "fr": "Variations des stocks de produits finis et services en cours"
+   },
+   "type": "income_other",
+   "reconcile": false,
+   "sourceId": "syscebnl_735"
+  },
+  {
+   "code": "736",
+   "labels": {
+    "en": "Changes in inventories of finished goods, intermediate products and residuals",
+    "fr": "Variations des stocks de produits finis,produit intermédiaires et résiduels"
+   },
+   "type": "income_other",
+   "reconcile": false,
+   "sourceId": "syscebnl_736"
+  },
+  {
+   "code": "751",
+   "labels": {
+    "en": "Gains on receivables Members, customer-users and other debtors",
+    "fr": "Profits sur créances Adhérents, clients-usagers, et autres débiteurs"
+   },
+   "type": "income_other",
+   "reconcile": false,
+   "sourceId": "syscebnl_751"
+  },
+  {
+   "code": "752",
+   "labels": {
+    "en": "Founder's contribution",
+    "fr": "Contribution du fondateur"
+   },
+   "type": "income_other",
+   "reconcile": false,
+   "sourceId": "syscebnl_752"
+  },
+  {
+   "code": "754",
+   "labels": {
+    "en": "Current donations in kind",
+    "fr": "Dons en nature courants"
+   },
+   "type": "income_other",
+   "reconcile": false,
+   "sourceId": "syscebnl_754"
+  },
+  {
+   "code": "758",
+   "labels": {
+    "en": "Miscellaneous income",
+    "fr": "Produits divers"
+   },
+   "type": "income_other",
+   "reconcile": false,
+   "sourceId": "syscebnl_758"
+  },
+  {
+   "code": "759",
+   "labels": {
+    "en": "Reversals of charges for impairment and provisions for short-term operating risks",
+    "fr": "Reprises de charges pour dépréciations et provisions pour risques à court terme d'exploitation"
+   },
+   "type": "income_other",
+   "reconcile": false,
+   "sourceId": "syscebnl_759"
+  },
+  {
+   "code": "771",
+   "labels": {
+    "en": "Interest on loans and other receivables",
+    "fr": "Intérêts de prêts et créances diverses"
+   },
+   "type": "income_other",
+   "reconcile": false,
+   "sourceId": "syscebnl_771"
+  },
+  {
+   "code": "772",
+   "labels": {
+    "en": "Income from equity interests and other long-term investments",
+    "fr": "Revenus des titres de participation et autres titres immobilisés"
+   },
+   "type": "income_other",
+   "reconcile": false,
+   "sourceId": "syscebnl_772"
+  },
+  {
+   "code": "773",
+   "labels": {
+    "en": "Discounts received",
+    "fr": "Escomptes obtenus"
+   },
+   "type": "income_other",
+   "reconcile": false,
+   "sourceId": "syscebnl_773"
+  },
+  {
+   "code": "774",
+   "labels": {
+    "en": "Investment income",
+    "fr": "Revenus de placement"
+   },
+   "type": "income_other",
+   "reconcile": false,
+   "sourceId": "syscebnl_774"
+  },
+  {
+   "code": "776",
+   "labels": {
+    "en": "Financial exchange gains",
+    "fr": "Gains de change financiers"
+   },
+   "type": "income_other",
+   "reconcile": false,
+   "sourceId": "syscebnl_776"
+  },
+  {
+   "code": "777",
+   "labels": {
+    "en": "Gains on disposals of marketable securities",
+    "fr": "Gains sur cessions de titres de placement"
+   },
+   "type": "income_other",
+   "reconcile": false,
+   "sourceId": "syscebnl_777"
+  },
+  {
+   "code": "778",
+   "labels": {
+    "en": "Gains on financial risks",
+    "fr": "Gains sur risques financiers"
+   },
+   "type": "income_other",
+   "reconcile": false,
+   "sourceId": "syscebnl_778"
+  },
+  {
+   "code": "779",
+   "labels": {
+    "en": "Reversals of charges for impairment and provisions for short-term financial risks",
+    "fr": "Reprises de charges pour dépréciations et provisions pour risques à court terme financières"
+   },
+   "type": "income_other",
+   "reconcile": false,
+   "sourceId": "syscebnl_779"
+  },
+  {
+   "code": "781",
+   "labels": {
+    "en": "Transfers of operating expenses",
+    "fr": "Transferts de charges d'exploitation"
+   },
+   "type": "income_other",
+   "reconcile": false,
+   "sourceId": "syscebnl_781"
+  },
+  {
+   "code": "787",
+   "labels": {
+    "en": "Transfers of financial expenses",
+    "fr": "Transferts de charges financières"
+   },
+   "type": "income_other",
+   "reconcile": false,
+   "sourceId": "syscebnl_787"
+  },
+  {
+   "code": "791",
+   "labels": {
+    "en": "Reversals of operating provisions and impairment losses",
+    "fr": "Reprises de provisions et dépréciations d'exploitation"
+   },
+   "type": "income_other",
+   "reconcile": false,
+   "sourceId": "syscebnl_791"
+  },
+  {
+   "code": "792",
+   "labels": {
+    "en": "Reversals of restricted funds and gifts and bequests of fixed assets",
+    "fr": "Reprises de fonds affectés et provenant de dons et legs d'immobilisations"
+   },
+   "type": "income_other",
+   "reconcile": false,
+   "sourceId": "syscebnl_792"
+  },
+  {
+   "code": "795",
+   "labels": {
+    "en": "Reversals of impairment losses on fixed assets received for sale from gifts and bequests and for temporary usufruct",
+    "fr": "Reprises des dépréciations d'immobilisations reçues destinées à la vente provenant des dons et legs et d'usufruit temporaire"
+   },
+   "type": "income_other",
+   "reconcile": false,
+   "sourceId": "syscebnl_795"
+  },
+  {
+   "code": "796",
+   "labels": {
+    "en": "Reversals of deferred funds",
+    "fr": "Reprises de fonds reportés"
+   },
+   "type": "income_other",
+   "reconcile": false,
+   "sourceId": "syscebnl_796"
+  },
+  {
+   "code": "797",
+   "labels": {
+    "en": "Reversals of provisions and impairment losses",
+    "fr": "Reprises de provisions et dépréciations financières"
+   },
+   "type": "income_other",
+   "reconcile": false,
+   "sourceId": "syscebnl_797"
+  },
+  {
+   "code": "798",
+   "labels": {
+    "en": "Write-backs of depreciation",
+    "fr": "Reprises d'amortissements"
+   },
+   "type": "income_other",
+   "reconcile": false,
+   "sourceId": "syscebnl_798"
+  },
+  {
+   "code": "799",
+   "labels": {
+    "en": "Reversals of investment grants",
+    "fr": "Reprises de subventions d'investissement"
+   },
+   "type": "income_other",
+   "reconcile": false,
+   "sourceId": "syscebnl_799"
+  },
+  {
+   "code": "811",
+   "labels": {
+    "en": "Book value of disposals of intangible assets",
+    "fr": "Valeurs comptables des cessions d'immobilisations incorporelles"
+   },
+   "type": "expense",
+   "reconcile": false,
+   "sourceId": "syscebnl_811"
+  },
+  {
+   "code": "812",
+   "labels": {
+    "en": "Book value of disposals of tangible fixed assets",
+    "fr": "Valeurs comptables des cessions d'immobilisations corporelles"
+   },
+   "type": "expense",
+   "reconcile": false,
+   "sourceId": "syscebnl_812"
+  },
+  {
+   "code": "816",
+   "labels": {
+    "en": "Book value of disposals of financial assets",
+    "fr": "Valeurs comptables des cessions d'immobilisations financières"
+   },
+   "type": "expense",
+   "reconcile": false,
+   "sourceId": "syscebnl_816"
+  },
+  {
+   "code": "818",
+   "labels": {
+    "en": "Book value of disposals of fixed assets received for sale as gifts and bequests",
+    "fr": "Valeurs comptables des cessions d'immobilisations reçues destinées à la vente provenant de dons et legs"
+   },
+   "type": "expense",
+   "reconcile": false,
+   "sourceId": "syscebnl_818"
+  },
+  {
+   "code": "821",
+   "labels": {
+    "en": "Proceeds from disposals of intangible assets",
+    "fr": "Produits des cessions d'immobilisations incorporelles"
+   },
+   "type": "income_other",
+   "reconcile": false,
+   "sourceId": "syscebnl_821"
+  },
+  {
+   "code": "822",
+   "labels": {
+    "en": "Proceeds from disposals of tangible assets",
+    "fr": "Produits des cessions d'immobilisations corporelles"
+   },
+   "type": "income_other",
+   "reconcile": false,
+   "sourceId": "syscebnl_822"
+  },
+  {
+   "code": "826",
+   "labels": {
+    "en": "Proceeds from disposals of financial assets",
+    "fr": "Produits des cessions d'immobilisations financières"
+   },
+   "type": "income_other",
+   "reconcile": false,
+   "sourceId": "syscebnl_826"
+  },
+  {
+   "code": "828",
+   "labels": {
+    "en": "Proceeds from disposals of fixed assets received for sale from gifts and bequests",
+    "fr": "Produits des cessions d'immobilisations reçues destinées à la vente provenant de dons et legs"
+   },
+   "type": "income_other",
+   "reconcile": false,
+   "sourceId": "syscebnl_828"
+  },
+  {
+   "code": "831",
+   "labels": {
+    "en": "H.A.O. expenses recognised",
+    "fr": "Charges H.A.O. constatées"
+   },
+   "type": "expense",
+   "reconcile": false,
+   "sourceId": "syscebnl_831"
+  },
+  {
+   "code": "832",
+   "labels": {
+    "en": "Donations in kind H.A.O. to distribute",
+    "fr": "Dons en nature H.A.O. à distribuer"
+   },
+   "type": "expense",
+   "reconcile": false,
+   "sourceId": "syscebnl_832"
+  },
+  {
+   "code": "834",
+   "labels": {
+    "en": "Losses on receivables H.A.O.",
+    "fr": "Pertes sur créances H.A.O."
+   },
+   "type": "expense",
+   "reconcile": false,
+   "sourceId": "syscebnl_834"
+  },
+  {
+   "code": "836",
+   "labels": {
+    "en": "Debt waivers granted",
+    "fr": "Abandons de créances consentis"
+   },
+   "type": "expense",
+   "reconcile": false,
+   "sourceId": "syscebnl_836"
+  },
+  {
+   "code": "838",
+   "labels": {
+    "en": "Expense transfers H.A.O.",
+    "fr": "Transferts de charges H.A.O."
+   },
+   "type": "expense",
+   "reconcile": false,
+   "sourceId": "syscebnl_838"
+  },
+  {
+   "code": "839",
+   "labels": {
+    "en": "Charges for depreciation and provisions for short-term risks H.A.O.",
+    "fr": "Charges pour dépréciations et provisions pour risques à court terme H.A.O."
+   },
+   "type": "expense",
+   "reconcile": false,
+   "sourceId": "syscebnl_839"
+  },
+  {
+   "code": "841",
+   "labels": {
+    "en": "Recognised H.A.O. income",
+    "fr": "Produits H.A.O. constatés"
+   },
+   "type": "income_other",
+   "reconcile": false,
+   "sourceId": "syscebnl_841"
+  },
+  {
+   "code": "842",
+   "labels": {
+    "en": "Voluntary contributions in kind",
+    "fr": "Contributions volontaires en nature"
+   },
+   "type": "income_other",
+   "reconcile": false,
+   "sourceId": "syscebnl_842"
+  },
+  {
+   "code": "843",
+   "labels": {
+    "en": "Voluntary contributions in cash",
+    "fr": "Contributions volontaires en numéraire"
+   },
+   "type": "income_other",
+   "reconcile": false,
+   "sourceId": "syscebnl_843"
+  },
+  {
+   "code": "846",
+   "labels": {
+    "en": "Debt waivers obtained",
+    "fr": "Abandons de créances obtenus"
+   },
+   "type": "income_other",
+   "reconcile": false,
+   "sourceId": "syscebnl_846"
+  },
+  {
+   "code": "848",
+   "labels": {
+    "en": "Transfers of income H.A.O.",
+    "fr": "Transferts de produits H.A.O"
+   },
+   "type": "income_other",
+   "reconcile": false,
+   "sourceId": "syscebnl_848"
+  },
+  {
+   "code": "849",
+   "labels": {
+    "en": "Reversals of charges for impairment and provisions for short-term risks",
+    "fr": "Reprises de charges pour dépréciations et provisions pour risques à court terme"
+   },
+   "type": "income_other",
+   "reconcile": false,
+   "sourceId": "syscebnl_849"
+  },
+  {
+   "code": "851",
+   "labels": {
+    "en": "Charges to regulated provisions",
+    "fr": "Dotations aux provisions réglementées"
+   },
+   "type": "expense",
+   "reconcile": false,
+   "sourceId": "syscebnl_851"
+  },
+  {
+   "code": "852",
+   "labels": {
+    "en": "Depreciation and amortisation charges H.A.O.",
+    "fr": "Dotations aux amortissements H.A.O."
+   },
+   "type": "expense",
+   "reconcile": false,
+   "sourceId": "syscebnl_852"
+  },
+  {
+   "code": "853",
+   "labels": {
+    "en": "Impairment charges H.A.O.",
+    "fr": "Dotations aux dépréciations H.A.O."
+   },
+   "type": "expense",
+   "reconcile": false,
+   "sourceId": "syscebnl_853"
+  },
+  {
+   "code": "854",
+   "labels": {
+    "en": "Charges to provisions for liabilities and charges H.A.O.",
+    "fr": "Dotations aux provisions pour risques et charges H.A.O."
+   },
+   "type": "expense",
+   "reconcile": false,
+   "sourceId": "syscebnl_854"
+  },
+  {
+   "code": "858",
+   "labels": {
+    "en": "Other charges H.A.O.",
+    "fr": "Autres dotations H.A.O"
+   },
+   "type": "expense",
+   "reconcile": false,
+   "sourceId": "syscebnl_858"
+  },
+  {
+   "code": "861",
+   "labels": {
+    "en": "Reversals of regulated provisions",
+    "fr": "Reprises de provisions réglementées"
+   },
+   "type": "income_other",
+   "reconcile": false,
+   "sourceId": "syscebnl_861"
+  },
+  {
+   "code": "862",
+   "labels": {
+    "en": "Write-backs of depreciation H.A.O.",
+    "fr": "Reprises d'amortissements H.A.O."
+   },
+   "type": "income_other",
+   "reconcile": false,
+   "sourceId": "syscebnl_862"
+  },
+  {
+   "code": "863",
+   "labels": {
+    "en": "Write-backs of depreciation H.A.O.",
+    "fr": "Reprises de dépréciations H.A.O."
+   },
+   "type": "income_other",
+   "reconcile": false,
+   "sourceId": "syscebnl_863"
+  },
+  {
+   "code": "864",
+   "labels": {
+    "en": "Reversals of provisions for liabilities and charges H.A.O.",
+    "fr": "Reprises de provisions pour risques et charges H.A.O."
+   },
+   "type": "income_other",
+   "reconcile": false,
+   "sourceId": "syscebnl_864"
+  },
+  {
+   "code": "868",
+   "labels": {
+    "en": "Other reversals H.A.O.",
+    "fr": "Autres reprises H.A.O."
+   },
+   "type": "income_other",
+   "reconcile": false,
+   "sourceId": "syscebnl_868"
+  },
+  {
+   "code": "87",
+   "labels": {
+    "en": "Changes in inventories of gifts in kind H.A.O.",
+    "fr": "Variations de stocks de dons en nature H.A.O."
+   },
+   "type": "expense",
+   "reconcile": false,
+   "sourceId": "syscebnl_87"
+  },
+  {
+   "code": "881",
+   "labels": {
+    "en": "Balancing subsidies, State",
+    "fr": "Subventions d'équilibre, État"
+   },
+   "type": "income_other",
+   "reconcile": false,
+   "sourceId": "syscebnl_881"
+  },
+  {
+   "code": "884",
+   "labels": {
+    "en": "Balancing subsidies, Public authorities",
+    "fr": "Subventions d'équilibre, Collectivités publiques"
+   },
+   "type": "income_other",
+   "reconcile": false,
+   "sourceId": "syscebnl_884"
+  },
+  {
+   "code": "888",
+   "labels": {
+    "en": "Other balancing subsidies",
+    "fr": "Autres subventions d'équilibre"
+   },
+   "type": "income_other",
+   "reconcile": false,
+   "sourceId": "syscebnl_888"
+  },
+  {
+   "code": "900",
+   "labels": {
+    "en": "Grants in kind",
+    "fr": "Secours en nature"
+   },
+   "type": "off_balance",
+   "reconcile": false,
+   "sourceId": "syscebnl_900"
+  },
+  {
+   "code": "901",
+   "labels": {
+    "en": "Free provision of goods",
+    "fr": "Mises à disposition gratuite de biens"
+   },
+   "type": "off_balance",
+   "reconcile": false,
+   "sourceId": "syscebnl_901"
+  },
+  {
+   "code": "902",
+   "labels": {
+    "en": "Services in kind",
+    "fr": "Prestations en nature"
+   },
+   "type": "off_balance",
+   "reconcile": false,
+   "sourceId": "syscebnl_902"
+  },
+  {
+   "code": "904",
+   "labels": {
+    "en": "Volunteer staff",
+    "fr": "Personnel bénévole"
+   },
+   "type": "off_balance",
+   "reconcile": false,
+   "sourceId": "syscebnl_904"
+  },
+  {
+   "code": "910",
+   "labels": {
+    "en": "Donations in kind",
+    "fr": "Dons en nature"
+   },
+   "type": "off_balance",
+   "reconcile": false,
+   "sourceId": "syscebnl_910"
+  },
+  {
+   "code": "911",
+   "labels": {
+    "en": "Services in kind",
+    "fr": "Prestations en nature"
+   },
+   "type": "off_balance",
+   "reconcile": false,
+   "sourceId": "syscebnl_911"
+  },
+  {
+   "code": "914",
+   "labels": {
+    "en": "Volunteers",
+    "fr": "Bénévolat"
+   },
+   "type": "off_balance",
+   "reconcile": false,
+   "sourceId": "syscebnl_914"
+  },
+  {
+   "code": "92",
+   "labels": {
+    "en": "ADJUSTED ACCOUNTS",
+    "fr": "COMPTES REFLECHIS"
+   },
+   "type": "off_balance",
+   "reconcile": false,
+   "sourceId": "syscebnl_92"
+  },
+  {
+   "code": "93",
+   "labels": {
+    "en": "RECLASSIFICATION ACCOUNTS",
+    "fr": "COMPTES DE RECLASSEMENTS"
+   },
+   "type": "off_balance",
+   "reconcile": false,
+   "sourceId": "syscebnl_93"
+  },
+  {
+   "code": "94",
+   "labels": {
+    "en": "COST ACCOUNTS",
+    "fr": "COMPTES DE COÛTS"
+   },
+   "type": "off_balance",
+   "reconcile": false,
+   "sourceId": "syscebnl_94"
+  },
+  {
+   "code": "95",
+   "labels": {
+    "en": "INVENTORY ACCOUNTS",
+    "fr": "COMPTES DE STOCKS"
+   },
+   "type": "off_balance",
+   "reconcile": false,
+   "sourceId": "syscebnl_95"
+  },
+  {
+   "code": "96",
+   "labels": {
+    "en": "PRE-ESTABLISHED COST VARIANCE ACCOUNTS",
+    "fr": "COMPTES D'ECARTS SUR COUTS PREETABLIS"
+   },
+   "type": "off_balance",
+   "reconcile": false,
+   "sourceId": "syscebnl_96"
+  },
+  {
+   "code": "97",
+   "labels": {
+    "en": "ACCOUNTING TREATMENT DIFFERENCES ACCOUNTS",
+    "fr": "COMPTES DE DIFFERENCES DE TRAITEMENT COMPTABLE"
+   },
+   "type": "off_balance",
+   "reconcile": false,
+   "sourceId": "syscebnl_97"
+  },
+  {
+   "code": "98",
+   "labels": {
+    "en": "PROFIT AND LOSS ACCOUNTS",
+    "fr": "COMPTES DE RESULTATS"
+   },
+   "type": "off_balance",
+   "reconcile": false,
+   "sourceId": "syscebnl_98"
+  },
+  {
+   "code": "99",
+   "labels": {
+    "en": "INTERCOMPANY BALANCES",
+    "fr": "COMPTES DE LIAISONS INTERNES"
+   },
+   "type": "off_balance",
+   "reconcile": false,
+   "sourceId": "syscebnl_99"
+  }
+ ]
+}

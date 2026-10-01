@@ -1,0 +1,38 @@
+{
+  "name": "@astratra/fhir",
+  "version": "1.0.0",
+  "description": "FHIR R4 helpers on top of the official Medplum types: minimal Patient, Encounter and Observation validation, references and builders.",
+  "engines": {
+    "node": ">=20"
+  },
+  "main": "src/index.js",
+  "types": "src/index.d.ts",
+  "type": "commonjs",
+  "files": [
+    "src"
+  ],
+  "scripts": {
+    "test": "jest"
+  },
+  "jest": {
+    "testMatch": [
+      "**/__tests__/**/*.test.js"
+    ]
+  },
+  "keywords": [
+    "astratra",
+    "fhir",
+    "fhir-r4",
+    "health"
+  ],
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
+  "dependencies": {
+    "@medplum/fhirtypes": "^5.2.0"
+  },
+  "devDependencies": {
+    "jest": "30.4.2"
+  }
+}

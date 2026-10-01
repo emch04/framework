@@ -1,7 +1,7 @@
 {
   "name": "@astratra/models",
-  "version": "0.1.0",
-  "description": "Local CPU model service for servers without GPU (embeddings, reranking, NLI, entities, speech-to-text) and its Node client: optional lazy-loaded models, token auth, request limits, per-endpoint timeouts, retries and circuit breakers, results that degrade instead of throwing, plus pm2/systemd generators and a pinned venv setup script.",
+  "version": "1.0.0",
+  "description": "Local CPU model service for servers without GPU (embeddings, reranking, NLI, entities, speech-to-text) and its Node client: optional lazy-loaded models, token auth, request limits, per-endpoint timeouts, retries and circuit breakers, results that degrade instead of throwing, a model price catalog (cost per call with cache, audio and long-context tiers, local overrides, context window, capabilities), plus pm2/systemd generators and a pinned venv setup script.",
   "engines": {
     "node": ">=20"
   },
@@ -10,6 +10,7 @@
   "type": "commonjs",
   "files": [
     "src",
+    "data",
     "server/app.py",
     "server/backends.py",
     "server/requirements*.txt",
@@ -19,7 +20,8 @@
   "scripts": {
     "test": "jest",
     "test:server": "PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s server/tests",
-    "check:setup": "bash -n server/setup-venv.sh && bash server/setup-venv.sh --check-only"
+    "check:setup": "bash -n server/setup-venv.sh && bash server/setup-venv.sh --check-only",
+    "prices:update": "node scripts/update-prices.js"
   },
   "jest": {
     "testMatch": [
@@ -36,7 +38,9 @@
     "speech-to-text",
     "onnx",
     "cpu",
-    "circuit-breaker"
+    "circuit-breaker",
+    "pricing",
+    "llm-cost"
   ],
   "license": "MIT",
   "publishConfig": {

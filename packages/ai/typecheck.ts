@@ -1,8 +1,13 @@
 import {
   createProviderRouter,
   createToolRegistry,
-  runAgentLoop
+  runAgentLoop,
+  LocalLlmError,
+  createLlamaCppConfig,
+  createLlamaCppProvider,
+  normalizeLlamaCppUrl
 } from '@astratra/ai';
+import type { LlamaCppChatResult, LlamaCppHealthState, LlamaCppProvider } from '@astratra/ai';
 
 const router = createProviderRouter({
   cooldownMs: 100,
@@ -233,3 +238,28 @@ const sentence: string = wholeSentences('Une phrase. Coup');
 searchSerper({ query: 'q', sites: ['jw.org'] }, { key: 'k', fetch: async () => ({ ok: true, status: 200, json: async () => ({}) }) }).then((results) => results.map((result) => result.url));
 declare const serverResponse: Parameters<typeof openEventStream>[0];
 openEventStream(serverResponse).send('answer', { text: `${params.reference}${sentence}` });
+
+
+const llamaCpp: LlamaCppProvider = createLlamaCppProvider({
+  baseUrl: 'http://10.0.0.5:8080/v1',
+  apiKey: 'cle',
+  model: 'qwen3-4b',
+  timeoutMs: 60_000
+});
+const llamaCppConfig = createLlamaCppConfig({ baseUrl: normalizeLlamaCppUrl('http://localhost:8080') });
+
+async function exerciseLlamaCpp(): Promise<void> {
+  const state: LlamaCppHealthState = await llamaCpp.waitUntilReady({ timeoutMs: 90_000 });
+  const models = await llamaCpp.listModels();
+  const answer: LlamaCppChatResult = await llamaCpp.chat([{ role: 'user', content: 'Bonjour' }], { temperature: 0.2 });
+  let streamed = '';
+  for await (const piece of llamaCpp.chatStream([{ role: 'user', content: 'Bonjour' }])) streamed += piece;
+  const openai: { baseURL: string } = llamaCpp.toOpenAICompatible();
+  try {
+    await llamaCpp.health();
+  } catch (error) {
+    if (error instanceof LocalLlmError) void error.code;
+  }
+  void [state, models, answer, streamed, openai, llamaCppConfig.baseUrl];
+}
+void exerciseLlamaCpp;

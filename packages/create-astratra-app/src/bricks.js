@@ -22,7 +22,7 @@ const FULLSTACK_ONLY = new Set(['client', 'prerender']);
 const BRICKS = {
   credentials: {
     package: '@astratra/credentials',
-    version: '^0.4.0',
+    version: '^1.0.0',
     summary: 'clés de service chiffrées en base, modifiables sans redémarrage',
     file: 'api/bricks/credentials.js',
     contents: () => `import { createFieldCipher } from '@astratra/security';
@@ -71,7 +71,7 @@ export const hydrator = createEnvHydrator({ vault });
 
   entitlements: {
     package: '@astratra/entitlements',
-    version: '^0.5.0',
+    version: '^1.0.0',
     summary: 'plans, droits d’accès, isolation par locataire, invitations',
     file: 'api/bricks/entitlements.js',
     contents: () => `import { createFeatureGuard, createPlanCatalog, createTenantScope } from '@astratra/entitlements';
@@ -104,7 +104,7 @@ export const tenants = createTenantScope({
 
   notify: {
     package: '@astratra/notify',
-    version: '^0.3.0',
+    version: '^1.0.0',
     summary: 'e-mail, SMS et notifications poussées, transport injecté',
     file: 'api/bricks/notify.js',
     contents: () => `import { createCaptureChannel, createMailer, renderEmail, renderText } from '@astratra/notify';
@@ -136,7 +136,7 @@ export async function sendWelcome(to, name) {
 
   payments: {
     package: '@astratra/payments',
-    version: '^0.2.0',
+    version: '^1.0.0',
     summary: 'webhooks de paiement : signature, rejeux, exemptions',
     file: 'api/bricks/payments.js',
     contents: () => `import {
@@ -176,7 +176,7 @@ export const webhook = createWebhookHandler({
 
   privacy: {
     package: '@astratra/privacy',
-    version: '^0.3.0',
+    version: '^1.0.0',
     summary: 'droit d’accès, droit à l’oubli, nettoyage des journaux',
     file: 'api/bricks/privacy.js',
     contents: () => `import {
@@ -220,7 +220,7 @@ export const erasure = createErasureWorkflow({
 
   resilience: {
     package: '@astratra/resilience',
-    version: '^0.2.0',
+    version: '^1.0.0',
     summary: 'disjoncteur, cache TTL, relance avec brouillage',
     file: 'api/bricks/resilience.js',
     contents: () => `import { createCache, createCircuitBreaker, retry } from '@astratra/resilience';
@@ -247,7 +247,7 @@ export async function fetchWithGuards(key, call) {
 
   'i18n-server': {
     package: '@astratra/i18n-server',
-    version: '^0.2.0',
+    version: '^1.0.0',
     summary: 'messages du serveur traduits, audit de lisibilité',
     file: 'api/bricks/i18n.js',
     contents: () => `import {
@@ -277,7 +277,7 @@ export const translation = createTranslationMiddleware({ catalog, resolver });
 
   pdf: {
     package: '@astratra/pdf',
-    version: '^0.2.0',
+    version: '^1.0.0',
     summary: 'texte borné, tableaux qui se paginent, planches de cartes (PDFKit)',
     file: 'api/bricks/pdf.js',
     contents: () => `import { drawTable, keepTogether, line } from '@astratra/pdf';
@@ -310,7 +310,7 @@ export function renderInvoice(doc, invoice) {
 
   closure: {
     package: '@astratra/closure',
-    version: '^0.1.0',
+    version: '^1.0.0',
     summary: 'clôture de période et archives sans identifiants',
     file: 'api/bricks/closure.js',
     contents: () => `import { createArchiveBuilder, createClosureChecklist, createScrubber } from '@astratra/closure';
@@ -336,7 +336,7 @@ export const archive = createArchiveBuilder({
 
   client: {
     package: '@astratra/client',
-    version: '^0.3.0',
+    version: '^1.0.0',
     summary: 'session sur 401, garde de route, mots de passe, file hors ligne',
     file: 'web/src/lib/client.js',
     contents: () => `import { createPasswordRules, createRouteGuard, createSessionClient } from '@astratra/client';
@@ -367,7 +367,7 @@ export const passwordRules = createPasswordRules();
 
   prerender: {
     package: '@astratra/prerender',
-    version: '^0.2.0',
+    version: '^1.0.0',
     summary: 'prérendu SEO + sitemap tiré de la même liste',
     file: 'astratra.prerender.config.cjs',
     contents: () => `// Lancé après le build : "vite build && astratra-prerender"

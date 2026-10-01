@@ -337,6 +337,47 @@ export function pickIntruders<Account = Record<string, unknown>>(input: {
   idOf?: (account: Account) => unknown;
 }): { intruders: Account[]; holder: Account | null; reason: SweepReason };
 
+/* ───────────────── Droits IA ───────────────── */
+export interface AIAccessKey {
+  id: string; accountId: unknown; fingerprint: string;
+  restrictions: { groups?: string[]; aliases?: Record<string, string>; features?: string[]; quotas?: Record<string, number>; budgets?: Record<string, number> };
+  createdAt: string; revokedAt: string | null;
+}
+export interface AIUsage { requests: number; tokens: number; cost: number; providerCosts?: Record<string, number> }
+/** Les méthodes de réservation/règlement doivent être atomiques et partagées entre instances. */
+export interface AIEntitlementsStore {
+  createKey(key: AIAccessKey): Awaitable<AIAccessKey>;
+  findKeyByFingerprint(fingerprint: string): Awaitable<AIAccessKey | null>;
+  findKey(id: string): Awaitable<AIAccessKey | null>;
+  revokeKey(id: string, at: string): Awaitable<boolean>;
+  getUsage(keyId: string, window: string): Awaitable<AIUsage>;
+  getProviderCosts?(keyId: string): Awaitable<Record<string, number>>;
+  /** Vérifie et réserve budgets/quotas en une transaction atomique. Codes d'erreur : AI_BUDGET et AI_QUOTA. */
+  reserve(input: { id: string; keyId: string; windows: string[]; amount: number; limits?: { daily?: number; monthly?: number }; quotas?: { requestsPerMinute?: number; tokensPerMinute?: number; requestsPerDay?: number }; estimatedTokens?: number }): Awaitable<void>;
+  settle(id: string, actual: number, tokens?: number, provider?: string | null): Awaitable<void>;
+  recordRequest(keyId: string, window: string, tokens: number): Awaitable<void>;
+}
+export interface AIEffectiveRights {
+  plan: string; groups: string[]; aliases: Record<string, string>; features: string[];
+  quotas: Record<string, number>; budgets: { daily?: number; monthly?: number };
+}
+export interface AIEntitlements {
+  issueKey(accountId: unknown, restrictions?: AIAccessKey['restrictions']): Promise<{ id: string; token: string; prefix: string }>;
+  resolve(token: string): Promise<AIEffectiveRights | null>;
+  decide(token: string, model: string, estimatedCost?: number, estimatedTokens?: number): Promise<{ allowed: boolean; reason?: string; model?: string; group?: string; plan?: string; quota?: string; budget?: string }>;
+  execute(token: string, model: string, estimatedCost: number | ((model: string) => number), fallback?: string[], invoke?: (model: string) => Awaitable<{ cost: number; tokens?: number; provider?: string; [key: string]: unknown }>, estimatedTokens?: number): Promise<Record<string, unknown> & { allowed: boolean }>;
+  revoke(id: string): Promise<boolean>;
+}
+export function createMemoryAIEntitlementsStore(): AIEntitlementsStore;
+export function createAIEntitlements(options: {
+  catalog: PlanCatalog;
+  resolveAccount: (accountId: unknown) => Awaitable<{ plan: string } | null>;
+  plans?: Record<string, { groups?: Record<string, string[]>; allowedGroups?: string[]; aliases?: Record<string, string>; quotas?: { requestsPerMinute?: number; tokensPerMinute?: number; requestsPerDay?: number }; budgets?: { daily?: number; monthly?: number } }>;
+  store?: AIEntitlementsStore;
+  now?: () => number;
+  randomBytes?: (size: number) => Buffer;
+}): AIEntitlements;
+
 export function createMemoryUniqueRoleStore<Account extends Record<string, unknown> = Record<string, unknown>>(
   initial?: Account[]
 ): UniqueRoleStore<Account> & {

@@ -10,6 +10,7 @@ const { runDeploy } = require('./commands/deploy');
 const { runHealth, runRemoteDeploy } = require('./commands/deployRemote');
 const { runPublish, runPublishCheckIos, runPublishFingerprint, runPublishUpload } = require('./commands/publish');
 const { runDispatchGenerate } = require('./commands/dispatch');
+const { runEval } = require('./commands/evalAi');
 
 const COMMANDS = {
   'audit:secrets': runAuditSecrets,
@@ -24,7 +25,8 @@ const COMMANDS = {
   'publish:fingerprint': runPublishFingerprint,
   'publish:upload': runPublishUpload,
   'publish:check-ios': runPublishCheckIos,
-  'dispatch:generate': runDispatchGenerate
+  'dispatch:generate': runDispatchGenerate,
+  eval: runEval
 };
 
 async function runCli(argv = [], options = {}) {

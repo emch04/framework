@@ -19,11 +19,12 @@ astratra test                                # lance le script 'test' de chaque 
 astratra deploy [--mode=<name>]              # exécute les étapes de déploiement définies dans votre propre config
 astratra deploy --remote  (ou deploy:remote)  # déploiement git complet vers un serveur (voir « Déploiement distant »)
 astratra deploy:health                       # santé du serveur : URLs publiques et internes, pm2, âge de la dernière sauvegarde
-astratra publish <ios|android|all|update>    # build EAS, montée de version auto, envoi Google Play / App Store Connect
+astratra publish <ios|android|all|update>    # build EAS (chez Expo ou sur la machine), montée de version auto, envoi Google Play / App Store Connect
 astratra publish:fingerprint [--record]      # compare l'empreinte native à la dernière publiée
 astratra publish:upload --platform=<p> --file=<archive>   # envoie un .aab/.ipa déjà construit
 astratra publish:check-ios                   # vérifie la clé App Store Connect (un appel signé, rien de construit)
 astratra dispatch:generate [--out=<file>] [--key=<file.pub>]   # script de commande forcée SSH + ligne authorized_keys
+astratra eval --provider=<id> [--cases=<file>] [--base-url=<url>] [--api-key-env=<VAR>] [--min-pass=<0..1>]   # évalue un modèle sur un jeu de cas (promptfoo)
 ```
 
 Chaque commande retourne un exit code non-zéro en cas de findings/échecs —
@@ -161,6 +162,15 @@ effective quand elle est déclarée ailleurs que dans `package.json`.
   le build, puis `xcrun altool --upload-app` envoie le `.ipa` (une erreur
   `ITMS-` fait échouer même si altool sort en 0). Sans clé : Transporter
   s'ouvre avec le fichier (`fallback: "none"` pour échouer).
+- **Build local** : `"eas": { "mode": "local" }` fabrique sur la machine
+  (`eas build --local`, Xcode pour iOS, JDK 17 et SDK Android pour Android)
+  au lieu d'attendre la file d'Expo ; l'archive est écrite dans
+  `downloadsDir` sous un nom provisoire puis renommée, puis envoyée comme un
+  build EAS. `eas.localWorkDir` (par exemple un disque externe) reçoit le
+  dossier de travail, vidé avant et après chaque build. Le nom du fichier
+  porte l'heure du build (`local-AAAAMMJJ-HHMM`) à la place du numéro.
+  Code `EAS_LOCAL_BUILD_FAILED` ; un mode inconnu (`PUBLISH_BUILD_MODE_INVALID`)
+  arrête tout avant la montée de version.
 - **update** : `eas update` seul, message = dernier commit si absent.
 - `all` s'arrête à la première plateforme en échec ; l'empreinte est
   enregistrée dès qu'une plateforme est passée.
@@ -284,6 +294,56 @@ seulement pour X » nomme X, et un modèle de langage lit les mots, pas
 l'intention de la phrase. Seul `allow` (appliqué à la ligne) fait une exception.
 `findForbiddenTermsInFiles({ dirs, terms })` fait la même chose sur disque, en
 sautant les tests.
+
+## Évaluer une IA (`eval`)
+
+Mesure un fournisseur ou un modèle sur **un jeu de cas** avec
+[promptfoo](https://github.com/promptfoo/promptfoo) (MIT). `promptfoo` est une
+*devDependency* (pair optionnel) : `npm install --save-dev promptfoo`, Node 22.22
+ou plus. Tout reste local : télémétrie, vérification de mise à jour et partage en
+ligne sont coupés, et rien n'est écrit dans l'historique de promptfoo.
+
+1. Écris `evals/cases.json` (exemple complet : `examples/eval-cases.example.json`) :
+
+```json
+{
+  "prompt": "Tu es l'assistant d'une école. Réponds en français.\n\nQuestion : {{question}}",
+  "cases": [
+    {
+      "description": "Capitale de la RDC",
+      "vars": { "question": "Quelle est la capitale de la République démocratique du Congo ?" },
+      "assert": [{ "type": "icontains", "value": "Kinshasa" }]
+    }
+  ]
+}
+```
+
+Les assertions sont celles de promptfoo (`icontains`, `not-icontains`, `javascript`,
+`llm-rubric`…). Un cas **sans assertion est refusé** : il réussirait toujours et
+fausserait le taux.
+
+2. Lance :
+
+```bash
+# Un modèle servi par llama.cpp (voir @astratra/ai (fournisseur llama.cpp)), la clé lue dans LLAMA_API_KEY :
+astratra eval --provider=openai:chat:local --base-url=http://127.0.0.1:8080/v1 --api-key-env=LLAMA_API_KEY --min-pass=0.9
+# Un fournisseur promptfoo quelconque :
+astratra eval --provider=openai:chat:gpt-… --cases=evals/orthographe.json
+```
+
+ou fixe-les dans `astratra.config.json` :
+
+```json
+{ "eval": { "cases": "evals/cases.json", "minPassRate": 0.9,
+            "providers": [{ "id": "openai:chat:local", "baseUrl": "http://127.0.0.1:8080/v1", "apiKeyEnv": "LLAMA_API_KEY" }] } }
+```
+
+La commande écrit la configuration promptfoo dans `.astratra-evals/promptfooconfig.json`
+(sans aucune clé : seul le **nom** de la variable d'environnement y figure) et le
+résultat dans `.astratra-evals/last-result.json`, affiche un score par fournisseur
+avec les cas ratés et leur raison, et sort en **1** si un fournisseur passe sous
+`minPassRate` (défaut 1, soit tous les cas) — utilisable en CI. Une erreur
+d'exécution (réseau, serveur arrêté) compte comme un échec, pas comme un succès.
 
 ## Tests
 

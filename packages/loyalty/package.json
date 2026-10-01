@@ -1,6 +1,6 @@
 {
   "name": "@astratra/loyalty",
-  "version": "0.2.0",
+  "version": "1.0.0",
   "description": "Loyalty rules without a database: stamp cards (N visits in a window earn a reward) and monthly passes (N uses per calendar month).",
   "engines": {
     "node": ">=20"

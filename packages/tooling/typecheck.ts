@@ -43,6 +43,7 @@ import {
   backupAgeDays,
   buildAltoolCommand,
   buildEasBuildArgs,
+  buildEasLocalBuildArgs,
   buildRemoteDeployArgs,
   buildSshInvocation,
   checkAscKey,
@@ -59,6 +60,7 @@ import {
   pm2ReloadCommand,
   resolveDispatchAction,
   runDispatchGenerate,
+  runEval,
   runHealth,
   runProcess,
   runPublish,
@@ -68,7 +70,7 @@ import {
   signJwt,
   waitForBuild
 } from '@astratra/tooling';
-import type { DispatchConfig, PublishResult, RemoteDeployConfig } from '@astratra/tooling';
+import type { AstratraConfig, DispatchConfig, EvalResult, PublishResult, RemoteDeployConfig } from '@astratra/tooling';
 
 const rootDir = '.';
 const config = mergeConfig(DEFAULT_CONFIG, {
@@ -154,6 +156,7 @@ void mustBump;
 computeFingerprint('.', { compute: async () => ({ hash: 'x' }) });
 applyVersionBump('.', 'patch');
 buildEasBuildArgs({ platform: 'ios', profile: 'production' });
+buildEasLocalBuildArgs({ platform: 'android', output: '/tmp/app.aab' });
 waitForBuild({ buildId: 'b', view: async () => ({ status: 'FINISHED', url: 'u', buildNumber: '1', appVersion: null }) });
 signJwt({ algorithm: 'ES256', header: { kid: 'K' }, payload: { aud: 'x' }, privateKey: 'pem' });
 createAscToken({ keyId: 'ABCDE12345', issuerId: 'uuid', privateKey: 'pem' });
@@ -196,3 +199,8 @@ runDispatchGenerate(rootDir, { dispatch }, { out: 'actions.sh' });
 const failure = new ToolingError('X', 'message', 400);
 const failureCode: string = failure.code;
 void failureCode;
+
+/* ---- AI evaluation ---- */
+
+runEval(rootDir, { eval: { providers: [{ id: 'openai:chat:local', baseUrl: 'http://127.0.0.1:8080/v1', apiKeyEnv: 'LLAMA_API_KEY' }], minPassRate: 0.9 } } as AstratraConfig, { cases: 'evals/cases.json' })
+  .then((evaluated: EvalResult) => evaluated.summaries.map((summary) => summary.passRate));

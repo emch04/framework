@@ -2,7 +2,9 @@
 
 Speech synthesis, segmentation, echo filtering, local transcription helpers,
 and session privacy policy without bundled models or engines. Providers,
-keys, storage, clock, network, classifiers, and decoders are injected.
+keys, storage, clock, network, classifiers, and decoders are injected. The
+`createLocalSpeech` module (see "Local CPU speech") is the one exception: it
+bundles a small HTTP client and a lazy sherpa-onnx loader.
 
 ## Pure builders shared by server and client
 
@@ -279,14 +281,79 @@ and retries the whole reading with the next injected provider. It returns the
 ordered pieces and the provider that completed them, preventing mixed voices
 within a reading. Combining audio and applying pauses remain caller owned.
 
+## Local CPU speech (`src/local`)
+
+Local transcription and synthesis without a paid API, with a choice of engine:
+
+| Engine | What it is | Dependency |
+| --- | --- | --- |
+| `sherpa` | [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) (Apache-2.0), in-process through `sherpa-onnx-node` | optional peer, install it yourself; loaded lazily, only when this engine is used |
+| `whisper-http` | a **faster-whisper** server (MIT) speaking the OpenAI audio API (`speaches`, `faster-whisper-server`...) | none (plain `fetch`) |
+
+`sherpa-onnx-node` is declared as an optional peer dependency: nothing heavier
+is installed for those who do not use it. The engines plug into the fallback
+chains above through `asTranscriptionProvider` and `asVoiceProvider`.
+
+#### Exemple
+```js
+const {
+  createLocalSpeech, asTranscriptionProvider, asVoiceProvider,
+  createTranscriptionProviderChain, createProviderVoiceService
+} = require('@astratra/voice');
+
+const speech = createLocalSpeech({
+  engine: 'auto', // sherpa si configuré ET installé, sinon whisper-http
+  sherpa: {
+    // Configurations sherpa-onnx, avec les chemins de TES modèles (aucun n'est fourni ici).
+    recognizerConfig: { featConfig: { sampleRate: 16000, featureDim: 80 }, modelConfig: { whisper: { encoder: '…', decoder: '…' }, tokens: '…', numThreads: 4, provider: 'cpu' } },
+    ttsConfig: { model: { vits: { model: '…', tokens: '…', dataDir: '…' }, numThreads: 2, provider: 'cpu' } },
+  },
+  whisperHttp: { baseUrl: 'http://127.0.0.1:8000', model: 'Systran/faster-whisper-small', ttsModel: 'kokoro', ttsVoice: 'ff_siwis' },
+});
+
+await speech.transcribe({ audio: wavBytes, language: 'fr' }); // { text, heardLanguage, logprob?, noSpeechProbability? }
+await speech.synthesize({ text: 'Bonjour', voice: 3 });        // { audio (WAV), format: 'wav', mimeType: 'audio/wav' }
+
+// Dans les chaînes de @astratra/voice :
+const stt = createTranscriptionProviderChain({ providers: [asTranscriptionProvider(speech), nuage] });
+const tts = createProviderVoiceService({ providers: [asVoiceProvider(speech, { voices: { fr: 3 } })] });
+```
+
+- **Entrée** : un WAV (PCM 16 bits ou flottant 32 bits, stéréo ramenée en mono) ;
+  sherpa accepte aussi des `Float32Array` mono. Le WAV est rééchantillonné à
+  16 kHz pour sherpa (interpolation linéaire, suffisante pour la parole).
+- **Sherpa** charge ses modèles à la **première** utilisation (plusieurs
+  secondes), pas à la création ; `close()` les libère. La voix est un numéro de
+  locuteur (`sid`).
+- **Service HTTP** : l'erreur HTTP porte `status`, donc `classifyProviderError`
+  de `@astratra/voice` la range (429 → quota, 5xx → transitoire) et la chaîne
+  bascule sur le fournisseur suivant. La confiance (`logprob`) et la probabilité
+  de non-parole viennent des segments, pour `analyzeTranscription`.
+- Une moitié non configurée (pas de `ttsConfig`, pas de `ttsModel`) refuse
+  proprement (`NOT_CONFIGURED`) et `capabilities` le dit.
+
+### Lancer un service faster-whisper
+
+Exemple avec `speaches` (image `ghcr.io/speaches-ai/speaches:latest-cpu`, port
+8000) : télécharge un modèle (`Systran/faster-whisper-small`) puis pointe
+`whisperHttp.baseUrl` dessus. Ne l'expose pas sans clé ni TLS.
+
+### Limites
+
+Testé avec des **doublures** : un faux module sherpa-onnx et un faux serveur
+HTTP. Ni `sherpa-onnx-node` ni modèle n'ont été installés ici : les appels sherpa
+(`OfflineRecognizer`, `createStream`, `acceptWaveform`, `decodeAsync`,
+`OfflineTts.generateAsync`) ont été relevés dans le code du paquet 1.13.8 mais
+jamais exécutés avec un vrai modèle. Pas de reconnaissance en flux continu.
+
 ## Intentionally out of scope
 
 - no Piper, ffmpeg, Redis, filesystem, or HTTP dependency (Node's `spawn` and
   file system are injected, so the assembler, the resident pool and the file
   cache run against fakes in tests);
 - no text normalization, language detection, user-facing copy, or fixed app roles;
-- no Python server implementation or bundled network client;
-- no model files, ONNX, sherpa, or Whisper bindings;
+- no model files, and no Python server (the `src/local` clients only talk to
+  a service you run yourself);
 - no cache eviction policy for the memory and injected caches: the backing store
   owns retention beyond the TTL (the file cache prunes by age).
 

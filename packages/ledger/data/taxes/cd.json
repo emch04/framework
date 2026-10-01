@@ -1,0 +1,1160 @@
+{
+ "country": "CD",
+ "source": {
+  "repository": "https://github.com/odoo/odoo",
+  "branch": "20.0",
+  "commit": "28ac90563f7239aef8fea6f20494adbcdd104236",
+  "license": "LGPL-3.0-only",
+  "copyright": "Odoo S.A.",
+  "files": [
+   {
+    "path": "addons/l10n_cd/data/template/account.tax-cd.csv",
+    "url": "https://raw.githubusercontent.com/odoo/odoo/28ac90563f7239aef8fea6f20494adbcdd104236/addons/l10n_cd/data/template/account.tax-cd.csv",
+    "sha256": "7c9f7e1982d85da3d52238011a952e55ac4485748a98c324c49f0a729a8154f2"
+   },
+   {
+    "path": "addons/l10n_cd/data/template/account.tax.group-cd.csv",
+    "url": "https://raw.githubusercontent.com/odoo/odoo/28ac90563f7239aef8fea6f20494adbcdd104236/addons/l10n_cd/data/template/account.tax.group-cd.csv",
+    "sha256": "07c8554a093a4fecee4cbe590241b9a68c1c2a14744345dbbd70248bd05ef28e"
+   },
+   {
+    "path": "addons/l10n_cd/data/template/account.tax-cd_syscebnl.csv",
+    "url": "https://raw.githubusercontent.com/odoo/odoo/28ac90563f7239aef8fea6f20494adbcdd104236/addons/l10n_cd/data/template/account.tax-cd_syscebnl.csv",
+    "sha256": "f7160951428f5486a148be82ea34d38fa459f5624131ff40a845cd6c577315eb"
+   },
+   {
+    "path": "addons/l10n_cd/data/template/account.tax.group-cd_syscebnl.csv",
+    "url": "https://raw.githubusercontent.com/odoo/odoo/28ac90563f7239aef8fea6f20494adbcdd104236/addons/l10n_cd/data/template/account.tax.group-cd_syscebnl.csv",
+    "sha256": "e751a02fddf374316d7c92a85a35104e40a541c9825670daf42130afadb09688"
+   }
+  ]
+ },
+ "charts": {
+  "syscohada": {
+   "groups": [
+    {
+     "id": "tax_group_0",
+     "labels": {
+      "en": "VAT 0%",
+      "fr": "T.V.A. 0%"
+     }
+    },
+    {
+     "id": "tax_group_16",
+     "labels": {
+      "en": "VAT 16%",
+      "fr": "T.V.A. 16%"
+     }
+    }
+   ],
+   "taxes": [
+    {
+     "id": "tva_sale_16",
+     "name": "16% G",
+     "labels": {
+      "en": "16% merchandises",
+      "fr": "16% Marchandises"
+     },
+     "active": true,
+     "amount": "16.0",
+     "amountType": "percent",
+     "use": "sale",
+     "group": "tax_group_16",
+     "repartition": [
+      {
+       "kind": "base",
+       "document": "invoice",
+       "factorPercent": 100,
+       "reportTag": "CD_1a"
+      },
+      {
+       "kind": "tax",
+       "document": "invoice",
+       "factorPercent": 100,
+       "reportTag": "CD_1b",
+       "account": "4431"
+      },
+      {
+       "kind": "base",
+       "document": "refund",
+       "factorPercent": 100,
+       "reportTag": "CD_1a"
+      },
+      {
+       "kind": "tax",
+       "document": "refund",
+       "factorPercent": 100,
+       "reportTag": "CD_1b",
+       "account": "4431"
+      }
+     ]
+    },
+    {
+     "id": "tva_sale_16_services",
+     "name": "16% S",
+     "labels": {
+      "en": "16% Services"
+     },
+     "active": true,
+     "amount": "16.0",
+     "amountType": "percent",
+     "use": "sale",
+     "group": "tax_group_16",
+     "repartition": [
+      {
+       "kind": "base",
+       "document": "invoice",
+       "factorPercent": 100,
+       "reportTag": "CD_2a"
+      },
+      {
+       "kind": "tax",
+       "document": "invoice",
+       "factorPercent": 100,
+       "reportTag": "CD_2b",
+       "account": "4431"
+      },
+      {
+       "kind": "base",
+       "document": "refund",
+       "factorPercent": 100,
+       "reportTag": "CD_2a"
+      },
+      {
+       "kind": "tax",
+       "document": "refund",
+       "factorPercent": 100,
+       "reportTag": "CD_2b",
+       "account": "4431"
+      }
+     ]
+    },
+    {
+     "id": "tva_sale_16_pm",
+     "name": "16% PM",
+     "labels": {
+      "en": "16% Public Markets",
+      "fr": "16% Marchés publics"
+     },
+     "active": false,
+     "amount": "16.0",
+     "amountType": "percent",
+     "use": "sale",
+     "group": "tax_group_16",
+     "repartition": [
+      {
+       "kind": "base",
+       "document": "invoice",
+       "factorPercent": 100,
+       "reportTag": "CD_5a"
+      },
+      {
+       "kind": "tax",
+       "document": "invoice",
+       "factorPercent": 100,
+       "reportTag": "CD_5b",
+       "account": "4431"
+      },
+      {
+       "kind": "base",
+       "document": "refund",
+       "factorPercent": 100,
+       "reportTag": "CD_5a"
+      },
+      {
+       "kind": "tax",
+       "document": "refund",
+       "factorPercent": 100,
+       "reportTag": "CD_5b",
+       "account": "4431"
+      }
+     ]
+    },
+    {
+     "id": "tva_sale_16_goods_sd",
+     "name": "16% G SD",
+     "labels": {
+      "en": "16% Goods Self Delivery",
+      "fr": "16% Biens Livraison à soi-meme"
+     },
+     "active": false,
+     "amount": "16.0",
+     "amountType": "percent",
+     "use": "sale",
+     "group": "tax_group_16",
+     "repartition": [
+      {
+       "kind": "base",
+       "document": "invoice",
+       "factorPercent": 100,
+       "reportTag": "CD_3a"
+      },
+      {
+       "kind": "tax",
+       "document": "invoice",
+       "factorPercent": 100,
+       "reportTag": "CD_3b",
+       "account": "4431"
+      },
+      {
+       "kind": "base",
+       "document": "refund",
+       "factorPercent": 100,
+       "reportTag": "CD_3a"
+      },
+      {
+       "kind": "tax",
+       "document": "refund",
+       "factorPercent": 100,
+       "reportTag": "CD_3b",
+       "account": "4431"
+      }
+     ],
+     "nameFr": "16 G LASM"
+    },
+    {
+     "id": "tva_sale_16_services_sd",
+     "name": "16% S SD",
+     "labels": {
+      "en": "16% Services Self Delivery",
+      "fr": "16% Services Livraison à soi-meme"
+     },
+     "active": false,
+     "amount": "16.0",
+     "amountType": "percent",
+     "use": "sale",
+     "group": "tax_group_16",
+     "repartition": [
+      {
+       "kind": "base",
+       "document": "invoice",
+       "factorPercent": 100,
+       "reportTag": "CD_4a"
+      },
+      {
+       "kind": "tax",
+       "document": "invoice",
+       "factorPercent": 100,
+       "reportTag": "CD_4b",
+       "account": "4431"
+      },
+      {
+       "kind": "base",
+       "document": "refund",
+       "factorPercent": 100,
+       "reportTag": "CD_4a"
+      },
+      {
+       "kind": "tax",
+       "document": "refund",
+       "factorPercent": 100,
+       "reportTag": "CD_4b",
+       "account": "4431"
+      }
+     ],
+     "nameFr": "16 S LASM"
+    },
+    {
+     "id": "tva_purchase_good_16",
+     "name": "16% M",
+     "labels": {
+      "en": "16% merchandises",
+      "fr": "16% Marchandises"
+     },
+     "active": true,
+     "amount": "16.0",
+     "amountType": "percent",
+     "use": "purchase",
+     "group": "tax_group_16",
+     "repartition": [
+      {
+       "kind": "base",
+       "document": "invoice",
+       "factorPercent": 100
+      },
+      {
+       "kind": "tax",
+       "document": "invoice",
+       "factorPercent": 100,
+       "reportTag": "CD_12f",
+       "account": "4452"
+      },
+      {
+       "kind": "base",
+       "document": "refund",
+       "factorPercent": 100
+      },
+      {
+       "kind": "tax",
+       "document": "refund",
+       "factorPercent": 100,
+       "reportTag": "CD_12f",
+       "account": "4452"
+      }
+     ]
+    },
+    {
+     "id": "tva_purchase_assets_16",
+     "name": "16% Asset",
+     "labels": {
+      "en": "16% assets",
+      "fr": "16% immobilisations"
+     },
+     "active": true,
+     "amount": "16.0",
+     "amountType": "percent",
+     "use": "purchase",
+     "group": "tax_group_16",
+     "repartition": [
+      {
+       "kind": "base",
+       "document": "invoice",
+       "factorPercent": 100
+      },
+      {
+       "kind": "tax",
+       "document": "invoice",
+       "factorPercent": 100,
+       "reportTag": "CD_11f",
+       "account": "4451"
+      },
+      {
+       "kind": "base",
+       "document": "refund",
+       "factorPercent": 100
+      },
+      {
+       "kind": "tax",
+       "document": "refund",
+       "factorPercent": 100,
+       "reportTag": "CD_11f",
+       "account": "4451"
+      }
+     ],
+     "nameFr": "16% Immo"
+    },
+    {
+     "id": "tva_export_0",
+     "name": "0% EX",
+     "labels": {
+      "en": "0% (export)",
+      "fr": "0% (exportation)"
+     },
+     "active": true,
+     "amount": "0.0",
+     "amountType": "percent",
+     "use": "sale",
+     "group": "tax_group_0",
+     "repartition": [
+      {
+       "kind": "base",
+       "document": "invoice",
+       "factorPercent": 100,
+       "reportTag": "CD_6a"
+      },
+      {
+       "kind": "tax",
+       "document": "invoice",
+       "factorPercent": 100
+      },
+      {
+       "kind": "base",
+       "document": "refund",
+       "factorPercent": 100,
+       "reportTag": "CD_6a"
+      },
+      {
+       "kind": "tax",
+       "document": "refund",
+       "factorPercent": 100
+      }
+     ],
+     "replaces": "tva_sale_16_services,tva_sale_16"
+    },
+    {
+     "id": "tva_import_goods_16",
+     "name": "16% G EX",
+     "labels": {
+      "en": "16% (import)",
+      "fr": "16% (importation)"
+     },
+     "active": true,
+     "amount": "16.0",
+     "amountType": "percent",
+     "use": "purchase",
+     "group": "tax_group_16",
+     "repartition": [
+      {
+       "kind": "base",
+       "document": "invoice",
+       "factorPercent": 100,
+       "reportTag": "CD_1a_rc"
+      },
+      {
+       "kind": "tax",
+       "document": "invoice",
+       "factorPercent": -100,
+       "reportTag": "CD_1b",
+       "account": "4431"
+      },
+      {
+       "kind": "tax",
+       "document": "invoice",
+       "factorPercent": 100,
+       "reportTag": "CD_12e",
+       "account": "4451"
+      },
+      {
+       "kind": "base",
+       "document": "refund",
+       "factorPercent": 100,
+       "reportTag": "CD_1a_rc"
+      },
+      {
+       "kind": "tax",
+       "document": "refund",
+       "factorPercent": -100,
+       "reportTag": "CD_1b",
+       "account": "4431"
+      },
+      {
+       "kind": "tax",
+       "document": "refund",
+       "factorPercent": 100,
+       "reportTag": "CD_12e",
+       "account": "4451"
+      }
+     ],
+     "replaces": "tva_purchase_good_16"
+    },
+    {
+     "id": "tva_import_assets_16",
+     "name": "16% I EX",
+     "labels": {
+      "en": "16% (import of assets)",
+      "fr": "16% (importation d'immobilisations)"
+     },
+     "active": false,
+     "amount": "16.0",
+     "amountType": "percent",
+     "use": "purchase",
+     "group": "tax_group_16",
+     "repartition": [
+      {
+       "kind": "base",
+       "document": "invoice",
+       "factorPercent": 100,
+       "reportTag": "CD_1a_rc"
+      },
+      {
+       "kind": "tax",
+       "document": "invoice",
+       "factorPercent": -100,
+       "reportTag": "CD_1b",
+       "account": "4431"
+      },
+      {
+       "kind": "tax",
+       "document": "invoice",
+       "factorPercent": 100,
+       "reportTag": "CD_11e",
+       "account": "4451"
+      },
+      {
+       "kind": "base",
+       "document": "refund",
+       "factorPercent": 100,
+       "reportTag": "CD_1a_rc"
+      },
+      {
+       "kind": "tax",
+       "document": "refund",
+       "factorPercent": -100,
+       "reportTag": "CD_1b",
+       "account": "4431"
+      },
+      {
+       "kind": "tax",
+       "document": "refund",
+       "factorPercent": 100,
+       "reportTag": "CD_11e",
+       "account": "4451"
+      }
+     ],
+     "replaces": "tva_purchase_assets_16"
+    },
+    {
+     "id": "tva_exempt_0",
+     "name": "0%",
+     "labels": {
+      "en": "0% (exempt)",
+      "fr": "0% (exonéré)"
+     },
+     "active": true,
+     "amount": "0.0",
+     "amountType": "percent",
+     "use": "sale",
+     "group": "tax_group_0",
+     "repartition": [
+      {
+       "kind": "base",
+       "document": "invoice",
+       "factorPercent": 100,
+       "reportTag": "CD_7a"
+      },
+      {
+       "kind": "tax",
+       "document": "invoice",
+       "factorPercent": 100
+      },
+      {
+       "kind": "base",
+       "document": "refund",
+       "factorPercent": 100,
+       "reportTag": "CD_7a"
+      },
+      {
+       "kind": "tax",
+       "document": "refund",
+       "factorPercent": 100
+      }
+     ]
+    },
+    {
+     "id": "tva_non_imposable_0",
+     "name": "0% NI",
+     "labels": {
+      "en": "0% (non imposable)"
+     },
+     "active": false,
+     "amount": "0.0",
+     "amountType": "percent",
+     "use": "sale",
+     "group": "tax_group_0",
+     "repartition": [
+      {
+       "kind": "base",
+       "document": "invoice",
+       "factorPercent": 100,
+       "reportTag": "CD_8a"
+      },
+      {
+       "kind": "tax",
+       "document": "invoice",
+       "factorPercent": 100
+      },
+      {
+       "kind": "base",
+       "document": "refund",
+       "factorPercent": 100,
+       "reportTag": "CD_8a"
+      },
+      {
+       "kind": "tax",
+       "document": "refund",
+       "factorPercent": 100
+      }
+     ]
+    },
+    {
+     "id": "tva_purchase_exempt_0",
+     "name": "0%",
+     "labels": {
+      "en": "0% (exempt)",
+      "fr": "0% (exonéré)"
+     },
+     "active": false,
+     "amount": "0.0",
+     "amountType": "percent",
+     "use": "purchase",
+     "group": "tax_group_0",
+     "repartition": [
+      {
+       "kind": "base",
+       "document": "invoice",
+       "factorPercent": 100
+      },
+      {
+       "kind": "tax",
+       "document": "invoice",
+       "factorPercent": 100
+      },
+      {
+       "kind": "base",
+       "document": "refund",
+       "factorPercent": 100
+      },
+      {
+       "kind": "tax",
+       "document": "refund",
+       "factorPercent": 100
+      }
+     ]
+    }
+   ]
+  },
+  "syscebnl": {
+   "groups": [
+    {
+     "id": "syscebnl_tax_group_0",
+     "labels": {
+      "en": "VAT 0%",
+      "fr": "T.V.A. 0%"
+     }
+    },
+    {
+     "id": "syscebnl_tax_group_16",
+     "labels": {
+      "en": "VAT 16%",
+      "fr": "T.V.A. 16%"
+     }
+    }
+   ],
+   "taxes": [
+    {
+     "id": "syscebnl_tva_sale_16",
+     "name": "16% G",
+     "labels": {
+      "en": "16% merchandises",
+      "fr": "16% Marchandises"
+     },
+     "active": true,
+     "amount": "16.0",
+     "amountType": "percent",
+     "use": "sale",
+     "group": "syscebnl_tax_group_16",
+     "repartition": [
+      {
+       "kind": "base",
+       "document": "invoice",
+       "factorPercent": 100,
+       "reportTag": "CD_1a"
+      },
+      {
+       "kind": "tax",
+       "document": "invoice",
+       "factorPercent": 100,
+       "reportTag": "CD_1b",
+       "account": "443"
+      },
+      {
+       "kind": "base",
+       "document": "refund",
+       "factorPercent": 100,
+       "reportTag": "CD_1a"
+      },
+      {
+       "kind": "tax",
+       "document": "refund",
+       "factorPercent": 100,
+       "reportTag": "CD_1b",
+       "account": "443"
+      }
+     ]
+    },
+    {
+     "id": "syscebnl_tva_sale_16_services",
+     "name": "16% S",
+     "labels": {
+      "en": "16% Services"
+     },
+     "active": true,
+     "amount": "16.0",
+     "amountType": "percent",
+     "use": "sale",
+     "group": "syscebnl_tax_group_16",
+     "repartition": [
+      {
+       "kind": "base",
+       "document": "invoice",
+       "factorPercent": 100,
+       "reportTag": "CD_2a"
+      },
+      {
+       "kind": "tax",
+       "document": "invoice",
+       "factorPercent": 100,
+       "reportTag": "CD_2b",
+       "account": "443"
+      },
+      {
+       "kind": "base",
+       "document": "refund",
+       "factorPercent": 100,
+       "reportTag": "CD_2a"
+      },
+      {
+       "kind": "tax",
+       "document": "refund",
+       "factorPercent": 100,
+       "reportTag": "CD_2b",
+       "account": "443"
+      }
+     ]
+    },
+    {
+     "id": "syscebnl_tva_sale_16_pm",
+     "name": "16% PM",
+     "labels": {
+      "en": "16% Public Markets",
+      "fr": "16% Marchés publics"
+     },
+     "active": false,
+     "amount": "16.0",
+     "amountType": "percent",
+     "use": "sale",
+     "group": "syscebnl_tax_group_16",
+     "repartition": [
+      {
+       "kind": "base",
+       "document": "invoice",
+       "factorPercent": 100,
+       "reportTag": "CD_5a"
+      },
+      {
+       "kind": "tax",
+       "document": "invoice",
+       "factorPercent": 100,
+       "reportTag": "CD_5b",
+       "account": "443"
+      },
+      {
+       "kind": "base",
+       "document": "refund",
+       "factorPercent": 100,
+       "reportTag": "CD_5a"
+      },
+      {
+       "kind": "tax",
+       "document": "refund",
+       "factorPercent": 100,
+       "reportTag": "CD_5b",
+       "account": "443"
+      }
+     ]
+    },
+    {
+     "id": "syscebnl_tva_sale_16_goods_sd",
+     "name": "16% G SD",
+     "labels": {
+      "en": "16% Goods Self Delivery",
+      "fr": "16% Biens Livraison à soi-meme"
+     },
+     "active": false,
+     "amount": "16.0",
+     "amountType": "percent",
+     "use": "sale",
+     "group": "syscebnl_tax_group_16",
+     "repartition": [
+      {
+       "kind": "base",
+       "document": "invoice",
+       "factorPercent": 100,
+       "reportTag": "CD_3a"
+      },
+      {
+       "kind": "tax",
+       "document": "invoice",
+       "factorPercent": 100,
+       "reportTag": "CD_3b",
+       "account": "443"
+      },
+      {
+       "kind": "base",
+       "document": "refund",
+       "factorPercent": 100,
+       "reportTag": "CD_3a"
+      },
+      {
+       "kind": "tax",
+       "document": "refund",
+       "factorPercent": 100,
+       "reportTag": "CD_3b",
+       "account": "443"
+      }
+     ],
+     "nameFr": "16 G LASM"
+    },
+    {
+     "id": "syscebnl_tva_sale_16_services_sd",
+     "name": "16% S SD",
+     "labels": {
+      "en": "16% Services Self Delivery",
+      "fr": "16% Services Livraison à soi-meme"
+     },
+     "active": false,
+     "amount": "16.0",
+     "amountType": "percent",
+     "use": "sale",
+     "group": "syscebnl_tax_group_16",
+     "repartition": [
+      {
+       "kind": "base",
+       "document": "invoice",
+       "factorPercent": 100,
+       "reportTag": "CD_4a"
+      },
+      {
+       "kind": "tax",
+       "document": "invoice",
+       "factorPercent": 100,
+       "reportTag": "CD_4b",
+       "account": "443"
+      },
+      {
+       "kind": "base",
+       "document": "refund",
+       "factorPercent": 100,
+       "reportTag": "CD_4a"
+      },
+      {
+       "kind": "tax",
+       "document": "refund",
+       "factorPercent": 100,
+       "reportTag": "CD_4b",
+       "account": "443"
+      }
+     ],
+     "nameFr": "16 S LASM"
+    },
+    {
+     "id": "syscebnl_tva_purchase_good_16",
+     "name": "16% M",
+     "labels": {
+      "en": "16% merchandises",
+      "fr": "16% Marchandises"
+     },
+     "active": true,
+     "amount": "16.0",
+     "amountType": "percent",
+     "use": "purchase",
+     "group": "syscebnl_tax_group_16",
+     "repartition": [
+      {
+       "kind": "base",
+       "document": "invoice",
+       "factorPercent": 100
+      },
+      {
+       "kind": "tax",
+       "document": "invoice",
+       "factorPercent": 100,
+       "reportTag": "CD_12f",
+       "account": "445"
+      },
+      {
+       "kind": "base",
+       "document": "refund",
+       "factorPercent": 100
+      },
+      {
+       "kind": "tax",
+       "document": "refund",
+       "factorPercent": 100,
+       "reportTag": "CD_12f",
+       "account": "445"
+      }
+     ]
+    },
+    {
+     "id": "syscebnl_tva_purchase_assets_16",
+     "name": "16% Asset",
+     "labels": {
+      "en": "16% assets",
+      "fr": "16% immobilisations"
+     },
+     "active": true,
+     "amount": "16.0",
+     "amountType": "percent",
+     "use": "purchase",
+     "group": "syscebnl_tax_group_16",
+     "repartition": [
+      {
+       "kind": "base",
+       "document": "invoice",
+       "factorPercent": 100
+      },
+      {
+       "kind": "tax",
+       "document": "invoice",
+       "factorPercent": 100,
+       "reportTag": "CD_11f",
+       "account": "445"
+      },
+      {
+       "kind": "base",
+       "document": "refund",
+       "factorPercent": 100
+      },
+      {
+       "kind": "tax",
+       "document": "refund",
+       "factorPercent": 100,
+       "reportTag": "CD_11f",
+       "account": "445"
+      }
+     ],
+     "nameFr": "16% Immo"
+    },
+    {
+     "id": "syscebnl_tva_export_0",
+     "name": "0% EX",
+     "labels": {
+      "en": "0% (export)",
+      "fr": "0% (exportation)"
+     },
+     "active": true,
+     "amount": "0.0",
+     "amountType": "percent",
+     "use": "sale",
+     "group": "syscebnl_tax_group_0",
+     "repartition": [
+      {
+       "kind": "base",
+       "document": "invoice",
+       "factorPercent": 100,
+       "reportTag": "CD_6a"
+      },
+      {
+       "kind": "tax",
+       "document": "invoice",
+       "factorPercent": 100
+      },
+      {
+       "kind": "base",
+       "document": "refund",
+       "factorPercent": 100,
+       "reportTag": "CD_6a"
+      },
+      {
+       "kind": "tax",
+       "document": "refund",
+       "factorPercent": 100
+      }
+     ],
+     "replaces": "syscebnl_tva_sale_16_services,syscebnl_tva_sale_16"
+    },
+    {
+     "id": "syscebnl_tva_import_goods_16",
+     "name": "16% G EX",
+     "labels": {
+      "en": "16% (import)",
+      "fr": "16% (importation)"
+     },
+     "active": true,
+     "amount": "16.0",
+     "amountType": "percent",
+     "use": "purchase",
+     "group": "syscebnl_tax_group_16",
+     "repartition": [
+      {
+       "kind": "base",
+       "document": "invoice",
+       "factorPercent": 100,
+       "reportTag": "CD_1a_rc"
+      },
+      {
+       "kind": "tax",
+       "document": "invoice",
+       "factorPercent": -100,
+       "reportTag": "CD_1b",
+       "account": "443"
+      },
+      {
+       "kind": "tax",
+       "document": "invoice",
+       "factorPercent": 100,
+       "reportTag": "CD_12e",
+       "account": "445"
+      },
+      {
+       "kind": "base",
+       "document": "refund",
+       "factorPercent": 100,
+       "reportTag": "CD_1a_rc"
+      },
+      {
+       "kind": "tax",
+       "document": "refund",
+       "factorPercent": -100,
+       "reportTag": "CD_1b",
+       "account": "443"
+      },
+      {
+       "kind": "tax",
+       "document": "refund",
+       "factorPercent": 100,
+       "reportTag": "CD_12e",
+       "account": "445"
+      }
+     ],
+     "replaces": "syscebnl_tva_purchase_good_16"
+    },
+    {
+     "id": "syscebnl_tva_import_assets_16",
+     "name": "16% I EX",
+     "labels": {
+      "en": "16% (import of assets)",
+      "fr": "16% (importation d'immobilisations)"
+     },
+     "active": false,
+     "amount": "16.0",
+     "amountType": "percent",
+     "use": "purchase",
+     "group": "syscebnl_tax_group_16",
+     "repartition": [
+      {
+       "kind": "base",
+       "document": "invoice",
+       "factorPercent": 100,
+       "reportTag": "CD_1a_rc"
+      },
+      {
+       "kind": "tax",
+       "document": "invoice",
+       "factorPercent": -100,
+       "reportTag": "CD_1b",
+       "account": "443"
+      },
+      {
+       "kind": "tax",
+       "document": "invoice",
+       "factorPercent": 100,
+       "reportTag": "CD_11e",
+       "account": "445"
+      },
+      {
+       "kind": "base",
+       "document": "refund",
+       "factorPercent": 100,
+       "reportTag": "CD_1a_rc"
+      },
+      {
+       "kind": "tax",
+       "document": "refund",
+       "factorPercent": -100,
+       "reportTag": "CD_1b",
+       "account": "443"
+      },
+      {
+       "kind": "tax",
+       "document": "refund",
+       "factorPercent": 100,
+       "reportTag": "CD_11e",
+       "account": "445"
+      }
+     ],
+     "replaces": "syscebnl_tva_purchase_assets_16"
+    },
+    {
+     "id": "syscebnl_tva_exempt_0",
+     "name": "0%",
+     "labels": {
+      "en": "0% (exempt)",
+      "fr": "0% (exonéré)"
+     },
+     "active": true,
+     "amount": "0.0",
+     "amountType": "percent",
+     "use": "sale",
+     "group": "syscebnl_tax_group_0",
+     "repartition": [
+      {
+       "kind": "base",
+       "document": "invoice",
+       "factorPercent": 100,
+       "reportTag": "CD_7a"
+      },
+      {
+       "kind": "tax",
+       "document": "invoice",
+       "factorPercent": 100
+      },
+      {
+       "kind": "base",
+       "document": "refund",
+       "factorPercent": 100,
+       "reportTag": "CD_7a"
+      },
+      {
+       "kind": "tax",
+       "document": "refund",
+       "factorPercent": 100
+      }
+     ]
+    },
+    {
+     "id": "syscebnl_tva_non_imposable_0",
+     "name": "0% NI",
+     "labels": {
+      "en": "0% (non imposable)"
+     },
+     "active": false,
+     "amount": "0.0",
+     "amountType": "percent",
+     "use": "sale",
+     "group": "syscebnl_tax_group_0",
+     "repartition": [
+      {
+       "kind": "base",
+       "document": "invoice",
+       "factorPercent": 100,
+       "reportTag": "CD_8a"
+      },
+      {
+       "kind": "tax",
+       "document": "invoice",
+       "factorPercent": 100
+      },
+      {
+       "kind": "base",
+       "document": "refund",
+       "factorPercent": 100,
+       "reportTag": "CD_8a"
+      },
+      {
+       "kind": "tax",
+       "document": "refund",
+       "factorPercent": 100
+      }
+     ]
+    },
+    {
+     "id": "syscebnl_tva_purchase_exempt_0",
+     "name": "0%",
+     "labels": {
+      "en": "0% (exempt)",
+      "fr": "0% (exonéré)"
+     },
+     "active": false,
+     "amount": "0.0",
+     "amountType": "percent",
+     "use": "purchase",
+     "group": "syscebnl_tax_group_0",
+     "repartition": [
+      {
+       "kind": "base",
+       "document": "invoice",
+       "factorPercent": 100
+      },
+      {
+       "kind": "tax",
+       "document": "invoice",
+       "factorPercent": 100
+      },
+      {
+       "kind": "base",
+       "document": "refund",
+       "factorPercent": 100
+      },
+      {
+       "kind": "tax",
+       "document": "refund",
+       "factorPercent": 100
+      }
+     ]
+    }
+   ]
+  }
+ }
+}

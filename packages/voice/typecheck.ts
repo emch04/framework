@@ -42,9 +42,16 @@ import {
   createMicrophoneGate,
   createUtteranceSegmenter,
   runProcess,
-  pcm16ToWav
+  pcm16ToWav,
+  asTranscriptionProvider,
+  asVoiceProvider,
+  createLocalSpeech,
+  createSherpaEngine,
+  createWhisperHttpEngine,
+  decodeWav
 } from './src';
 import type {
+  LocalSpeechEngine,
   Spawn,
   VoiceCache,
   VoiceClock,
@@ -151,3 +158,21 @@ void [
   createProviderVoiceService({ providers: [], restingLast: true })
 ];
 void exercise;
+
+const localSpeech: LocalSpeechEngine = createLocalSpeech({
+  engine: 'auto',
+  sherpa: { recognizerConfig: { modelConfig: {} }, ttsConfig: { model: {} }, sampleRate: 16000 },
+  whisperHttp: { baseUrl: 'http://127.0.0.1:8000', model: 'Systran/faster-whisper-small', ttsModel: 'speaches-ai/Kokoro-82M-v1.0-ONNX' }
+});
+const sherpaEngine: LocalSpeechEngine = createSherpaEngine({ ttsConfig: {} });
+const httpEngine: LocalSpeechEngine = createWhisperHttpEngine({ apiKey: 'cle' });
+
+async function exerciseLocal(): Promise<void> {
+  const heard = await localSpeech.transcribe({ audio: new Uint8Array([1]), language: 'fr' });
+  const voice = await asVoiceProvider(sherpaEngine, { voices: { fr: 3 } }).synthesize({ text: 'Bonjour', language: 'fr' });
+  const provider = asTranscriptionProvider(httpEngine);
+  const wav = decodeWav(voice.audio);
+  void [heard.text, provider.id, wav.sampleRate];
+  localSpeech.close();
+}
+void exerciseLocal;

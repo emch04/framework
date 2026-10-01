@@ -7,5 +7,6 @@ module.exports = {
   ...require('./tenantScope'),
   ...require('./invitations'),
   ...require('./invitationBoard'),
-  ...require('./uniqueRole')
+  ...require('./uniqueRole'),
+  ...require('./aiEntitlements')
 };

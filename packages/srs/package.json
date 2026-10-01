@@ -1,0 +1,38 @@
+{
+  "name": "@astratra/srs",
+  "version": "1.0.0",
+  "description": "Spaced repetition on top of FSRS: cards, grading (Again/Hard/Good/Easy), next due date, FSRS parameters, daily queue and statistics, with an injectable store.",
+  "engines": {
+    "node": ">=20"
+  },
+  "main": "src/index.js",
+  "types": "src/index.d.ts",
+  "type": "commonjs",
+  "files": [
+    "src"
+  ],
+  "scripts": {
+    "test": "jest"
+  },
+  "jest": {
+    "testMatch": [
+      "**/__tests__/**/*.test.js"
+    ]
+  },
+  "keywords": [
+    "astratra",
+    "spaced-repetition",
+    "fsrs",
+    "flashcards"
+  ],
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
+  "dependencies": {
+    "ts-fsrs": "^5.4.2"
+  },
+  "devDependencies": {
+    "jest": "30.4.2"
+  }
+}

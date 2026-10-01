@@ -118,12 +118,19 @@ export interface ToolDefinition<TParams = Record<string, unknown>, TResult = unk
   roles: string[];
   /** Reaches outside (web search, third-party API): its parameters are masked. */
   external?: boolean;
+  /** Niveau de risque déclaré ; absent, le registre utilise UNKNOWN. */
+  risk?: DeclaredToolRisk;
   params?: Record<string, unknown>;
   handler(params: TParams, ctx: Record<string, unknown>): Awaitable<TResult>;
 }
 
-export interface RegisteredTool<TParams = Record<string, unknown>, TResult = unknown> extends ToolDefinition<TParams, TResult> {
+export type ToolRisk = 'LOW' | 'MEDIUM' | 'HIGH' | 'UNKNOWN';
+export type DeclaredToolRisk = Exclude<ToolRisk, 'UNKNOWN'>;
+export const TOOL_RISKS: Readonly<Record<ToolRisk, number>>;
+
+export interface RegisteredTool<TParams = Record<string, unknown>, TResult = unknown> extends Omit<ToolDefinition<TParams, TResult>, 'risk'> {
   params: Record<string, unknown>;
+  risk: ToolRisk;
 }
 
 export interface ToolRegistry {
@@ -183,8 +190,27 @@ export interface AgentLoopOptions {
   maxMs?: number;
   /** When steps or time run out: one last turn without tools, with this instruction. */
   finalInstruction?: string;
+  /** Seuils d'appels strictement identiques (défauts : 3, 5 et 8). */
+  loopGuard?: { reminder?: number; firmReminder?: number; stop?: number };
+  /** Mise de côté au-delà du seuil en caractères (défaut : 12 000). */
+  spill?: { threshold?: number; store?: SpillStore };
+  /** Politique active uniquement lorsqu'elle est fournie : always, never ou seuil de risque. */
+  confirmationPolicy?: 'always' | 'never' | { threshold: ToolRisk };
+  /** Analyseurs supplémentaires ; le risque le plus élevé prévaut. */
+  riskAnalyzers?: Array<(toolCall: ToolCall, ctx: Record<string, unknown>, tool: RegisteredTool) => Awaitable<ToolRisk>>;
+  /** Adaptateur de createPendingActions ; les actions créées attendent leur approbation. */
+  pendingActions?: Pick<PendingActions, 'propose'>;
+  onEvent?: (event: { type: 'tool_loop_warning' | 'tool_loop_stopped'; name: string; repetitions: number; message?: string; reason?: string }) => void;
   now?: () => number;
 }
+
+export interface SpillStore {
+  set(id: string, value: string): Awaitable<void>;
+  get(id: string): Awaitable<string | undefined>;
+}
+export function createMemorySpillStore(): SpillStore;
+export const DEFAULT_LOOP_THRESHOLDS: Readonly<{ reminder: number; firmReminder: number; stop: number }>;
+export const DEFAULT_SPILL_THRESHOLD: number;
 
 export function runAgentLoop(options: AgentLoopOptions): Promise<string>;
 
@@ -734,3 +760,60 @@ export function searchSerper(
   search: { query: string; sites?: string[]; hl?: string; num?: number },
   io: { key: string | null | undefined; fetch: FetchLike; accept?: (result: WebResult, url: URL) => boolean; timeoutMs?: number; endpoint?: string }
 ): Promise<WebResult[]>;
+
+// Serveur llama.cpp (inférence CPU) : src/llamaCpp.js
+export const DEFAULT_LLAMA_CPP_URL: string;
+export function normalizeLlamaCppUrl(value: string): string;
+
+export interface LlamaCppConfigInput {
+  /** Base du serveur, avec ou sans `/v1` (défaut http://127.0.0.1:8080). */
+  baseUrl?: string;
+  apiKey?: string | null;
+  model?: string | null;
+  timeoutMs?: number;
+  healthTimeoutMs?: number;
+}
+export interface LlamaCppConfig {
+  readonly id: 'llama.cpp';
+  readonly baseUrl: string;
+  readonly apiKey: string | null;
+  readonly model: string | null;
+  readonly timeoutMs: number;
+  readonly healthTimeoutMs: number;
+}
+export function createLlamaCppConfig(input?: LlamaCppConfigInput): LlamaCppConfig;
+
+export type LocalLlmErrorCode = 'UNREACHABLE' | 'TIMEOUT' | 'UNAUTHORIZED' | 'LOADING' | 'HTTP_ERROR' | 'INVALID_RESPONSE';
+export class LocalLlmError extends Error {
+  code: LocalLlmErrorCode;
+  status: number | null;
+}
+
+export interface LlamaCppChatMessage { role: 'system' | 'user' | 'assistant' | 'tool'; content: string; [key: string]: unknown }
+export interface LlamaCppChatOptions { model?: string; temperature?: number; max_tokens?: number; [key: string]: unknown }
+export interface LlamaCppChatResult {
+  text: string;
+  finishReason: string | null;
+  usage: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number } | null;
+  model: string | null;
+}
+export interface LlamaCppHealthState {
+  ok: boolean;
+  status: 'ok' | 'loading' | 'unauthorized' | 'error' | 'unreachable' | 'timeout';
+  latencyMs: number;
+  httpStatus?: number;
+  message?: string;
+}
+export interface LlamaCppProvider {
+  config: LlamaCppConfig;
+  health(): Promise<LlamaCppHealthState>;
+  waitUntilReady(options?: { timeoutMs?: number; intervalMs?: number }): Promise<LlamaCppHealthState>;
+  listModels(): Promise<Array<{ id: string; ownedBy: string | null }>>;
+  chat(messages: LlamaCppChatMessage[], options?: LlamaCppChatOptions): Promise<LlamaCppChatResult>;
+  chatStream(messages: LlamaCppChatMessage[], options?: LlamaCppChatOptions): AsyncGenerator<string, void, undefined>;
+  toOpenAICompatible(): { baseURL: string; apiKey: string; model: string | null };
+}
+export function createLlamaCppProvider(options?: LlamaCppConfigInput & {
+  fetch?: (url: string, init: object) => Awaitable<Response>;
+  sleep?: (ms: number) => Promise<void>;
+}): LlamaCppProvider;

@@ -10,5 +10,6 @@ module.exports = {
   ...require('./rerank'),
   ...require('./search'),
   ...require('./verify'),
-  ...require('./indexer')
+  ...require('./indexer'),
+  ...require('./extraction')
 };

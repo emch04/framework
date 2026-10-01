@@ -1,0 +1,20 @@
+{
+  "name": "@astratra/repomap",
+  "version": "1.0.0",
+  "description": "Carte pondérée de symboles pour explorer un dépôt dans un budget de jetons.",
+  "engines": { "node": ">=20" },
+  "main": "src/index.js",
+  "types": "src/index.d.ts",
+  "type": "commonjs",
+  "files": ["src"],
+  "scripts": { "test": "NODE_OPTIONS=--experimental-vm-modules jest --runInBand" },
+  "jest": { "testMatch": ["**/__tests__/**/*.test.js"] },
+  "license": "MIT",
+  "publishConfig": { "access": "public" },
+  "dependencies": {
+    "ignore": "^7.0.5",
+    "tree-sitter-wasms": "^0.1.11",
+    "web-tree-sitter": "^0.25.10"
+  },
+  "devDependencies": { "jest": "30.4.2" }
+}

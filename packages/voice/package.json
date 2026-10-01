@@ -1,6 +1,6 @@
 {
   "name": "@astratra/voice",
-  "version": "0.3.0",
+  "version": "1.0.0",
   "description": "Server-side text-to-speech finishing and caching: deterministic voice-version keys, Piper and ffmpeg argument builders, injected process and file adapters, and a memory cache for tests.",
   "engines": {
     "node": ">=20"
@@ -25,11 +25,22 @@
     "text-to-speech",
     "piper",
     "ffmpeg",
-    "cache"
+    "cache",
+    "sherpa-onnx",
+    "faster-whisper",
+    "speech-to-text"
   ],
   "license": "MIT",
   "publishConfig": {
     "access": "public"
+  },
+  "peerDependencies": {
+    "sherpa-onnx-node": ">=1.13.8"
+  },
+  "peerDependenciesMeta": {
+    "sherpa-onnx-node": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "jest": "30.4.2"

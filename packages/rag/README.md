@@ -55,3 +55,76 @@ await watcher.stop();
 ## Source verification
 
 `verifySources(answer, excerpts, { nli })` pairs each factual claim with its closest excerpt and calls injected NLI with `{ premise, hypothesis }`. Its `claims` contain `SUPPORTED`, `CONTRADICTED`, or `UNSUPPORTED`; `flags` contain only actionable contradiction and unsupported codes. Missing, failing, or malformed NLI returns `NLI_UNAVAILABLE` without claiming verification. The application decides how to display these codes.
+
+## Extraction de documents (Docling)
+
+Client Node pour un service **Docling** (projet MIT, en Python), `src/extraction` :
+tu envoies un PDF, un DOCX, un PPTX, un XLSX ou une image, tu récupères le
+**texte structuré** (Markdown, JSON, texte, HTML) et les **tableaux remis en
+grilles**. Aucune dépendance ; le client ne lance rien, il parle à un
+`docling-serve` que tu déploies à part (voir `deploy/docling/`). Le Markdown
+obtenu se passe tel quel à `normalizeDocument({ format: 'markdown' })`.
+
+### Exemple
+
+```js
+const { createDoclingClient, tableToMarkdown } = require('@astratra/rag');
+
+const extraction = createDoclingClient({
+  baseUrl: 'http://127.0.0.1:5001',
+  apiKey: process.env.DOCLING_SERVE_API_KEY, // en-tête X-Api-Key
+  timeoutMs: 300_000,
+  maxFileBytes: 50 * 1024 * 1024,
+});
+
+const { markdown, tables, json, processingTimeMs } = await extraction.convert({
+  file: '/chemin/bulletin.pdf',            // ou un Buffer + filename
+  formats: ['md', 'json'],                 // md | json | text | html
+  options: { ocr: true, ocrLang: ['fr', 'en'], tableMode: 'accurate' },
+});
+
+tables[0].rows;                // [['Matière', 'Notes', 'Notes'], ['Maths', '14', '16']]
+tableToMarkdown(tables[0]);    // le tableau seul, en Markdown
+
+// Gros document : passe par la file de tâches du service (soumission, sondage, résultat)
+await extraction.convert({ file: bufferGrosPdf, filename: 'rapport.pdf', async: true });
+
+await extraction.health();     // { ok, status } — ne lance jamais
+```
+
+Le JSON est toujours demandé au service (même si tu ne veux que le Markdown),
+car les tableaux en sont extraits. Une cellule fusionnée remplit toute la zone
+qu'elle couvre.
+
+### Erreurs
+
+`ExtractionError` avec `code` : `UNSUPPORTED_FILE` (type inconnu ou fichier vide),
+`FILE_TOO_LARGE` — ces deux-là **avant** tout envoi —, `UNREACHABLE`, `TIMEOUT`,
+`UNAUTHORIZED`, `HTTP_ERROR` (avec `status`), `CONVERSION_FAILED` (le service
+répond « failure » : PDF chiffré, corrompu… ; `details` contient ses erreurs),
+`INVALID_RESPONSE`.
+
+### Lancer docling-serve
+
+Projet officiel : <https://github.com/docling-project/docling-serve> (Docling,
+licence MIT). Images : `ghcr.io/docling-project/docling-serve-cpu` (sans CUDA,
+pour un VPS) et `ghcr.io/docling-project/docling-serve`.
+
+```bash
+cd packages/rag/deploy/docling
+echo "DOCLING_SERVE_API_KEY=$(openssl rand -hex 24)" > .env   # ne le commite pas
+docker compose up -d
+```
+
+Le port 5001 n'est publié que sur `127.0.0.1` ; l'ouverture au public passe par
+un proxy avec TLS. Le premier démarrage peut être long.
+
+### Limites
+
+Testé contre un faux serveur HTTP (multipart, sondage asynchrone, erreurs). Le
+vrai `docling-serve` n'a **pas** été lancé ici (ni Docker ni Docling installés) :
+le format de requête et de réponse suit la documentation du projet
+(`/v1/convert/file`, `/v1/convert/file/async`, `/v1/status/poll/{id}`,
+`/v1/result/{id}`). Le chemin `/health` de la sonde et l'absence de `curl` dans
+l'image (d'où la sonde Python du compose) sont à vérifier au premier
+déploiement.

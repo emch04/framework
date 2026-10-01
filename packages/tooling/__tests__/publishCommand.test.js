@@ -50,9 +50,17 @@ function fingerprintOf(root, native = 'N1') {
   return async () => `fp-${native}-${versionOf(root)}`;
 }
 
-function createWorld({ root, events = [], playFails = null, ascStatus = 200, altoolOutput = 'UPLOAD SUCCEEDED' }) {
-  const run = createFakeRunner((command, args) => {
+function createWorld({ root, events = [], playFails = null, ascStatus = 200, altoolOutput = 'UPLOAD SUCCEEDED', localFails = false }) {
+  const localBuilds = [];
+  const run = createFakeRunner((command, args, options) => {
     events.push(`${command} ${args.slice(0, 3).join(' ')}`);
+    if (command === 'npx' && args[1] === 'build' && args.includes('--local')) {
+      const output = args[args.indexOf('--output') + 1];
+      localBuilds.push({ args, workDir: options.env && options.env.EAS_LOCAL_BUILD_WORKINGDIR, workDirExisted: Boolean(options.env && options.env.EAS_LOCAL_BUILD_WORKINGDIR && fs.existsSync(options.env.EAS_LOCAL_BUILD_WORKINGDIR)) });
+      if (localFails) return { code: 1 };
+      fs.writeFileSync(output, `local ${args[3]}`);
+      return { stdout: 'Build successful' };
+    }
     if (command === 'npx' && args[1] === 'build') {
       return { stdout: JSON.stringify([{ id: `build-${args[3]}` }]) };
     }
@@ -86,6 +94,7 @@ function createWorld({ root, events = [], playFails = null, ascStatus = 200, alt
   const opened = [];
   return {
     events,
+    localBuilds,
     run,
     fetch,
     notifications,
@@ -276,6 +285,58 @@ describe('publish orchestrator', () => {
 
   test('an unknown target is refused with the usage', async () => {
     await expect(runPublish('/tmp', {}, { target: 'tout' })).rejects.toMatchObject({ code: 'PUBLISH_TARGET_INVALID' });
+  });
+});
+
+describe('publish, local build', () => {
+  const localConfig = (config, root, extra = {}) => ({
+    publish: { ...config.publish, eas: { mode: 'local', localWorkDir: path.join(root, 'chantier'), ...extra } }
+  });
+
+  test('android: builds on this machine into the downloads folder, sends to Play, cleans the work folder', async () => {
+    const { root, config } = setupProject();
+    const world = createWorld({ root });
+    const now = () => Date.parse('2026-10-01T18:42:00Z');
+
+    const result = await runPublish(root, localConfig(config, root), { ...world.options, target: 'android', output: createOutput(), now, computeFingerprint: fingerprintOf(root) });
+
+    expect(result.exitCode).toBe(0);
+    expect(result.results[0]).toMatchObject({ platform: 'android', ok: true, delivered: true, versionCode: 7 });
+    const file = path.join(root, 'downloads', 'Acme-android-1.1.6-local-20261001-1842.aab');
+    expect(fs.readFileSync(file, 'utf8')).toBe('local android');
+    expect(fs.readdirSync(path.join(root, 'downloads'))).toEqual(['Acme-android-1.1.6-local-20261001-1842.aab']);
+    const [build] = world.localBuilds;
+    expect(build.args).toEqual(['eas-cli', 'build', '-p', 'android', '--profile', 'production', '--local', '--non-interactive', '--output', `${file}.part.aab`]);
+    expect(build.workDir).toBe(path.join(root, 'chantier', 'travail-android'));
+    expect(build.workDirExisted).toBe(true);
+    expect(fs.existsSync(build.workDir)).toBe(false);
+    expect(world.run.calls.some((call) => call.args[1] === 'build:view')).toBe(false);
+    expect(world.events.some((event) => event.startsWith('download'))).toBe(false);
+  });
+
+  test('a failed local build sends nothing, leaves no partial file and does not record the fingerprint', async () => {
+    const { root, config } = setupProject({ published: 'fp-N0-1.1.5' });
+    const world = createWorld({ root, localFails: true });
+
+    const result = await runPublish(root, localConfig(config, root), { ...world.options, target: 'android', output: createOutput(), computeFingerprint: fingerprintOf(root) });
+
+    expect(result.exitCode).toBe(1);
+    expect(result.error.code).toBe('EAS_LOCAL_BUILD_FAILED');
+    expect(fs.existsSync(path.join(root, 'downloads')) ? fs.readdirSync(path.join(root, 'downloads')) : []).toEqual([]);
+    expect(world.events.some((event) => event.startsWith('play'))).toBe(false);
+    expect(fs.readFileSync(path.join(root, 'mobile/scripts/.fp'), 'utf8')).toBe('fp-N0-1.1.5\n');
+    expect(fs.existsSync(path.join(root, 'chantier', 'travail-android'))).toBe(false);
+  });
+
+  test('an unknown build mode stops before any version bump or build', async () => {
+    const { root, config } = setupProject();
+    const world = createWorld({ root });
+
+    const result = await runPublish(root, localConfig(config, root, { mode: 'cloudd' }), { ...world.options, target: 'android', output: createOutput(), computeFingerprint: fingerprintOf(root) });
+
+    expect(result.exitCode).toBe(1);
+    expect(versionOf(root)).toBe('1.1.5');
+    expect(world.run.calls.some((call) => call.args[1] === 'build')).toBe(false);
   });
 });
 

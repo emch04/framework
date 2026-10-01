@@ -1,6 +1,6 @@
 {
   "name": "@astratra/privacy",
-  "version": "0.3.0",
+  "version": "1.0.0",
   "description": "Right of access, right to erasure, and log redaction — anonymise without destroying the records you must keep.",
   "engines": {
     "node": ">=20"

@@ -61,3 +61,67 @@ export function createIndexer(options: { sources: { list(options: { full: boolea
   run(options?: { full?: boolean; maxPassages?: number }): Promise<IndexStats>;
   watch(options?: { shortEveryMs?: number; fullEveryMs?: number; pauseAfterFailureMs?: number; onRun?: (stats: IndexStats, pass: { full: boolean }) => void; onError?: (error: unknown) => void }): { stop(): Promise<void> };
 };
+
+type Awaitable<T> = T | Promise<T>;
+// Extraction de documents par un service Docling : src/extraction
+export type ExtractionErrorCode = 'UNREACHABLE' | 'TIMEOUT' | 'UNAUTHORIZED' | 'UNSUPPORTED_FILE' | 'FILE_TOO_LARGE' | 'CONVERSION_FAILED' | 'HTTP_ERROR' | 'INVALID_RESPONSE';
+export class ExtractionError extends Error {
+  code: ExtractionErrorCode;
+  status: number | null;
+  details: unknown;
+}
+
+export const MEDIA_TYPES: Readonly<Record<string, string>>;
+
+export interface TableGrid {
+  rows: string[][];
+  numRows: number;
+  numCols: number;
+  /** Nombre de lignes d'en-tête. */
+  headerRows: number;
+  page: number | null;
+}
+export function extractTables(documentJson: unknown): TableGrid[];
+export function gridFromTable(table: unknown): TableGrid;
+export function tableToMarkdown(table: Pick<TableGrid, 'rows' | 'headerRows'>): string;
+
+export type OutputFormat = 'md' | 'json' | 'text' | 'html';
+export interface ConvertOptions {
+  /** Reconnaissance de caractères (documents numérisés). */
+  ocr?: boolean;
+  ocrEngine?: string;
+  ocrLang?: string | string[];
+  tableMode?: 'fast' | 'accurate';
+  pdfBackend?: string;
+  includeImages?: boolean;
+}
+export interface ExtractionResult {
+  status: string;
+  processingTimeMs: number | null;
+  warnings: unknown[];
+  markdown: string | null;
+  json: unknown;
+  text: string | null;
+  html: string | null;
+  tables: TableGrid[];
+}
+export interface DoclingClient {
+  convert(request: {
+    file: Uint8Array | string;
+    filename?: string;
+    formats?: OutputFormat[];
+    options?: ConvertOptions;
+    /** Passe par la file de tâches du service (gros documents). */
+    async?: boolean;
+  }): Promise<ExtractionResult>;
+  health(): Promise<{ ok: boolean; status: 'ok' | 'unauthorized' | 'error' | 'unreachable' | 'timeout' }>;
+}
+export function createDoclingClient(options?: {
+  baseUrl?: string;
+  apiKey?: string | null;
+  timeoutMs?: number;
+  maxFileBytes?: number;
+  pollIntervalMs?: number;
+  fetch?: (url: string, init: object) => Awaitable<Response>;
+  sleep?: (ms: number) => Promise<void>;
+}): DoclingClient;

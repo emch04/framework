@@ -14,6 +14,7 @@ module.exports = {
   ...require('./language'),
   ...require('./askLimit'),
   ...require('./openaiCompatible'),
+  ...require('./llamaCpp'),
   ...require('./gemini'),
   ...require('./nativeTools'),
   ...require('./eventStream'),

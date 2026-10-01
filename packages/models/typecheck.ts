@@ -1,5 +1,8 @@
 import {
   createEndpointBreaker,
+  createPriceCatalog,
+  diffPriceCatalogs,
+  normalizeUsage,
   createModelsClient,
   createPm2App,
   createSystemdUnit,
@@ -10,7 +13,7 @@ import {
   serviceEnv,
   setupVenvCommand
 } from './src';
-import type { EmbedData, FetchLike, ModelsClient, ModelsResult, ModelsResultCode, Pm2App } from './src';
+import type { CallCost, EmbedData, FetchLike, ModelsClient, ModelsResult, ModelsResultCode, Pm2App, PriceCatalog } from './src';
 
 const fakeFetch: FetchLike = async () => ({ status: 200, json: async () => ({}) });
 
@@ -82,3 +85,32 @@ const unit: string = createSystemdUnit({
 });
 const argv: string[] = setupVenvCommand({ venvDir: '/srv/venv', components: ['onnx'] });
 console.log(env, ecosystem, unit, argv);
+
+const prices: PriceCatalog = createPriceCatalog({
+  overrides: {
+    'gemini/gemini-2.5-flash': { billing: 'free_tier' },
+    'claude-sonnet-4-5': { pricesPerMillion: { input: 2 }, discount: 0.1 }
+  },
+  aliases: [{ from: 'rapide', model: 'groq/openai/gpt-oss-120b' }, { match: /^gpt-4o-\d+$/, model: 'gpt-4o' }]
+});
+const local = createPriceCatalog({
+  data: { 'm': { litellm_provider: 'x', input_cost_per_token: 1e-6 } },
+  overrides: [{ match: '(?i)^vercel', billing: 'credits', creditPool: 'vercel' }],
+  now: () => 0
+});
+const spent = prices.cost('gemini-2.5-flash', { promptTokenCount: 10, candidatesTokenCount: 5 }, { provider: 'gemini', freeTierExhausted: true });
+if (spent.ok) {
+  const frozen: CallCost = spent;
+  const total: number = frozen.total;
+  const list: number | null = frozen.listTotal;
+  console.log(total, list, frozen.billing, frozen.unitPrices.input?.perUnit, frozen.computedAt);
+} else {
+  console.log(spent.code, spent.missing);
+}
+const info = prices.lookup('openai/gpt-oss-120b', { provider: 'groq' });
+if (info.ok) console.log(info.contextWindow.maxInput, info.capabilities.vision, info.tiers[0]?.above);
+const window = prices.contextWindow('gpt-4o');
+if (window.ok) console.log(window.maxOutput);
+const caps = local.capabilities('m');
+if (caps.ok) console.log(caps.reasoning);
+console.log(normalizeUsage({ input: 1 })?.cacheRead, diffPriceCatalogs({}, {}).added.length, prices.date, prices.size);

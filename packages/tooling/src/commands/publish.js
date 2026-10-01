@@ -18,6 +18,7 @@ const {
   archiveExtension,
   artifactFileName,
   buildEasBuildArgs,
+  buildEasLocalBuildArgs,
   buildEasUpdateArgs,
   buildEasViewArgs,
   downloadArtifact,
@@ -39,6 +40,10 @@ const PUBLISH_DEFAULTS = {
   versionBump: 'patch',
   eas: {
     command: ['npx', 'eas-cli'],
+    // 'cloud' : fabrique chez Expo puis telecharge ; 'local' : fabrique sur cette machine (Xcode, SDK Android).
+    mode: 'cloud',
+    // Dossier de travail du build local (EAS_LOCAL_BUILD_WORKINGDIR), vide a chaque build ; null = dossier temporaire d'eas-cli.
+    localWorkDir: null,
     profile: 'production',
     channel: 'production',
     pollIntervalMs: 60000,
@@ -87,6 +92,10 @@ function resolvePublishConfig(rootDir, config = {}, homeDir = os.homedir()) {
     projectDir,
     fingerprintFile: resolveIn(projectDir, merged.fingerprintFile),
     downloadsDir: resolveIn(projectDir, merged.downloadsDir),
+    eas: {
+      ...merged.eas,
+      localWorkDir: resolveIn(projectDir, merged.eas.localWorkDir)
+    },
     android: {
       ...merged.android,
       serviceAccountPath: resolveIn(projectDir, merged.android.serviceAccountPath)
@@ -170,11 +179,12 @@ function ascCredentialsAvailable(ctx) {
   return hasAscCredentials(options);
 }
 
-async function runEas(ctx, args, { quietStdout = true } = {}) {
+async function runEas(ctx, args, { quietStdout = true, env } = {}) {
   const [command, ...prefix] = ctx.publishConfig.eas.command;
   return ctx.run(command, [...prefix, ...args], {
     cwd: ctx.publishConfig.projectDir,
     quietStdout,
+    ...(env ? { env } : {}),
     onLine: (line) => ctx.output.log(colors.dim(`  ${line}`))
   });
 }
@@ -212,6 +222,64 @@ async function prepareVersion(ctx) {
   }
 
   return { fingerprint: current, decision, bumped, version: publishConfig.version || readPackageVersion(publishConfig.projectDir) };
+}
+
+function localStamp(ctx) {
+  // Le numero de build n'est pas relu dans l'archive : le nom du fichier porte l'heure du build.
+  return `local-${new Date(ctx.now ? ctx.now() : Date.now()).toISOString().slice(0, 16).replace(/[-:]/g, '').replace('T', '-')}`;
+}
+
+/** Fabrique sur cette machine : l'archive est ecrite d'abord a cote, puis renommee, comme un telechargement. */
+async function buildLocally(ctx, platformName, version) {
+  const { publishConfig, output } = ctx;
+  output.log(colors.bold(`Fabrication ${platformName}, version ${version}, sur cette machine...`));
+  const stamp = localStamp(ctx);
+  const fileName = artifactFileName({
+    appName: resolveAppName(publishConfig),
+    platform: platformName,
+    version,
+    buildNumber: stamp,
+    template: publishConfig.fileNameTemplate
+  });
+  const filePath = path.join(publishConfig.downloadsDir, fileName);
+  const partial = `${filePath}.part.${archiveExtension(platformName)}`;
+  fs.mkdirSync(publishConfig.downloadsDir, { recursive: true });
+
+  const env = { ...(ctx.env || process.env) };
+  const workDir = publishConfig.eas.localWorkDir ? path.join(publishConfig.eas.localWorkDir, `travail-${platformName}`) : null;
+  if (workDir) {
+    fs.rmSync(workDir, { recursive: true, force: true });
+    fs.mkdirSync(workDir, { recursive: true });
+    env.EAS_LOCAL_BUILD_WORKINGDIR = workDir;
+  }
+
+  try {
+    const built = await runEas(ctx, buildEasLocalBuildArgs({ platform: platformName, profile: publishConfig.eas.profile, output: partial }), { env });
+    if (built.code !== 0) {
+      throw new ToolingError('EAS_LOCAL_BUILD_FAILED', `Le build local ${platformName} a echoue (code ${built.code}).`, 502);
+    }
+    const size = fs.existsSync(partial) ? fs.statSync(partial).size : 0;
+    if (size === 0) {
+      throw new ToolingError('EAS_ARTIFACT_MISSING', `Le build local ${platformName} n'a produit aucun fichier.`, 502);
+    }
+    fs.renameSync(partial, filePath);
+    output.log(`Fabrique : ${filePath} (${formatBytes(size)})`);
+    return { buildId: null, buildNumber: null, filePath };
+  } finally {
+    fs.rmSync(partial, { force: true });
+    if (workDir) fs.rmSync(workDir, { recursive: true, force: true });
+  }
+}
+
+function assertBuildMode(publishConfig) {
+  const mode = publishConfig.eas.mode;
+  if (mode !== 'cloud' && mode !== 'local') {
+    throw new ToolingError('PUBLISH_BUILD_MODE_INVALID', `publish.eas.mode inconnu : ${mode} (cloud ou local).`, 400);
+  }
+}
+
+function buildApp(ctx, platformName, version) {
+  return ctx.publishConfig.eas.mode === 'local' ? buildLocally(ctx, platformName, version) : buildOnEas(ctx, platformName, version);
 }
 
 async function buildOnEas(ctx, platformName, version) {
@@ -345,7 +413,7 @@ async function runPublish(rootDir, config, options = {}) {
   ctx.output.log(`${colors.blue(`Publication (${target})`)}\n`);
 
   if (options['dry-run'] || options.dryRun) {
-    ctx.output.log(`Essai a blanc : projet ${ctx.publishConfig.projectDir} ; cible ${target} ; profil ${ctx.publishConfig.eas.profile} ; canal ${ctx.publishConfig.eas.channel} ; envoi Android ${ctx.publishConfig.android.upload} ; repli iOS ${ctx.publishConfig.ios.fallback}.`);
+    ctx.output.log(`Essai a blanc : projet ${ctx.publishConfig.projectDir} ; cible ${target} ; build ${ctx.publishConfig.eas.mode === 'local' ? 'sur cette machine' : 'chez Expo'} ; profil ${ctx.publishConfig.eas.profile} ; canal ${ctx.publishConfig.eas.channel} ; envoi Android ${ctx.publishConfig.android.upload} ; repli iOS ${ctx.publishConfig.ios.fallback}.`);
     return { exitCode: 0, dryRun: true, target, results: [] };
   }
 
@@ -355,6 +423,8 @@ async function runPublish(rootDir, config, options = {}) {
     }
 
     const platforms = TARGETS[target];
+    // Avant toute montee de version : une configuration fausse ne doit rien toucher.
+    if (platforms.length > 0) assertBuildMode(ctx.publishConfig);
     if (platforms.includes('android') && ctx.publishConfig.android.upload === 'api') {
       // Fails before a build is spent: the key must at least be readable.
       loadServiceAccount({ path: ctx.publishConfig.android.serviceAccountPath, jsonEnv: ctx.publishConfig.android.serviceAccountJsonEnv, env: ctx.env });
@@ -369,7 +439,7 @@ async function runPublish(rootDir, config, options = {}) {
 
     for (const platformName of platforms) {
       try {
-        const built = await buildOnEas(ctx, platformName, prepared.version);
+        const built = await buildApp(ctx, platformName, prepared.version);
         const sent = platformName === 'android' ? await sendToGooglePlay(ctx, built.filePath) : await sendToAppStore(ctx, built.filePath);
         results.push({ platform: platformName, ok: true, ...built, ...sent });
         await ctx.notify(

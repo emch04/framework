@@ -1,0 +1,47 @@
+# llama.cpp en inférence CPU sur un VPS — API compatible OpenAI sur le port 8080.
+# NE démarre rien tout seul : `docker compose up -d` après avoir lu le README du paquet.
+#
+# Image officielle : ghcr.io/ggml-org/llama.cpp:server (CPU). Épingle un tag
+# `server-b<numéro>` en production plutôt que le tag flottant.
+services:
+  llama:
+    image: ${LLAMA_IMAGE:-ghcr.io/ggml-org/llama.cpp:server}
+    restart: unless-stopped
+    # Écoute en local seulement : la sortie publique passe par un proxy avec TLS (nginx, Caddy).
+    ports:
+      - "127.0.0.1:${LLAMA_PORT:-8080}:8080"
+    volumes:
+      # Les fichiers .gguf, à télécharger une fois (voir README).
+      - ${LLAMA_MODELS_DIR:-./models}:/models:ro
+    environment:
+      # La clé est lue dans l'environnement, jamais passée en argument (visible dans `ps`).
+      LLAMA_API_KEY: ${LLAMA_API_KEY:?définis LLAMA_API_KEY dans .env}
+    command:
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8080"
+      - --model
+      - /models/${LLAMA_MODEL_FILE:?définis LLAMA_MODEL_FILE dans .env}
+      - --alias
+      - ${LLAMA_ALIAS:-local}
+      - --ctx-size
+      - "${LLAMA_CTX:-8192}"
+      # Fils de calcul : le nombre de cœurs PHYSIQUES, pas de vCPU.
+      - --threads
+      - "${LLAMA_THREADS:-4}"
+      # Requêtes simultanées ; le contexte est partagé entre elles (ctx-size / parallel chacune).
+      - --parallel
+      - "${LLAMA_PARALLEL:-2}"
+      - --metrics
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      # Le chargement d'un modèle de plusieurs Go prend du temps.
+      start_period: 120s
+    deploy:
+      resources:
+        limits:
+          memory: ${LLAMA_MEMORY_LIMIT:-6g}

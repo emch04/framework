@@ -1,9 +1,12 @@
+const TOOL_RISKS = Object.freeze({ LOW: 0, MEDIUM: 1, HIGH: 2, UNKNOWN: 3 });
+
 function createToolRegistry() {
   const tools = [];
 
   function register(tool) {
     validateTool(tool);
-    tools.push({ ...tool, roles: [...tool.roles], params: tool.params || {} });
+    const risk = normalizeRisk(tool.risk);
+    tools.push({ ...tool, risk, roles: [...tool.roles], params: tool.params || {} });
     return tool;
   }
 
@@ -40,8 +43,16 @@ function validateTool(tool) {
   if (!tool.type) throw new Error('tool.type is required');
   if (!Array.isArray(tool.roles)) throw new Error('tool.roles must be an array');
   if (typeof tool.handler !== 'function') throw new Error('tool.handler must be a function');
+  if (tool.risk !== undefined && !['LOW', 'MEDIUM', 'HIGH'].includes(String(tool.risk).toUpperCase())) {
+    throw new Error('tool.risk must be LOW, MEDIUM or HIGH');
+  }
+}
+
+function normalizeRisk(risk) {
+  return risk === undefined ? 'UNKNOWN' : String(risk).toUpperCase();
 }
 
 module.exports = {
-  createToolRegistry
+  createToolRegistry,
+  TOOL_RISKS
 };

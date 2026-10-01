@@ -1,6 +1,9 @@
 const { AppError } = require('@astratra/core');
 
 const DEFAULT_MAX_STEPS = 5;
+const DEFAULT_LOOP_THRESHOLDS = Object.freeze({ reminder: 3, firmReminder: 5, stop: 8 });
+const DEFAULT_SPILL_THRESHOLD = 12_000;
+const SPILL_TOOL_NAME = 'read_spilled_result';
 
 async function runAgentLoop({
   prompt,
@@ -17,6 +20,12 @@ async function runAgentLoop({
   toolTimeoutMs,
   maxMs,
   finalInstruction,
+  loopGuard = {},
+  spill = {},
+  confirmationPolicy,
+  riskAnalyzers = [],
+  pendingActions,
+  onEvent,
   now = Date.now
 }) {
   if (!registry) throw new AppError('agentLoop requires a registry', 500);
@@ -26,6 +35,12 @@ async function runAgentLoop({
   }
 
   const messages = Array.isArray(history) ? [...history] : [];
+  const loopCounts = new Map();
+  const spillStore = spill.store || createMemorySpillStore();
+  const spillThreshold = Number.isFinite(spill.threshold) && spill.threshold >= 0 ? spill.threshold : DEFAULT_SPILL_THRESHOLD;
+  const thresholds = { ...DEFAULT_LOOP_THRESHOLDS, ...loopGuard };
+  const spills = new Map();
+  if (typeof spillStore.set !== 'function' || typeof spillStore.get !== 'function') throw new AppError('spill.store requires set() and get()', 500);
   messages.push({ role: 'user', content: prompt });
   const started = now();
 
@@ -53,13 +68,28 @@ async function runAgentLoop({
   const outOfTime = () => Number.isFinite(maxMs) && now() - started >= maxMs;
 
   for (let step = 0; step < maxSteps && !outOfTime(); step += 1) {
-    const response = await askModel(buildPrompt(registry, userRole, messages));
+    const spillInstruction = spills.size ? `\n### Lire un résultat mis de côté\nAppelle <tool_call name="${SPILL_TOOL_NAME}">{"id":"référence","start":0,"length":4000}</tool_call> pour relire une tranche.` : '';
+    const response = await askModel(buildPrompt(registry, userRole, messages) + spillInstruction);
     const toolCall = parseToolCall(response);
 
     if (!toolCall) {
       return response;
     }
 
+    if (toolCall.name === SPILL_TOOL_NAME) {
+      const id = String(toolCall.params.id || '');
+      const stored = spills.get(id);
+      let result;
+      if (!stored) result = { error: 'spill_not_found' };
+      else {
+        const start = Math.max(0, Math.floor(Number(toolCall.params.start) || 0));
+        const length = Math.min(12_000, Math.max(0, Math.floor(Number(toolCall.params.length) || 4000)));
+        const value = await spillStore.get(id);
+        result = typeof value === 'string' ? { id, start, totalLength: value.length, text: value.slice(start, start + length) } : { error: 'spill_not_found' };
+      }
+      messages.push({ role: 'assistant', content: response }, { role: 'tool', content: `<tool_result name="${SPILL_TOOL_NAME}">${JSON.stringify(result)}</tool_result>` });
+      continue;
+    }
     const tool = registry.getToolByName(toolCall.name);
     if (!tool) {
       throw new AppError(`Tool "${toolCall.name}" is not registered`, 400);
@@ -73,8 +103,41 @@ async function runAgentLoop({
     // runs. Denying doesn't crash the loop: the model gets told and can
     // adjust course (ask something else, explain, stop), same as it would
     // handle any other tool result.
-    if (typeof confirmTool === 'function') {
-      const approved = await confirmTool(toolCall, ctx);
+    const normalizedCall = `${tool.name}:${stableStringify(toolCall.params)}`;
+    const repetitions = (loopCounts.get(normalizedCall) || 0) + 1;
+    loopCounts.set(normalizedCall, repetitions);
+    if (repetitions >= thresholds.stop) {
+      const reason = `Boucle arrêtée : l'appel ${tool.name} a été répété ${repetitions} fois.`;
+      const event = { type: 'tool_loop_stopped', name: tool.name, repetitions, reason };
+      if (typeof onEvent === 'function') onEvent(event);
+      return reason;
+    }
+    if (repetitions === thresholds.reminder || repetitions === thresholds.firmReminder) {
+      const reminder = repetitions === thresholds.reminder
+        ? `Rappel : cet appel identique a déjà été effectué ${repetitions} fois. Change de stratégie si le résultat ne suffit pas.`
+        : `Rappel ferme : cet appel identique a déjà été effectué ${repetitions} fois. Ne le répète plus sans modifier les arguments.`;
+      messages.push({ role: 'system', content: reminder });
+      if (typeof onEvent === 'function') onEvent({ type: 'tool_loop_warning', name: tool.name, repetitions, message: reminder });
+    }
+
+    let requiresConfirmation = typeof confirmTool === 'function';
+    if (confirmationPolicy !== undefined) {
+      let risk = tool.risk || 'UNKNOWN';
+      for (const analyze of riskAnalyzers) {
+        const analyzed = await analyze(toolCall, ctx, tool);
+        if (analyzed !== undefined && riskValue(analyzed) > riskValue(risk)) risk = String(analyzed).toUpperCase();
+      }
+      requiresConfirmation = shouldConfirm(confirmationPolicy, risk);
+    }
+    if (requiresConfirmation) {
+      let approved;
+      if (typeof confirmTool === 'function') approved = await confirmTool(toolCall, ctx);
+      else if (pendingActions && typeof pendingActions.propose === 'function') {
+        const proposed = await pendingActions.propose({ action: tool.name, payload: toolCall.params, description: `Appel ${tool.name} (${tool.risk || 'UNKNOWN'})`, proposedBy: ctx.userId, tenant: ctx.tenantId });
+        approved = false;
+        messages.push({ role: 'assistant', content: response }, { role: 'tool', content: `<tool_result name="${tool.name}">${JSON.stringify({ pending: true, actionId: proposed.action.id })}</tool_result>` });
+        continue;
+      } else approved = false;
       if (!approved) {
         messages.push({ role: 'assistant', content: response });
         messages.push({
@@ -100,13 +163,25 @@ async function runAgentLoop({
     }
     if (masker && tool.external === true) result = masker.unmaskDeep(result);
     const serialized = JSON.stringify(result);
+    const modelSerialized = masker ? masker.mask(serialized) : serialized;
     /* Your own data (a class list, a file) carries names the register may not
        know: the detector reads the result before it can reach the prompt. */
     if (masker && tool.external !== true && typeof masker.maskAsync === 'function') await masker.maskAsync(String(serialized));
     messages.push({ role: 'assistant', content: response });
+    let modelResult = serialized;
+    if (serialized.length > spillThreshold) {
+      const id = createSpillId();
+      try {
+        await spillStore.set(id, serialized);
+        spills.set(id, true);
+        modelResult = JSON.stringify({ spilled: true, id, totalLength: serialized.length, excerpt: modelSerialized.slice(0, 1500), readTool: SPILL_TOOL_NAME });
+      } catch (_error) {
+        modelResult = JSON.stringify({ error: 'result_storage_failed' });
+      }
+    }
     messages.push({
       role: 'tool',
-      content: `<tool_result name="${tool.name}">${serialized}</tool_result>`
+      content: `<tool_result name="${tool.name}">${modelResult}</tool_result>`
     });
   }
 
@@ -120,6 +195,24 @@ async function runAgentLoop({
 
   throw new AppError(`agentLoop reached maxSteps (${maxSteps}) before a final answer`, 500);
 }
+
+function stableStringify(value) {
+  if (value === null || typeof value !== 'object') return JSON.stringify(value);
+  if (Array.isArray(value)) return `[${value.map(stableStringify).join(',')}]`;
+  return `{${Object.keys(value).sort().map(key => `${JSON.stringify(key)}:${stableStringify(value[key])}`).join(',')}}`;
+}
+function riskValue(risk) { return ({ LOW: 0, MEDIUM: 1, HIGH: 2, UNKNOWN: 3 })[String(risk).toUpperCase()] ?? 3; }
+function shouldConfirm(policy, risk) {
+  if (policy === 'always') return true;
+  if (policy === 'never') return false;
+  const threshold = typeof policy === 'object' && policy ? policy.threshold : policy;
+  return risk === 'UNKNOWN' || riskValue(risk) >= riskValue(threshold);
+}
+function createMemorySpillStore() {
+  const values = new Map();
+  return { async set(id, value) { values.set(id, value); }, async get(id) { return values.get(id); } };
+}
+function createSpillId() { return `spill_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`; }
 
 async function runTool(tool, params, ctx, timeoutMs) {
   if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) return tool.handler(params, ctx);
@@ -200,5 +293,8 @@ function estimateTokens(text) {
 }
 
 module.exports = {
-  runAgentLoop
+  runAgentLoop,
+  createMemorySpillStore,
+  DEFAULT_LOOP_THRESHOLDS,
+  DEFAULT_SPILL_THRESHOLD
 };

@@ -177,6 +177,7 @@ registry.register({
   name: 'get_patient_record',
   description: "Récupère le dossier d'un patient par son id",
   type: 'read',
+  risk: 'LOW', // LOW, MEDIUM ou HIGH ; absent = UNKNOWN
   roles: ['doctor', 'admin'],
   params: { patientId: 'string' },
   handler: async ({ patientId }, ctx) => patientStore.findById(patientId)
@@ -221,6 +222,43 @@ détecté. Retourne `false` (ou une promesse résolue en `false`) pour refuser
 comme résultat d'outil) et continue, il peut réagir (expliquer, proposer
 autre chose, s'arrêter). Omis, chaque outil autorisé s'exécute automatiquement,
 comme avant.
+
+### Garde-fous de la boucle, résultats volumineux et risque
+
+Les appels répétés avec le même nom et les mêmes paramètres JSON (l'ordre des
+clés d'objet ne compte pas) reçoivent un rappel aux répétitions 3 et 5, puis
+la boucle s'arrête à 8. Ces seuils se règlent avec `loopGuard`; `onEvent`
+reçoit `tool_loop_warning` ou `tool_loop_stopped`. Le nombre d'étapes par
+défaut reste 5 : l'arrêt à 8 ne joue que si `maxSteps` est réglé à 8 ou plus.
+
+```js
+await runAgentLoop({
+  prompt, registry, router, userRole: 'doctor',
+  loopGuard: { reminder: 3, firmReminder: 5, stop: 8 },
+  spill: { threshold: 12_000 },
+  confirmationPolicy: { threshold: 'HIGH' },
+  riskAnalyzers: [async (call, ctx, tool) => classifier(call, ctx, tool)],
+  pendingActions
+});
+```
+
+Au-dessus du seuil (`spill.threshold`, 12 000 caractères par défaut), le
+résultat complet est écrit dans `spill.store` (stockage mémoire par défaut).
+Le modèle reçoit un extrait et un identifiant, puis peut appeler
+`read_spilled_result` avec `{ id, start, length }` pour lire une tranche. Si
+l'écriture échoue, le contenu est supprimé de la réponse et le modèle reçoit
+`result_storage_failed`. Un stockage injecté expose `set(id, value)` et
+`get(id)`.
+
+Les risques possibles sont `LOW`, `MEDIUM`, `HIGH` et `UNKNOWN` (valeur des
+outils sans déclaration). La politique de confirmation est inactive par
+défaut, pour préserver l'exécution existante. Elle accepte `'always'`,
+`'never'` ou `{ threshold: 'MEDIUM' }`; dans ce dernier cas, les risques au
+moins aussi élevés que le seuil, dont `UNKNOWN`, demandent une confirmation.
+Les `riskAnalyzers` reçoivent l'appel, le contexte et l'outil ; le niveau le
+plus élevé entre l'outil et les analyseurs l'emporte. Les appels à confirmer
+sont enregistrés par `pendingActions.propose()` et attendent l'approbation
+via le cycle de vie déjà fourni par `createPendingActions`.
 
 **Périmètre V0 — toujours volontairement exclu :** gestion d'images/vision.
 Fonctionnalité non triviale dont une boucle d'agent de production a besoin,
@@ -362,6 +400,77 @@ await runAgentLoop({
 Le modèle lit un code, jamais le message d'erreur. À court de tours ou de
 temps, un dernier tour sans outils répond avec ce qui a été lu, plutôt qu'une
 erreur.
+
+## llama.cpp : un modèle sur CPU, sur ton VPS
+
+Fournisseur « **llama.cpp server** » : un modèle qui tourne sur **CPU** (un VPS
+sans GPU) derrière l'API compatible OpenAI de `llama-server`. Aucune dépendance
+(`src/llamaCpp.js`). C'est un client ; il ne lance rien. Le serveur se lance avec
+le `docker-compose` de `deploy/llama-cpp/`. Ce n'est pas un doublon de
+`createOpenAICompatibleProvider` : celui-ci branche un modèle dans le routeur et
+rend `{ status }` pour une erreur HTTP, alors qu'un serveur hébergé par toi a
+besoin de sa santé, du chargement du modèle (503) et d'erreurs typées.
+
+### Client
+
+```js
+const { createLlamaCppProvider } = require('@astratra/ai');
+
+const llm = createLlamaCppProvider({
+  baseUrl: 'http://127.0.0.1:8080',   // avec ou sans /v1
+  apiKey: process.env.LLAMA_API_KEY,
+  model: 'local',                      // l'alias donné au serveur (facultatif)
+  timeoutMs: 120_000,
+});
+
+await llm.waitUntilReady({ timeoutMs: 120_000 }); // le chargement du modèle prend du temps
+console.log(await llm.health());                  // { ok, status: 'ok'|'loading'|'unauthorized'|'error'|'unreachable'|'timeout', latencyMs }
+console.log(await llm.listModels());              // [{ id: 'local', ownedBy: 'llamacpp' }]
+
+const { text, usage } = await llm.chat([{ role: 'user', content: 'Bonjour' }], { temperature: 0.2 });
+for await (const piece of llm.chatStream([{ role: 'user', content: 'Raconte-moi une histoire' }])) process.stdout.write(piece);
+
+llm.toOpenAICompatible(); // { baseURL: '…/v1', apiKey, model } pour tout autre client compatible OpenAI
+```
+
+`health()` ne lance jamais d'exception (c'est une sonde). Les autres appels
+lancent `LocalLlmError` avec `code` : `UNREACHABLE`, `TIMEOUT`, `UNAUTHORIZED`,
+`LOADING` (503, modèle pas chargé), `HTTP_ERROR` (avec `status`), `INVALID_RESPONSE`.
+
+### Lancer `llama-server` sur un VPS CPU
+
+Image officielle : `ghcr.io/ggml-org/llama.cpp:server` (CPU ; épingle un tag
+`server-b<numéro>` en production).
+
+```bash
+cd packages/ai/deploy/llama-cpp
+cp .env.example .env            # remplis LLAMA_API_KEY (longue valeur aléatoire) et LLAMA_MODEL_FILE
+mkdir -p models                  # y déposer le fichier .gguf (quantisation Q4_K_M : bon compromis)
+docker compose up -d
+docker compose logs -f llama     # attendre « server is listening »
+curl -H "Authorization: Bearer $LLAMA_API_KEY" http://127.0.0.1:8080/v1/models
+```
+
+Points à régler :
+
+- **`LLAMA_THREADS`** : cœurs *physiques*, pas vCPU. Trop de fils ralentit.
+- **`LLAMA_PARALLEL`** : requêtes simultanées. Le contexte (`LLAMA_CTX`) est
+  **partagé** : chacune dispose de `LLAMA_CTX / LLAMA_PARALLEL` jetons.
+- **Mémoire** : prévoir la taille du fichier .gguf + ~1 à 2 Go pour le contexte ;
+  `LLAMA_MEMORY_LIMIT` plafonne le conteneur.
+- **Débit** : sur CPU, un modèle de 3 à 4 milliards de paramètres en Q4 donne de
+  l'ordre de quelques à une dizaine de jetons par seconde selon le VPS ; à
+  mesurer sur le tien avant de promettre quoi que ce soit.
+- Le port n'est publié que sur `127.0.0.1` : l'ouverture au public passe par un
+  proxy avec TLS, et la clé API reste obligatoire.
+- La clé est lue dans l'environnement (`LLAMA_API_KEY`), jamais en argument.
+
+### Limites
+
+Pas de répartition de charge ni de repli intégrés au client : pour router ce
+serveur avec les autres fournisseurs, donne `toOpenAICompatible()` (adresse et clé)
+à `createOpenAICompatibleProvider`. Testé avec un faux
+serveur HTTP ; le vrai `llama-server` n'a pas été lancé dans ce dépôt.
 
 ## Tests
 

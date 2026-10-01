@@ -4,40 +4,27 @@ const os = require('os');
 const path = require('path');
 
 const root = path.resolve(__dirname, '..');
-const workspaces = [
-  '@astratra/core',
-  '@astratra/security',
-  '@astratra/ai',
-  '@astratra/memory',
-  '@astratra/rag',
-  '@astratra/credentials',
-  '@astratra/entitlements',
-  '@astratra/i18n-server',
-  '@astratra/pdf',
-  '@astratra/loyalty',
-  '@astratra/wallet',
-  '@astratra/payments',
-  '@astratra/privacy',
-  '@astratra/resilience',
-  '@astratra/models',
-  '@astratra/closure',
-  '@astratra/notify',
-  '@astratra/client',
-  '@astratra/native',
-  '@astratra/native-ui',
-  '@astratra/app-version',
-  '@astratra/app-guide',
-  '@astratra/voice',
-  '@astratra/live',
-  '@astratra/prerender',
-  '@astratra/react',
-  '@astratra/tooling',
-  '@astratra/saas-kit',
-  '@astratra/saas-kit-ui',
-  '@astratra/store-mongo',
-  '@astratra/store-postgres',
-  'create-astratra-app'
-];
+
+/* La liste se lit dans packages/ : une liste écrite à la main oubliait les
+   nouveaux paquets et gardait ceux qu'on avait fusionnés. Tout paquet publiable
+   (non privé) est empaqueté, installé dans un projet vierge, puis chargé. */
+const packages = fs.readdirSync(path.join(root, 'packages'))
+  .map((dir) => path.join(root, 'packages', dir, 'package.json'))
+  .filter((file) => fs.existsSync(file))
+  .map((file) => JSON.parse(fs.readFileSync(file, 'utf8')))
+  .filter((pkg) => !pkg.private)
+  .sort((a, b) => a.name.localeCompare(b.name));
+
+/* Ce que Node charge pour vérifier chaque paquet, quand ce n'est pas son
+   point d'entrée principal. `null` : rien à charger dans Node. */
+const entryOverrides = {
+  // Point d'entrée React Native : seules les règles pures se chargent dans Node.
+  '@astratra/native-ui': '@astratra/native-ui/logic',
+  // Composants .jsx livrés tels quels, compilés par le bundler du projet.
+  '@astratra/saas-kit-ui': null,
+  // Générateur en ligne de commande, sans point d'entrée à charger.
+  'create-astratra-app': null
+};
 
 const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'astratra-package-install-'));
 const tarballDir = path.join(tempDir, 'tarballs');
@@ -46,9 +33,9 @@ fs.mkdirSync(tarballDir);
 fs.mkdirSync(projectDir);
 
 try {
-  const tarballs = workspaces.map((workspace) => {
+  const tarballs = packages.map(({ name }) => {
     const output = execFileSync('npm', [
-      'pack', '--workspace', workspace, '--json', '--pack-destination', tarballDir
+      'pack', '--workspace', name, '--json', '--pack-destination', tarballDir
     ], { cwd: root, encoding: 'utf8' });
     const [{ filename }] = JSON.parse(output);
     return path.join(tarballDir, filename);
@@ -63,43 +50,25 @@ try {
     'install', '--ignore-scripts', '--no-audit', '--no-fund', ...tarballs
   ], { cwd: projectDir, stdio: 'inherit' });
 
-  execFileSync(process.execPath, ['-e', [
-    "require('@astratra/core')",
-    "require('@astratra/security')",
-    "require('@astratra/ai')",
-    "require('@astratra/memory')",
-    "require('@astratra/rag')",
-    "require('@astratra/credentials')",
-    "require('@astratra/entitlements')",
-    "require('@astratra/i18n-server')",
-    "require('@astratra/pdf')",
-    "require('@astratra/loyalty')",
-    "require('@astratra/wallet')",
-    "require('@astratra/payments')",
-    "require('@astratra/privacy')",
-    "require('@astratra/resilience')",
-    "require('@astratra/models')",
-    "require('@astratra/closure')",
-    "require('@astratra/notify')",
-    "require('@astratra/client')",
-    "require('@astratra/app-version')",
-    "require('@astratra/app-guide')",
-    "require('@astratra/voice')",
-    "require('@astratra/live')",
-    "require('@astratra/native-ui/logic')",
-    "require('@astratra/prerender')",
-    "require('@astratra/tooling')",
-    "require('@astratra/saas-kit')",
-    "require('@astratra/store-mongo')",
-    "require('@astratra/store-postgres')"
-  ].join(';')], { cwd: projectDir, stdio: 'inherit' });
+  const required = [];
+  const imported = [];
+  for (const pkg of packages) {
+    const entry = Object.prototype.hasOwnProperty.call(entryOverrides, pkg.name)
+      ? entryOverrides[pkg.name]
+      : pkg.name;
+    if (entry === null) continue;
+    (pkg.type === 'module' ? imported : required).push(entry);
+  }
 
-  execFileSync(process.execPath, ['--input-type=module', '-e', "import('@astratra/react')"], {
-    cwd: projectDir,
-    stdio: 'inherit'
-  });
+  execFileSync(process.execPath, ['-e',
+    required.map((entry) => `require(${JSON.stringify(entry)})`).join(';')
+  ], { cwd: projectDir, stdio: 'inherit' });
 
-  console.log('All Astratra package archives install and load successfully.');
+  execFileSync(process.execPath, ['--input-type=module', '-e',
+    imported.map((entry) => `await import(${JSON.stringify(entry)});`).join('\n')
+  ], { cwd: projectDir, stdio: 'inherit' });
+
+  console.log(`${packages.length} Astratra package archives install; ${required.length + imported.length} load successfully.`);
 } finally {
   fs.rmSync(tempDir, { recursive: true, force: true });
 }

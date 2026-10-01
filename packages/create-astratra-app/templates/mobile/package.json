@@ -9,8 +9,8 @@
     "test": "node --test features/*.test.mjs"
   },
   "dependencies": {
-    "@astratra/client": "^0.3.0",
-    "@astratra/native": "^0.3.0",
+    "@astratra/client": "^1.0.0",
+    "@astratra/native": "^1.0.0",
     "@shopify/react-native-skia": "2.2.12",
     "expo": "^54.0.0",
     "expo-blur": "~15.0.8",

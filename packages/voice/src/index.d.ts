@@ -385,3 +385,64 @@ export function createUtteranceSegmenter(options: {
   push(base64: string): Promise<Utterance[]>;
   finish(): Promise<Utterance[]>;
 };
+
+// Parole locale (sherpa-onnx, service faster-whisper) : src/local
+export interface SpeechAudio { audio: Uint8Array; format: 'wav'; mimeType: 'audio/wav' }
+export interface SpeechTranscription {
+  text: string;
+  heardLanguage: string | null;
+  logprob?: number;
+  noSpeechProbability?: number;
+}
+export interface LocalSpeechEngine {
+  id: string;
+  engine: 'sherpa' | 'whisper-http';
+  capabilities: { transcribe: boolean; synthesize: boolean };
+  /** `audio` : WAV (PCM 16 bits ou flottant) ou, pour sherpa, des échantillons Float32 mono. */
+  transcribe(request: { audio: Uint8Array | Float32Array; language?: string | null; requestedLanguage?: string | null; mediaType?: string }): Promise<SpeechTranscription>;
+  synthesize(request: { text: string; voice?: string | number | null; speed?: number }): Promise<SpeechAudio>;
+  close(): void;
+}
+
+export interface SherpaEngineOptions {
+  /** Module `sherpa-onnx-node` (sinon chargé à la demande). */
+  sherpa?: unknown;
+  /** Configuration OfflineRecognizer de sherpa-onnx (chemins de tes modèles). */
+  recognizerConfig?: object;
+  /** Configuration OfflineTts de sherpa-onnx. */
+  ttsConfig?: object;
+  sampleRate?: number;
+  id?: string;
+}
+export interface WhisperHttpOptions {
+  baseUrl?: string;
+  model?: string;
+  ttsModel?: string | null;
+  ttsVoice?: string | null;
+  apiKey?: string | null;
+  timeoutMs?: number;
+  fetch?: (url: string, init: object) => Awaitable<Response>;
+  id?: string;
+}
+export function createSherpaEngine(options?: SherpaEngineOptions): LocalSpeechEngine;
+export function createWhisperHttpEngine(options?: WhisperHttpOptions): LocalSpeechEngine;
+export function loadSherpa(): unknown;
+
+export function createLocalSpeech(options?: {
+  engine?: 'auto' | 'sherpa' | 'whisper-http';
+  sherpa?: Omit<SherpaEngineOptions, 'sherpa'>;
+  whisperHttp?: WhisperHttpOptions;
+  /** Module sherpa injecté (tests, binaire embarqué). */
+  sherpaModule?: unknown;
+}): LocalSpeechEngine;
+
+export function asVoiceProvider(speech: LocalSpeechEngine, options?: { voices?: Record<string, string | number>; defaultVoice?: string | number | null }): {
+  id: string;
+  synthesize(request: { text: string; language: string; voice?: string | null }): Promise<SpeechAudio>;
+};
+export function asTranscriptionProvider(speech: LocalSpeechEngine): {
+  id: string;
+  transcribe(request: { audio: Uint8Array | Float32Array; language?: string | null; requestedLanguage?: string | null; mediaType?: string }): Promise<SpeechTranscription>;
+};
+export function decodeWav(bytes: Uint8Array): { samples: Float32Array; sampleRate: number };
+export function resample(samples: Float32Array, from: number, to: number): Float32Array;

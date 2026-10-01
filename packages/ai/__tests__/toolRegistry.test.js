@@ -51,4 +51,14 @@ describe('toolRegistry', () => {
       '  - includeNotes: boolean optional'
     ].join('\n'));
   });
+
+  test('uses UNKNOWN by default and validates explicit risk levels', () => {
+    const registry = createToolRegistry();
+    const tool = { name: 'read', description: 'Read', type: 'read', roles: ['member'], handler: async () => null };
+    registry.register(tool);
+    expect(registry.getToolByName('read').risk).toBe('UNKNOWN');
+    registry.register({ ...tool, name: 'write', risk: 'high' });
+    expect(registry.getToolByName('write').risk).toBe('HIGH');
+    expect(() => registry.register({ ...tool, name: 'bad', risk: 'critical' })).toThrow('tool.risk');
+  });
 });

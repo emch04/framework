@@ -1,0 +1,44 @@
+{
+  "name": "@astratra/booking",
+  "version": "1.0.0",
+  "description": "Appointment slot engine without a database: weekly availability per resource, exceptions and public holidays, time zones and daylight saving, service duration, buffers, minimum notice, horizon, capacity, and atomic booking through an injected store (book fails on conflict), cancel and reschedule.",
+  "engines": {
+    "node": ">=20"
+  },
+  "main": "src/index.js",
+  "types": "src/index.d.ts",
+  "type": "commonjs",
+  "files": [
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "test": "jest --runInBand"
+  },
+  "jest": {
+    "testMatch": [
+      "**/__tests__/**/*.test.js"
+    ]
+  },
+  "keywords": [
+    "astratra",
+    "booking",
+    "appointments",
+    "availability",
+    "slots",
+    "scheduling",
+    "timezone"
+  ],
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
+  "devDependencies": {
+    "jest": "30.4.2",
+    "mongodb-memory-server": "^10.2.0",
+    "mongoose": "^8.17.0",
+    "pg": "^8.13.1",
+    "pg-mem": "^3.0.5"
+  }
+}

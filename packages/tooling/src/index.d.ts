@@ -25,6 +25,7 @@ export interface AstratraConfig {
   };
   publish: PublishConfigInput | null;
   dispatch: DispatchConfig | null;
+  eval?: EvalConfigInput | null;
   [key: string]: unknown;
 }
 
@@ -281,6 +282,7 @@ export interface EasBuildState {
 
 export function archiveExtension(platform: MobilePlatform): 'ipa' | 'aab';
 export function buildEasBuildArgs(input: { platform: MobilePlatform; profile?: string }): string[];
+export function buildEasLocalBuildArgs(input: { platform: MobilePlatform; profile?: string; output: string }): string[];
 export function buildEasViewArgs(buildId: string): string[];
 export function buildEasUpdateArgs(input: { channel?: string; message: string }): string[];
 export function parseBuildStart(stdout: string): string;
@@ -395,7 +397,7 @@ export interface PublishConfigInput {
   fingerprintFile?: string;
   fingerprint?: { command?: string[] | null };
   versionBump?: VersionLevel | false;
-  eas?: { command?: string[]; profile?: string; channel?: string; pollIntervalMs?: number; timeoutMs?: number; buildUrlTemplate?: string | null };
+  eas?: { command?: string[]; mode?: 'cloud' | 'local'; localWorkDir?: string | null; profile?: string; channel?: string; pollIntervalMs?: number; timeoutMs?: number; buildUrlTemplate?: string | null };
   downloadsDir?: string;
   fileNameTemplate?: string | null;
   android?: {
@@ -707,3 +709,61 @@ export function findForbiddenTermsInFiles(options: TermOptions & {
   include?: (name: string, fullPath: string) => boolean;
   skippedDirs?: string[];
 }): TermReport & { fileCount: number };
+
+/* ---- évaluation des IA (promptfoo) ---- */
+
+export interface EvalProviderInput {
+  /** Identifiant promptfoo : `openai:chat:local`, `echo`, `openai:chat:gpt-…`. */
+  id: string;
+  /** Serveur compatible OpenAI (llama.cpp, LiteLLM…). */
+  baseUrl?: string;
+  /** NOM de la variable d'environnement qui porte la clé (jamais la clé elle-même). */
+  apiKeyEnv?: string;
+  model?: string;
+  config?: Record<string, unknown>;
+}
+export interface EvalConfigInput {
+  cases?: string;
+  prompt?: string;
+  providers?: Array<string | EvalProviderInput>;
+  outputDir?: string;
+  /** Part minimale de cas réussis, entre 0 et 1 (défaut 1). */
+  minPassRate?: number;
+}
+export interface EvalCase {
+  description?: string;
+  vars: Record<string, unknown>;
+  assert: Array<{ type: string; value?: unknown; [key: string]: unknown }>;
+}
+export interface EvalSummary {
+  provider: string;
+  passed: number;
+  failed: number;
+  errors: number;
+  total: number;
+  passRate: number;
+  failures: Array<{ description: string; reason: string }>;
+}
+export interface EvalResult extends CommandResult {
+  summaries: EvalSummary[];
+  resultFile: string;
+  configFile: string;
+}
+export const EVAL_DEFAULTS: Required<EvalConfigInput>;
+export function loadCases(file: string): { cases: EvalCase[]; prompt: string | null };
+export function buildProvider(input: Partial<EvalProviderInput>): string | { id: string; config: Record<string, unknown> };
+export function buildPromptfooConfig(input: { description: string; prompt: string; providers: unknown[]; cases: EvalCase[] }): Record<string, unknown>;
+export function findPromptfoo(rootDir: string): string | null;
+export function summarizeEval(result: unknown): EvalSummary[];
+export function runEval(rootDir: string, config: AstratraConfig, options?: {
+  cases?: string;
+  provider?: string;
+  'base-url'?: string;
+  'api-key-env'?: string;
+  model?: string;
+  'min-pass'?: string | number;
+  out?: string;
+  output?: Pick<Console, 'log'>;
+  promptfooEntry?: string;
+  runProcess?: (command: string, args: string[], options: { cwd?: string; env?: Record<string, string | undefined>; quiet?: boolean }) => Promise<{ code: number | null; stdout?: string; stderr?: string }>;
+}): Promise<EvalResult>;

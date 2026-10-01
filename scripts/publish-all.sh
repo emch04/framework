@@ -24,8 +24,6 @@ DRY=0
 ORDER=(
   "@astratra/core"
   "@astratra/security"
-  "@astratra/ai"
-  "@astratra/memory"
   "@astratra/rag"
   "@astratra/credentials"
   "@astratra/entitlements"
@@ -36,6 +34,8 @@ ORDER=(
   "@astratra/payments"
   "@astratra/privacy"
   "@astratra/resilience"
+  "@astratra/ai"
+  "@astratra/memory"
   "@astratra/models"
   "@astratra/i18n-server"
   "@astratra/pdf"
@@ -53,6 +53,14 @@ ORDER=(
   "@astratra/saas-kit-ui"
   "@astratra/store-mongo"
   "@astratra/store-postgres"
+  "@astratra/booking"
+  "@astratra/collab"
+  "@astratra/fhir"
+  "@astratra/flags"
+  "@astratra/ledger"
+  "@astratra/repomap"
+  "@astratra/srs"
+  "@astratra/testkit"
   "create-astratra-app"
 )
 
@@ -67,6 +75,25 @@ done
 if [ ${#missing[@]} -gt 0 ]; then
   printf '  absent de ORDER : %s\n' "${missing[@]}"
   echo "ajoute-les à leur place dans l'ordre des dépendances, puis relance."
+  exit 1
+fi
+
+# Chaque dépendance interne (dependencies, peer, dev, optional) doit partir
+# avant le paquet qui la réclame : sinon un projet installé pendant la
+# publication demande une version encore absente du registre.
+if ! node -e '
+  const order = process.argv.slice(1);
+  const kinds = ["dependencies", "peerDependencies", "devDependencies", "optionalDependencies"];
+  let bad = 0;
+  order.forEach((name, i) => {
+    const pkg = require("./packages/" + name.replace(/^@astratra\//, "") + "/package.json");
+    for (const kind of kinds) for (const dep of Object.keys(pkg[kind] || {})) {
+      if (order.indexOf(dep) > i) { console.log("  " + name + " dépend de " + dep + ", placé après lui dans ORDER"); bad++; }
+    }
+  });
+  process.exit(bad ? 1 : 0);
+' "${ORDER[@]}"; then
+  echo "remets ORDER dans l'ordre des dépendances, puis relance."
   exit 1
 fi
 

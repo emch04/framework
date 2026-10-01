@@ -14,5 +14,6 @@ module.exports = {
   ...require('./transcription'),
   ...require('./reading'),
   ...require('./pieces'),
-  ...require('./policy')
+  ...require('./policy'),
+  ...require('./local')
 };

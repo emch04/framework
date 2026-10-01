@@ -9,6 +9,7 @@ module.exports = {
   ...require('./commands/deployRemote'),
   ...require('./commands/publish'),
   ...require('./commands/dispatch'),
+  ...require('./commands/evalAi'),
   ...require('./publish/jwt'),
   ...require('./publish/fingerprint'),
   ...require('./publish/version'),

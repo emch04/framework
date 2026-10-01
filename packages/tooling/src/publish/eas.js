@@ -22,6 +22,15 @@ function buildEasBuildArgs({ platform, profile = 'production' }) {
   return ['build', '-p', platform, '--profile', profile, '--non-interactive', '--no-wait', '--json'];
 }
 
+/** Build on this machine: eas-cli writes the archive straight to `output`, nothing to poll or download. */
+function buildEasLocalBuildArgs({ platform, profile = 'production', output }) {
+  assertPlatform(platform);
+  if (!output || !path.isAbsolute(String(output))) {
+    throw new ToolingError('EAS_LOCAL_OUTPUT_INVALID', `Chemin de sortie du build local invalide : ${output}`, 400);
+  }
+  return ['build', '-p', platform, '--profile', profile, '--local', '--non-interactive', '--output', String(output)];
+}
+
 function buildEasViewArgs(buildId) {
   if (!/^[A-Za-z0-9-]+$/.test(String(buildId || ''))) {
     throw new ToolingError('EAS_BUILD_ID_INVALID', `Identifiant de build invalide : ${buildId}`, 400);
@@ -168,6 +177,7 @@ module.exports = {
   archiveExtension,
   artifactFileName,
   buildEasBuildArgs,
+  buildEasLocalBuildArgs,
   buildEasUpdateArgs,
   buildEasViewArgs,
   downloadArtifact,

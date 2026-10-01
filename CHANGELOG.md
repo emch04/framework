@@ -3,6 +3,148 @@
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Chaque package Astratra est versionné indépendamment.
 
+## 2026-10-01 (35) — tous les paquets en 1.x, huit nouveaux paquets, trois fusions
+
+Décision : plus aucun paquet Astratra en 0.x. Les 27 paquets encore en 0.x (publiés ou nouveaux)
+passent en **1.0.0** ; un nouveau paquet naît désormais en 1.0.0. Le simple passage en 1.0.0
+n'ajoute **aucune rupture d'API** : un projet sur `^0.y.z` doit seulement relever son plancher à
+`^1.0.0` (un caret sur une 0.x ne franchit pas la mineure, il ne prendrait jamais la 1.0.0 seul).
+
+| Paquet | Avant | Après |
+|---|---|---|
+| `@astratra/ai` | 1.5.0 | 1.6.0 |
+| `@astratra/tooling` | 1.3.1 | 1.4.0 |
+| `create-astratra-app` | 1.6.1 | 1.7.0 |
+| `@astratra/app-guide`, `app-version`, `closure`, `models` | 0.1.0 | 1.0.0 |
+| `@astratra/i18n-server`, `live`, `loyalty`, `memory`, `native-ui`, `payments`, `pdf`, `prerender`, `rag`, `react`, `resilience`, `wallet` | 0.2.0 | 1.0.0 |
+| `@astratra/client`, `native`, `notify`, `privacy`, `voice` | 0.3.0 | 1.0.0 |
+| `@astratra/credentials` | 0.4.0 | 1.0.0 |
+| `@astratra/entitlements` | 0.5.0 | 1.0.0 |
+| `@astratra/booking`, `collab`, `fhir`, `ledger`, `srs`, `testkit` (nouveaux) | — | 1.0.0 |
+| `@astratra/flags`, `repomap` (nouveaux) | — | 1.0.0 |
+
+Inchangés (contenu identique à la version en ligne) : `core` 1.1.0, `security` 1.11.0,
+`saas-kit` 1.6.0, `saas-kit-ui` 1.0.1, `store-mongo` 1.1.0, `store-postgres` 1.1.0.
+
+### Ajoute
+
+- `@astratra/booking` 1.0.0 (nouveau) — moteur de créneaux de rendez-vous sans base imposée :
+  disponibilités hebdomadaires par ressource, exceptions et jours fériés, fuseaux et heure d'été,
+  durée de prestation, battements, préavis minimal, horizon, capacité, réservation atomique par
+  magasin injecté (échec en cas de conflit), annulation et report.
+- `@astratra/collab` 1.0.0 (nouveau) — édition collaborative en temps réel : serveur Hocuspocus
+  branché sur l'authentification de l'application (lecture/écriture par document), persistance
+  injectée en instantanés Yjs, versions nommées et restauration, limites de taille, éditeur
+  Tiptap sans interface, conversion Yjs vers JSON, Markdown et HTML pour la recherche et l'export.
+- `@astratra/fhir` 1.0.0 (nouveau) — aides FHIR R4 sur les types officiels Medplum : validation
+  minimale de Patient, Encounter et Observation, références et constructeurs.
+- `@astratra/flags` 1.0.0 (nouveau) — évaluation déterministe de fonctionnalités et
+  d'expériences : ciblage, déploiement progressif, fournisseur compatible OpenFeature.
+- `@astratra/ledger` 1.0.0 (nouveau) — comptabilité en partie double : écritures équilibrées et
+  immuables, numérotation sans trou, clôture, lettrage, rapprochement bancaire, états SYSCOHADA,
+  plans OHADA (SYSCOHADA, SYSCEBNL) et TVA de la RDC ; données livrées avec leur `NOTICE`.
+- `@astratra/repomap` 1.0.0 (nouveau) — carte pondérée des symboles d'un dépôt (tree-sitter) pour
+  explorer du code dans un budget de jetons.
+- `@astratra/srs` 1.0.0 (nouveau) — répétition espacée sur FSRS : cartes, notation
+  Again/Hard/Good/Easy, prochaine échéance, paramètres FSRS, file du jour et statistiques,
+  magasin injecté.
+- `@astratra/testkit` 1.0.0 (nouveau) — bases de test jetables (MongoDB ou PostgreSQL en
+  conteneur), fausses données reproductibles par pays, garde qui refuse toute adresse de base
+  ressemblant à la production.
+- `@astratra/ai` 1.6.0 — boucle d'agent : garde contre les appels répétés (même outil, mêmes
+  paramètres : rappels à 3 et 5, arrêt à 8, réglables par `loopGuard`, événements
+  `tool_loop_warning` / `tool_loop_stopped`) ; mise de côté des gros résultats d'outil
+  (`spill`, seuil 12 000 caractères, `createMemorySpillStore`, outil `read_spilled_result` pour les
+  lire par tranches) ; niveaux de risque `LOW` / `MEDIUM` / `HIGH` / `UNKNOWN` (`TOOL_RISKS`),
+  `confirmationPolicy` (`'always'`, `'never'`, `{ threshold }`, inactive par défaut) et
+  `riskAnalyzers`. Fournisseur llama.cpp pour un modèle local sur CPU
+  (`createLlamaCppProvider`, `createLlamaCppConfig`, `normalizeLlamaCppUrl`, `LocalLlmError`,
+  `chatStream`, état de santé) et un `docker-compose.yml` de `llama-server` dans `deploy/`.
+  API rétrocompatible ; la garde et la mise de côté sont actives par défaut (voir « Change »),
+  la politique de confirmation ne l'est pas.
+- `@astratra/models` 1.0.0 — catalogue des prix des modèles hébergés et coût d'un appel
+  (`createPriceCatalog`, `normalizeUsage`, `diffPriceCatalogs`, `loadBundledCatalog`) : cache en
+  lecture et en écriture, audio, paliers de long contexte, surcharges locales, coût figé, fenêtre
+  de contexte et capacités ; catalogue LiteLLM (MIT) du 2026-10-01 livré dans `data/` avec son
+  `NOTICE`, mis à jour par `npm run prices:update`.
+- `@astratra/entitlements` 1.0.0 — droits IA (`createAIEntitlements`,
+  `createMemoryAIEntitlementsStore`) : clés gardées par empreinte SHA-256 (secret montré une seule
+  fois), modèles et groupes par plan, alias, quotas par minute et par jour, budgets jour/mois,
+  `execute` qui réserve l'estimation puis règle au coût réel, repli dont chaque cible est
+  revérifiée (modèle, quota, budget) avant l'appel, révocation immédiate ; les restrictions d'une
+  clé ne peuvent jamais élargir les droits du compte.
+- `@astratra/voice` 1.0.0 — voix et transcription locales sur CPU (`createLocalSpeech`,
+  `createSherpaEngine` avec `sherpa-onnx-node` en dépendance pair optionnelle,
+  `createWhisperHttpEngine` pour un service faster-whisper, `asVoiceProvider`,
+  `asTranscriptionProvider`, `decodeWav`, `resample`).
+- `@astratra/rag` 1.0.0 — lecture de documents par un service Docling (`createDoclingClient`,
+  `ExtractionError`, `MEDIA_TYPES`) : PDF, Office et images convertis en Markdown, JSON, texte ou
+  HTML, tableaux rendus en grilles et en Markdown (`extractTables`, `gridFromTable`,
+  `tableToMarkdown`) ; `docker-compose.yml` de `docling-serve` dans `deploy/`.
+- `@astratra/tooling` 1.4.0 — commande `astratra eval` : évalue une IA sur un fichier de cas
+  (`loadCases`, `buildProvider`, `buildPromptfooConfig`, `runEval`, `summarizeEval`), seuil de
+  réussite `--min-pass`, fournisseur compatible OpenAI (dont llama.cpp) ou promptfoo ;
+  `promptfoo` en dépendance pair optionnelle ; exemple de cas dans `examples/`. Publication :
+  `publish.eas.mode: "local"` fabrique sur la machine (`eas build --local`) puis envoie aux
+  stores comme un build EAS, dossier de travail `eas.localWorkDir` vidé à chaque build.
+- `create-astratra-app` 1.7.0 — planchers relevés : `@astratra/ai` ^1.6.0 ; toutes les briques
+  `--with` (credentials, entitlements, notify, payments, privacy, resilience, i18n-server, pdf,
+  closure, client, prerender) en ^1.0.0 ; gabarit mobile : `@astratra/client` et
+  `@astratra/native` en ^1.0.0.
+
+### Fusionne
+
+Trois paquets jamais publiés sont fondus dans un paquet existant ; aucun nom `@astratra/…` ne
+disparaît du registre :
+
+- `speech-local` → `@astratra/voice` (`src/local`) ;
+- `local-llm` → `@astratra/ai` (fournisseur llama.cpp) ;
+- `extraction` → `@astratra/rag` (`src/extraction`, Docling).
+
+### Change
+
+- `@astratra/ai` 1.6.0 — comportement par défaut de `runAgentLoop` : un même appel d'outil répété
+  reçoit un rappel à la 3e et à la 5e fois (arrêt à la 8e si `maxSteps` le permet), et un résultat
+  d'outil de plus de 12 000 caractères est remplacé, pour le modèle, par un extrait et une
+  référence lisible par tranches. Aucune signature ne change ; pour retrouver l'ancien
+  comportement : `loopGuard: { reminder: Infinity, firmReminder: Infinity, stop: Infinity }` et
+  `spill: { threshold: Number.MAX_SAFE_INTEGER }`.
+- Dépendances internes relevées : `@astratra/native` → `@astratra/client` ^1.0.0,
+  `@astratra/native-ui` → `@astratra/native` ^1.0.0, `@astratra/live` → `@astratra/voice` ^1.0.0,
+  `@astratra/ai` (développement) → `@astratra/resilience` ^1.0.0.
+- `scripts/publish-all.sh` connaît les 40 paquets et refuse de démarrer si un paquet est placé
+  avant une de ses dépendances internes ; `scripts/verify-package-installation.js` lit
+  `packages/` au lieu d'une liste écrite à la main.
+- `package-lock.json` : quatre entrées de paquets supprimés depuis longtemps (`invitations`,
+  `mailer`, `offline`, `session-client`) retirées.
+
+### Sécurité
+
+`npm audit --omit=dev` à la racine : 17 vulnérabilités (1 faible, 13 modérées, 3 hautes) → 0.
+
+- `@astratra/testkit` 1.0.0 — `@faker-js/faker` passe de 9.9 à **10.6** (faille d'exécution de
+  code par `helpers.fake`, corrigée seulement en 10.x). faker 10 n'existe qu'en module ES : le
+  paquet fournit un préréglage Jest (`preset: '@astratra/testkit'`) qui le fait convertir par
+  babel-jest ; nouvelle dépendance `@babel/plugin-transform-modules-commonjs` (MIT).
+- `@astratra/wallet` 1.0.0 — `passkit-generator` 3.6.1 (dernière version) épingle `joi` 17.13.4
+  (trois failles, dont une expression régulière quadratique dans `isoDate()`). La racine force
+  `joi` 17.13.8 par `overrides` ; npm ne transmet pas les `overrides` d'un paquet installé, le
+  README indique celui à ajouter dans l'application.
+- Racine : `overrides` `xcode` → `uuid` ^11.1.1 (chaîne `expo`, installée comme pair de
+  `@astratra/native-ui`) ; verrou relevé : `express` 4.22.3, `body-parser` 1.20.8, `qs` 6.16.0,
+  `js-yaml` 4.3.2. Aucun `package.json` de paquet déjà publié ne change.
+
+### Ordre de publication
+
+Calculé par tri topologique des dépendances internes réelles (voir `docs/PUBLISHING.md`) :
+`core`, `security`, `rag`, `credentials`, `entitlements`, `notify`, `client`, `native`,
+`native-ui`, `payments`, `privacy`, `resilience`, `ai`, `memory`, `models`, `i18n-server`,
+`pdf`, `loyalty`, `wallet`, `closure`, `app-version`, `app-guide`, `voice`, `live`,
+`prerender`, `react`, `tooling`, `saas-kit`, `saas-kit-ui`, `store-mongo`, `store-postgres`,
+`booking`, `collab`, `fhir`, `flags`, `ledger`, `repomap`, `srs`, `testkit`, puis
+`create-astratra-app` en dernier. `bash scripts/publish-all.sh` suit cet ordre et saute les
+six paquets inchangés.
+
 ## 2026-09-29 (34) — Tertius reprend ses briques depuis les paquets : ce que la production demandait
 
 `@astratra/memory` 0.2.0, `@astratra/rag` 0.2.0, `@astratra/ai` 1.5.0, `@astratra/voice` 0.3.0,

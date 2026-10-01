@@ -1,0 +1,31 @@
+# docling-serve (Docling, licence MIT) — service d'extraction de documents sur le port 5001.
+# NE démarre rien tout seul : `docker compose up -d` après avoir lu le README du paquet.
+#
+# Projet officiel : https://github.com/docling-project/docling-serve
+# Image CPU (sans PyTorch CUDA, bien plus légère) : ghcr.io/docling-project/docling-serve-cpu
+# Image par défaut (CUDA) : ghcr.io/docling-project/docling-serve
+# Les modèles (mise en page, tableaux, OCR) sont fournis dans l'image.
+# Épingle un numéro de version en production plutôt que « latest ».
+services:
+  docling:
+    image: ${DOCLING_IMAGE:-ghcr.io/docling-project/docling-serve-cpu:latest}
+    restart: unless-stopped
+    ports:
+      # Local seulement : le service passe derrière un proxy avec TLS, jamais en direct sur Internet.
+      - "127.0.0.1:${DOCLING_PORT:-5001}:5001"
+    environment:
+      # Clé exigée dans l'en-tête X-Api-Key. Lue dans l'environnement.
+      DOCLING_SERVE_API_KEY: ${DOCLING_SERVE_API_KEY:?définis DOCLING_SERVE_API_KEY dans .env}
+      # Attente maximale des appels synchrones (secondes) ; au-delà, utiliser `async: true` côté client.
+      DOCLING_SERVE_MAX_SYNC_WAIT: "${DOCLING_SERVE_MAX_SYNC_WAIT:-120}"
+    healthcheck:
+      # L'image est Python : pas besoin de curl pour la sonde.
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5001/health', timeout=4)"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 90s
+    deploy:
+      resources:
+        limits:
+          memory: ${DOCLING_MEMORY_LIMIT:-4g}

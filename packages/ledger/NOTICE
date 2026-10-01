@@ -1,0 +1,61 @@
+@astratra/ledger
+================
+
+Le code de ce paquet (src/, scripts/, __tests__/) est sous licence MIT
+(voir LICENSE). Il est écrit pour Astratra ; aucun code d'Odoo n'y est repris.
+
+Les DONNÉES du dossier data/ forment une œuvre distincte, sous une autre
+licence, détaillée ci-dessous.
+
+
+Données issues d'Odoo — LGPL-3.0
+--------------------------------
+
+Copyright (c) Odoo S.A. et contributeurs.
+Licence : GNU Lesser General Public License, version 3 (LGPL-3.0-only).
+Texte complet de la licence : data/source/LICENSE (copie du fichier LICENSE
+d'Odoo au même commit, qui contient la LGPL-3 puis la GPL-3 à laquelle elle
+renvoie).
+
+Provenance exacte :
+  Dépôt   : https://github.com/odoo/odoo
+  Branche : 20.0
+  Commit  : 28ac90563f7239aef8fea6f20494adbcdd104236
+
+Fichiers repris tels quels dans data/source/ :
+  addons/l10n_syscohada/data/template/account.account-syscohada.csv
+      plan comptable SYSCOHADA révisé, 1 134 comptes
+  addons/l10n_syscohada/data/template/account.account-syscebnl.csv
+      plan comptable SYSCEBNL (entités à but non lucratif), 453 comptes
+  addons/l10n_syscohada/data/template/account.account.group-syscebnl.csv
+      91 groupes de comptes SYSCEBNL
+  addons/l10n_cd/data/template/account.tax-cd.csv
+  addons/l10n_cd/data/template/account.tax.group-cd.csv
+  addons/l10n_cd/data/template/account.tax-cd_syscebnl.csv
+  addons/l10n_cd/data/template/account.tax.group-cd_syscebnl.csv
+      taxes de la République démocratique du Congo (TVA 16 %, 0 %)
+  LICENSE
+
+Fichiers dérivés : data/charts/syscohada.json, data/charts/syscebnl.json,
+data/taxes/cd.json. Ils sont produits par scripts/import-odoo.js à partir de
+data/source/ et restent sous LGPL-3.0. Modifications apportées, toutes de
+forme :
+  - conversion CSV → JSON ;
+  - noms de champs renommés (name → labels.en, name@fr → labels.fr,
+    account_type → type, reconcile → booléen, id → sourceId) ;
+  - dans les taxes, l'identifiant du compte (pcg_4431) est remplacé par son
+    code (4431) et les lignes de répartition sont regroupées sous leur taxe.
+Aucun libellé, code, type ou taux n'est réécrit. L'empreinte SHA-256 de
+chaque fichier source figure dans le champ "source" de chaque JSON.
+
+Pour régénérer les JSON : node scripts/import-odoo.js
+Pour retélécharger les sources au commit épinglé puis régénérer :
+  node scripts/import-odoo.js --fetch
+
+Comptes par défaut (src/charts.js, PROFILS) : pour le SYSCOHADA les comptes
+clients (4111) et fournisseurs (4011), et pour les deux plans les comptes
+d'écarts de change (676, 776), suivent les valeurs par défaut
+des modèles de plan d'Odoo (l10n_syscohada/models/template_*.py), qui ne sont
+que des références à des numéros de comptes ; aucun code de ces fichiers
+n'est repris. Pour le SYSCEBNL, clients 412 et fournisseurs 401 sont nos
+propres choix (Odoo y met 409 et 419).

@@ -97,7 +97,18 @@ if ! node -e '
   exit 1
 fi
 
-published=(); skipped=()
+published=(); skipped=(); staged=()
+
+# La sortie de npm n'est pas capturée (voir plus bas) : la raison d'un échec se
+# relit dans le journal que npm vient d'écrire.
+npm_journal_dit() {
+  # Pas de `npm config get logs-dir` : l'option est protégée, et l'appel
+  # écrirait lui-même un journal plus récent que celui du refus.
+  local motif="$1" paquet="${2/\//%2f}" dossier="${npm_config_logs_dir:-$HOME/.npm/_logs}"
+  local journal
+  journal=$(ls -t "$dossier"/*-debug-*.log 2>/dev/null | head -1)
+  [ -n "$journal" ] && grep -q "$paquet" "$journal" && grep -qF "$motif" "$journal"
+}
 
 for name in "${ORDER[@]}"; do
   dir="packages/${name#@astratra/}"
@@ -122,6 +133,12 @@ for name in "${ORDER[@]}"; do
   # publication échouait sans que personne ait pu valider (21/09/2026).
   if npm publish --workspace "$name" --access public; then
     published+=("$name")
+  elif npm_journal_dit "previously staged version \"$local_v\"" "$name"; then
+    # E409 : npm a déjà accepté cette version et la garde « en attente »
+    # quelques minutes (jusqu'à ~20) avant de la servir. Elle est publiée :
+    # la suite peut partir, rien n'est à refaire (01/10/2026).
+    echo "  …      $name $local_v déjà reçue par npm, encore en attente : comptée publiée"
+    staged+=("$name")
   else
     # Arrêt au premier échec : la suite dépend de ce paquet, et la publier
     # quand même livre un paquet qui réclame une version absente. C'est arrivé
@@ -133,11 +150,12 @@ for name in "${ORDER[@]}"; do
     echo "  E409 « previously staged version » : npm a déjà reçu cette version et la traite ;"
     echo "    ne rien republier, attendre qu'elle apparaisse, puis relancer."
     echo "Relancer ne republie rien : les paquets déjà en ligne sont sautés."
-    echo "publiés : ${#published[@]} | déjà à jour : ${#skipped[@]}"
+    echo "publiés : ${#published[@]} | en attente chez npm : ${#staged[@]} | déjà à jour : ${#skipped[@]}"
     exit 1
   fi
 done
 
 echo
-echo "publiés : ${#published[@]} | déjà à jour : ${#skipped[@]}"
+echo "publiés : ${#published[@]} | en attente chez npm : ${#staged[@]} | déjà à jour : ${#skipped[@]}"
+[ ${#staged[@]} -gt 0 ] && echo "Les paquets en attente apparaissent d'eux-mêmes sous ~20 min (npm view <paquet>@<version>)."
 exit 0

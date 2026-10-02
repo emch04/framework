@@ -171,7 +171,7 @@ effective quand elle est déclarée ailleurs que dans `package.json`.
   porte l'heure du build (`local-AAAAMMJJ-HHMM`) à la place du numéro.
   Code `EAS_LOCAL_BUILD_FAILED` ; un mode inconnu (`PUBLISH_BUILD_MODE_INVALID`)
   arrête tout avant la montée de version.
-- **update** : `eas update` seul, message = dernier commit si absent.
+- **update** : le paquet est préparé sur la machine (`expo export`, iPhone et Android seulement) avec les variables du profil de `eas.json` (`extends` compris), qui recouvrent le `.env` local ; une variable `EXPO_PUBLIC_*` qui pointe vers la machine (localhost, 127.0.0.1) arrête tout avant, et une adresse locale du `.env` retrouvée dans le paquet arrête tout avant l'envoi. Puis `eas update --environment <eas.environment> --skip-bundler --input-dir`. Message = dernier commit si absent.
 - `all` s'arrête à la première plateforme en échec ; l'empreinte est
   enregistrée dès qu'une plateforme est passée.
 

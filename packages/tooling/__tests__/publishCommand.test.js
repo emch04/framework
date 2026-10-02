@@ -18,6 +18,13 @@ function setupProject({ version = '1.1.5', published, withAsc = false, withPlayK
   const home = createTempProject();
   writeJson(root, 'mobile/package.json', { name: '@acme/mobile', version });
   writeJson(root, 'mobile/app.json', { expo: { runtimeVersion: { policy: 'appVersion' } } });
+  writeJson(root, 'mobile/eas.json', {
+    build: {
+      base: { env: { EXPO_PUBLIC_SENTRY_DSN: 'https://dsn.example' } },
+      production: { extends: 'base', env: { EXPO_PUBLIC_API_BASE_URL: 'https://api.acme.example' } }
+    }
+  });
+  writeFile(root, 'mobile/.env', 'EXPO_PUBLIC_API_BASE_URL=http://127.0.0.1:3000\n');
   if (published) {
     writeFile(root, 'mobile/scripts/.fp', `${published}\n`);
   }
@@ -50,8 +57,9 @@ function fingerprintOf(root, native = 'N1') {
   return async () => `fp-${native}-${versionOf(root)}`;
 }
 
-function createWorld({ root, events = [], playFails = null, ascStatus = 200, altoolOutput = 'UPLOAD SUCCEEDED', localFails = false }) {
+function createWorld({ root, events = [], playFails = null, ascStatus = 200, altoolOutput = 'UPLOAD SUCCEEDED', localFails = false, bundle = 'fetch("https://api.acme.example")' }) {
   const localBuilds = [];
+  const exports = [];
   const run = createFakeRunner((command, args, options) => {
     events.push(`${command} ${args.slice(0, 3).join(' ')}`);
     if (command === 'npx' && args[1] === 'build' && args.includes('--local')) {
@@ -68,7 +76,16 @@ function createWorld({ root, events = [], playFails = null, ascStatus = 200, alt
       const platform = args[2].replace('build-', '');
       return { stdout: JSON.stringify({ status: 'FINISHED', artifacts: { buildUrl: `https://expo.dev/artifacts/${platform}` }, appBuildVersion: '7' }) };
     }
+    if (command === 'npx' && args[0] === 'expo' && args[1] === 'export') {
+      const outputDir = args[args.indexOf('--output-dir') + 1];
+      exports.push({ args, env: options.env, cwd: options.cwd, outputDir });
+      fs.mkdirSync(path.join(outputDir, '_expo/static/js/ios'), { recursive: true });
+      fs.writeFileSync(path.join(outputDir, '_expo/static/js/ios/entry.hbc'), bundle);
+      return { code: 0 };
+    }
     if (command === 'npx' && args[1] === 'update') {
+      const inputDir = args[args.indexOf('--input-dir') + 1];
+      exports.push({ updateSawBundle: fs.existsSync(path.join(inputDir, '_expo/static/js/ios/entry.hbc')) });
       return { stdout: 'Published update group' };
     }
     if (command === 'git') {
@@ -95,6 +112,7 @@ function createWorld({ root, events = [], playFails = null, ascStatus = 200, alt
   return {
     events,
     localBuilds,
+    exports,
     run,
     fetch,
     notifications,
@@ -267,12 +285,22 @@ describe('publish orchestrator', () => {
     expect(world.fetch.calls.some((call) => call.url.includes('androidpublisher'))).toBe(false);
   });
 
-  test('update: JavaScript only, message from the last commit when none is given', async () => {
+  test('update: the bundle is made here with the build profile, sent with its environment, then removed', async () => {
     const { root, config } = setupProject();
     const world = createWorld({ root });
     const result = await runPublish(root, config, { ...world.options, target: 'update', output: createOutput() });
     expect(result).toMatchObject({ exitCode: 0, version: '1.1.5', message: 'Fix login screen' });
-    expect(world.run.calls.find((call) => call.args[1] === 'update').args).toEqual(['eas-cli', 'update', '--channel', 'production', '--message', 'Fix login screen', '--non-interactive']);
+    const [made, sent] = world.exports;
+    expect(made.args).toEqual(['expo', 'export', '--platform', 'ios', '--platform', 'android', '--output-dir', made.outputDir]);
+    expect(made.cwd).toBe(path.join(root, 'mobile'));
+    // Le profil (et ce dont il herite) recouvre le .env local.
+    expect(made.env).toMatchObject({ EXPO_PUBLIC_API_BASE_URL: 'https://api.acme.example', EXPO_PUBLIC_SENTRY_DSN: 'https://dsn.example' });
+    expect(sent.updateSawBundle).toBe(true);
+    expect(world.run.calls.find((call) => call.args[1] === 'update').args).toEqual([
+      'eas-cli', 'update', '--channel', 'production', '--environment', 'production', '--message', 'Fix login screen',
+      '--skip-bundler', '--input-dir', made.outputDir, '--non-interactive'
+    ]);
+    expect(fs.existsSync(made.outputDir)).toBe(false);
     expect(versionOf(root)).toBe('1.1.5');
   });
 
@@ -280,7 +308,36 @@ describe('publish orchestrator', () => {
     const { root, config } = setupProject();
     const world = createWorld({ root });
     await runPublish(root, config, { ...world.options, target: 'update', message: 'Depuis l\'iPhone; $(date)', output: createOutput() });
-    expect(world.run.calls.find((call) => call.args[1] === 'update').args[5]).toBe('Depuis l\'iPhone; $(date)');
+    const args = world.run.calls.find((call) => call.args[1] === 'update').args;
+    expect(args[args.indexOf('--message') + 1]).toBe('Depuis l\'iPhone; $(date)');
+  });
+
+  test('update refused before anything is made when the app would point to this machine', async () => {
+    const { root, config } = setupProject();
+    writeJson(root, 'mobile/eas.json', { build: { production: { env: {} } } });
+    const world = createWorld({ root });
+    const result = await runPublish(root, config, { ...world.options, target: 'update', message: 'fix', output: createOutput() });
+    expect(result).toMatchObject({ exitCode: 1, error: { code: 'EAS_UPDATE_LOCAL_URL' } });
+    expect(world.exports).toEqual([]);
+    expect(world.run.calls.some((call) => call.args[1] === 'update')).toBe(false);
+  });
+
+  test('update refused when the made bundle still holds the local address', async () => {
+    const { root, config } = setupProject();
+    const world = createWorld({ root, bundle: 'fetch("http://127.0.0.1:3000")' });
+    const result = await runPublish(root, config, { ...world.options, target: 'update', message: 'fix', output: createOutput() });
+    expect(result).toMatchObject({ exitCode: 1, error: { code: 'EAS_UPDATE_LOCAL_URL_IN_BUNDLE' } });
+    expect(world.run.calls.some((call) => call.args[1] === 'update')).toBe(false);
+    expect(fs.existsSync(world.exports[0].outputDir)).toBe(false);
+  });
+
+  test('update refused when the build profile is missing from eas.json', async () => {
+    const { root, config } = setupProject();
+    config.publish.eas = { profile: 'staging' };
+    const world = createWorld({ root });
+    const result = await runPublish(root, config, { ...world.options, target: 'update', message: 'fix', output: createOutput() });
+    expect(result).toMatchObject({ exitCode: 1, error: { code: 'EAS_PROFILE_MISSING' } });
+    expect(world.exports).toEqual([]);
   });
 
   test('an unknown target is refused with the usage', async () => {

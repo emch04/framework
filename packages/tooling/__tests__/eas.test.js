@@ -18,7 +18,11 @@ describe('EAS commands and answers', () => {
   test('build, view and update argv', () => {
     expect(buildEasBuildArgs({ platform: 'ios', profile: 'production' })).toEqual(['build', '-p', 'ios', '--profile', 'production', '--non-interactive', '--no-wait', '--json']);
     expect(buildEasViewArgs('0b9f-12')).toEqual(['build:view', '0b9f-12', '--json']);
-    expect(buildEasUpdateArgs({ channel: 'production', message: 'fix; rm -rf /' })).toEqual(['update', '--channel', 'production', '--message', 'fix; rm -rf /', '--non-interactive']);
+    expect(buildEasUpdateArgs({ channel: 'production', message: 'fix; rm -rf /', inputDir: '/tmp/dist' })).toEqual([
+      'update', '--channel', 'production', '--environment', 'production', '--message', 'fix; rm -rf /',
+      '--skip-bundler', '--input-dir', '/tmp/dist', '--non-interactive'
+    ]);
+    expect(() => buildEasUpdateArgs({ message: 'fix', inputDir: 'dist' })).toThrow(expect.objectContaining({ code: 'EAS_UPDATE_INPUT_INVALID' }));
     expect(buildEasLocalBuildArgs({ platform: 'ios', output: '/ssd/App.ipa' })).toEqual(['build', '-p', 'ios', '--profile', 'production', '--local', '--non-interactive', '--output', '/ssd/App.ipa']);
     expect(() => buildEasLocalBuildArgs({ platform: 'ios', output: 'App.ipa' })).toThrow(expect.objectContaining({ code: 'EAS_LOCAL_OUTPUT_INVALID' }));
     expect(() => buildEasBuildArgs({ platform: 'web' })).toThrow(expect.objectContaining({ code: 'PUBLISH_PLATFORM_INVALID' }));

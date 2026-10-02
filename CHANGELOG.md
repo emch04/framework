@@ -3,6 +3,22 @@
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Chaque package Astratra est versionné indépendamment.
 
+## 2026-10-02 — `@astratra/tooling` 1.5.0 : mise à jour à distance sûre
+
+### Corrige
+- `publish update` échouait (eas-cli exige `--environment` depuis 2026, et préparait aussi la version web)
+  et, sans cela, aurait envoyé le `.env` local : une application dont l'adresse du serveur est
+  `http://127.0.0.1:3000`, coupée de son serveur. Le paquet est désormais préparé sur la machine avec
+  les variables du profil de `eas.json` (`extends` compris), iPhone et Android seulement, puis envoyé
+  par `eas update --environment … --skip-bundler --input-dir …`.
+- Deux garde-fous : une variable `EXPO_PUBLIC_*` qui pointe vers la machine arrête tout avant la
+  préparation ; une adresse locale du `.env` retrouvée dans le paquet (JavaScript ou bytecode Hermes)
+  arrête tout avant l'envoi. Le dossier préparé est toujours supprimé.
+
+### Ajoute
+- `publish.eas.environment` (défaut `production`) et `publish.expoCommand` (défaut `npx expo`).
+- `buildEasUpdateArgs` prend `environment` et `inputDir` (obligatoire, absolu).
+
 ## 2026-10-01 (35) — tous les paquets en 1.x, huit nouveaux paquets, trois fusions
 
 Décision : plus aucun paquet Astratra en 0.x. Les 27 paquets encore en 0.x (publiés ou nouveaux)

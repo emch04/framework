@@ -284,7 +284,7 @@ export function archiveExtension(platform: MobilePlatform): 'ipa' | 'aab';
 export function buildEasBuildArgs(input: { platform: MobilePlatform; profile?: string }): string[];
 export function buildEasLocalBuildArgs(input: { platform: MobilePlatform; profile?: string; output: string }): string[];
 export function buildEasViewArgs(buildId: string): string[];
-export function buildEasUpdateArgs(input: { channel?: string; message: string }): string[];
+export function buildEasUpdateArgs(input: { channel?: string; environment?: string; message: string; inputDir: string }): string[];
 export function parseBuildStart(stdout: string): string;
 export function parseBuildView(stdout: string): EasBuildState;
 export function waitForBuild(options: {

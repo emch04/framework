@@ -1,6 +1,6 @@
 {
   "name": "@astratra/tooling",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "description": "Generic audit, test, deploy and app-publishing tooling for Astratra workspaces.",
   "engines": {
     "node": ">=20"

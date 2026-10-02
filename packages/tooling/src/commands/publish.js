@@ -30,6 +30,14 @@ const {
 const { createGooglePlayClient, loadServiceAccount } = require('../publish/googlePlay');
 const { checkAscKey, expandHome, hasAscCredentials, loadAscCredentials, uploadToAppStore } = require('../publish/appStoreConnect');
 const { createDesktopNotifier } = require('../publish/notify');
+const {
+  assertBundleClean,
+  assertNoLocalUrl,
+  buildExpoExportArgs,
+  localPublicUrls,
+  readDotEnv,
+  readProfileEnv
+} = require('../publish/expoExport');
 
 const PUBLISH_DEFAULTS = {
   appName: null,
@@ -46,11 +54,15 @@ const PUBLISH_DEFAULTS = {
     localWorkDir: null,
     profile: 'production',
     channel: 'production',
+    // Environnement Expo des variables (eas-cli l'exige pour une mise a jour a distance).
+    environment: 'production',
     pollIntervalMs: 60000,
     timeoutMs: 3 * 60 * 60 * 1000,
     maxViewFailures: 5,
     buildUrlTemplate: null
   },
+  // Prepare le paquet d'une mise a jour a distance (expo export) avec les reglages du profil.
+  expoCommand: ['npx', 'expo'],
   downloadsDir: '~/Downloads',
   fileNameTemplate: null,
   android: {
@@ -385,9 +397,39 @@ async function lastCommitSubject(ctx) {
 async function runUpdate(ctx, message) {
   const version = ctx.publishConfig.version || readPackageVersion(ctx.publishConfig.projectDir);
   const finalMessage = message || await lastCommitSubject(ctx);
-  const result = await runEas(ctx, buildEasUpdateArgs({ channel: ctx.publishConfig.eas.channel, message: finalMessage }), { quietStdout: false });
-  if (result.code !== 0) {
-    throw new ToolingError('EAS_UPDATE_FAILED', `eas update a echoue (code ${result.code}).`, 502);
+  const { projectDir, eas } = ctx.publishConfig;
+
+  // Ce que l'application recevra : le .env local, recouvert par l'environnement puis par le profil de build.
+  const profileEnv = readProfileEnv(projectDir, eas.profile);
+  const dotEnv = readDotEnv(projectDir);
+  assertNoLocalUrl({ ...dotEnv, ...ctx.env, ...profileEnv });
+
+  const outputDir = fs.mkdtempSync(path.join(os.tmpdir(), 'astratra-update-'));
+  try {
+    const [command, ...prefix] = ctx.publishConfig.expoCommand;
+    const exported = await ctx.run(command, [...prefix, ...buildExpoExportArgs({ outputDir })], {
+      cwd: projectDir,
+      env: { ...ctx.env, ...profileEnv },
+      quietStdout: true,
+      onLine: (line) => ctx.output.log(colors.dim(`  ${line}`))
+    });
+    if (exported.code !== 0) {
+      throw new ToolingError('EXPO_EXPORT_FAILED', `Preparation du paquet echouee (code ${exported.code}).`, 502);
+    }
+    // Les adresses locales du .env ne doivent plus figurer nulle part dans le paquet.
+    assertBundleClean(outputDir, localPublicUrls(dotEnv).map((one) => one.value));
+
+    const result = await runEas(ctx, buildEasUpdateArgs({
+      channel: eas.channel,
+      environment: eas.environment,
+      message: finalMessage,
+      inputDir: outputDir
+    }), { quietStdout: false });
+    if (result.code !== 0) {
+      throw new ToolingError('EAS_UPDATE_FAILED', `eas update a echoue (code ${result.code}).`, 502);
+    }
+  } finally {
+    fs.rmSync(outputDir, { recursive: true, force: true });
   }
   ctx.output.log(colors.green(`Envoye : les applications en version ${version} la prennent a leur prochain lancement.`));
   await ctx.notify('mise a jour envoyee', `Version ${version} : ${finalMessage}`);
@@ -413,7 +455,7 @@ async function runPublish(rootDir, config, options = {}) {
   ctx.output.log(`${colors.blue(`Publication (${target})`)}\n`);
 
   if (options['dry-run'] || options.dryRun) {
-    ctx.output.log(`Essai a blanc : projet ${ctx.publishConfig.projectDir} ; cible ${target} ; build ${ctx.publishConfig.eas.mode === 'local' ? 'sur cette machine' : 'chez Expo'} ; profil ${ctx.publishConfig.eas.profile} ; canal ${ctx.publishConfig.eas.channel} ; envoi Android ${ctx.publishConfig.android.upload} ; repli iOS ${ctx.publishConfig.ios.fallback}.`);
+    ctx.output.log(`Essai a blanc : projet ${ctx.publishConfig.projectDir} ; cible ${target} ; build ${ctx.publishConfig.eas.mode === 'local' ? 'sur cette machine' : 'chez Expo'} ; profil ${ctx.publishConfig.eas.profile} ; canal ${ctx.publishConfig.eas.channel} ; environnement ${ctx.publishConfig.eas.environment} ; envoi Android ${ctx.publishConfig.android.upload} ; repli iOS ${ctx.publishConfig.ios.fallback}.`);
     return { exitCode: 0, dryRun: true, target, results: [] };
   }
 

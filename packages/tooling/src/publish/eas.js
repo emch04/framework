@@ -38,11 +38,22 @@ function buildEasViewArgs(buildId) {
   return ['build:view', buildId, '--json'];
 }
 
-function buildEasUpdateArgs({ channel = 'production', message }) {
+/**
+ * Envoie un paquet deja prepare (expoExport.js) : eas-cli ne refait pas le
+ * paquet lui-meme, il le ferait avec le .env local et toutes les plateformes.
+ * L'environnement est exige par eas-cli depuis 2026.
+ */
+function buildEasUpdateArgs({ channel = 'production', environment = 'production', message, inputDir }) {
   if (!message || !String(message).trim()) {
     throw new ToolingError('EAS_UPDATE_MESSAGE_MISSING', 'Une mise a jour a distance demande un message.', 400);
   }
-  return ['update', '--channel', channel, '--message', String(message), '--non-interactive'];
+  if (!inputDir || !path.isAbsolute(String(inputDir))) {
+    throw new ToolingError('EAS_UPDATE_INPUT_INVALID', `Paquet de mise a jour introuvable : ${inputDir}`, 400);
+  }
+  return [
+    'update', '--channel', channel, '--environment', environment, '--message', String(message),
+    '--skip-bundler', '--input-dir', String(inputDir), '--non-interactive'
+  ];
 }
 
 function parseJson(stdout, code, what) {

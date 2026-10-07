@@ -3,6 +3,20 @@
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Chaque package Astratra est versionné indépendamment.
 
+## 2026-10-07 — `@astratra/centrale` 1.0.0 et `@astratra/centrale-cli` 1.0.0 : nouveaux paquets
+
+Venus du dépôt de Centrale LJ (`paquets/`), où ils sont nés.
+
+### Ajoute
+- `@astratra/centrale` : le paquet de collecte de Centrale LJ (erreurs, plantages, vues, usages,
+  sessions, appels d'IA), masqués à la source et envoyés par lots. Entrées `/node`, `/navigateur`,
+  `/expo`, `/ia`, plus `/envoi` (le contrat d'envoi) et `/masquage`, repris par le backend.
+  Aucune dépendance.
+- `@astratra/centrale-cli` : la commande `centrale` (identifiants de débogage dans les builds,
+  envoi des cartes de code, déclaration des déploiements).
+- Premiers paquets Astratra écrits en TypeScript : publiés construits (`dist/`, JavaScript et types,
+  par `prepack`), parce que Node n'exécute pas le TypeScript d'un paquet installé.
+
 ## 2026-10-07 — `@astratra/saas-kit` 1.6.1, `@astratra/client` 1.1.0, `create-astratra-app` 1.8.0 : sessions plus robustes
 
 ### Corrige

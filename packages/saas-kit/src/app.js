@@ -198,7 +198,21 @@ function createSaasApp(options = {}) {
     skip: (req) => isBearerAuthenticated(req) || (normalized.csrf && normalized.csrf.skip && normalized.csrf.skip(req))
   });
 
-  app.use('/auth', createLoginLimiter(normalized.loginRateLimit), createAuthRoutes({
+  /*
+   * Le limiteur de connexion ne compte que les routes où l'on devine un secret :
+   * la connexion et la réinitialisation du mot de passe. Monté sur tout /auth, il
+   * comptait aussi /auth/me et /auth/refresh, qu'une app appelle à chaque lancement :
+   * après une dizaine d'ouvertures, l'app restait bloquée (« Too many login attempts »).
+   */
+  const LIMITED_AUTH_PATHS = new Set(['/login', '/forgot-password', '/reset-password']);
+  const userLoginSkip = normalized.loginRateLimit && normalized.loginRateLimit.skip;
+  const loginLimiter = createLoginLimiter({
+    ...normalized.loginRateLimit,
+    skip: (req, res) => !(req.method === 'POST' && LIMITED_AUTH_PATHS.has(req.path))
+      || Boolean(userLoginSkip && userLoginSkip(req, res))
+  });
+
+  app.use('/auth', loginLimiter, createAuthRoutes({
     ...normalized,
     authMiddleware,
     csrfMiddleware

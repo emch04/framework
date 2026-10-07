@@ -3,6 +3,25 @@
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Chaque package Astratra est versionné indépendamment.
 
+## 2026-10-07 — `@astratra/saas-kit` 1.6.1, `@astratra/client` 1.1.0, `create-astratra-app` 1.8.0 : sessions plus robustes
+
+### Corrige
+- `saas-kit` : le limiteur des connexions s'appliquait à tout `/auth`. Après une dizaine
+  d'ouvertures d'une app (`GET /auth/me`, renouvellements), la connexion était bloquée 15 minutes.
+  Il ne compte plus que `POST /auth/login`, `/auth/forgot-password` et `/auth/reset-password` ;
+  l'option `loginRateLimit.skip` de l'application reste respectée.
+- `client` : `createSessionClient` mettait fin à la session au moindre échec du renouvellement.
+  Une coupure réseau, un 5xx ou un 429 renvoient désormais l'erreur telle quelle et gardent la
+  session ; l'appel suivant réessaie. Seul un refus du serveur (400, 401, 403) appelle
+  `onSessionExpired` et lève `SessionExpiredError`.
+
+### Ajoute
+- `client` : option `isRefusal(refreshError)` pour redéfinir ce qui met fin à la session.
+
+### Change
+- `create-astratra-app` : les nouveaux projets demandent `@astratra/saas-kit` ^1.6.1 et,
+  dans le gabarit mobile, `@astratra/client` ^1.1.0.
+
 ## 2026-10-02 — `@astratra/tooling` 1.5.0 : mise à jour à distance sûre
 
 ### Corrige

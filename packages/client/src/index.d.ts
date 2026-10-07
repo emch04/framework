@@ -26,6 +26,11 @@ export function createSessionClient<Response = unknown, Init = unknown>(options:
   onSessionExpired?: (cause: unknown) => void;
   /** Default: error.status === 401. */
   isAuthError?: (error: unknown) => boolean;
+  /**
+   * Which renewal failure ends the session. Default: the server answered 400, 401 or 403.
+   * Anything else (offline, 5xx, 429) is rethrown and the session is kept.
+   */
+  isRefusal?: (refreshError: unknown) => boolean;
 }): SessionClient<Response, Init>;
 
 export interface RouteGuard {

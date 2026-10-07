@@ -2,7 +2,7 @@ const { createSessionClient, SessionExpiredError } = require('../src');
 
 const authError = () => Object.assign(new Error('Unauthorized'), { status: 401 });
 
-function build({ failFirst = 0, refreshFails = false } = {}) {
+function build({ failFirst = 0, refreshFails = false, refreshError } = {}) {
   const calls = [];
   let failures = failFirst;
   let refreshes = 0;
@@ -17,7 +17,8 @@ function build({ failFirst = 0, refreshFails = false } = {}) {
     refresh: async () => {
       refreshes += 1;
       await new Promise((resolve) => setTimeout(resolve, 10));
-      if (refreshFails) throw new Error('refresh token invalid');
+      if (refreshError) throw refreshError();
+      if (refreshFails) throw Object.assign(new Error('refresh token invalid'), { status: 401 });
     },
     excluded: ['/auth/refresh', '/auth/login'],
     onSessionExpired: (cause) => expired.push(cause.message)
@@ -108,7 +109,7 @@ describe('definitive expiry', () => {
   test('a crashing onSessionExpired handler does not mask the expiry', async () => {
     const client = createSessionClient({
       request: async () => { throw authError(); },
-      refresh: async () => { throw new Error('dead'); },
+      refresh: async () => { throw Object.assign(new Error('dead'), { status: 401 }); },
       onSessionExpired: () => { throw new Error('handler crashed'); }
     });
 
@@ -157,5 +158,64 @@ describe('wiring', () => {
   test('a client without a transport or a refresh is refused up front', () => {
     expect(() => createSessionClient({ refresh: async () => {} })).toThrow(/request/);
     expect(() => createSessionClient({ request: async () => {} })).toThrow(/refresh/);
+  });
+});
+
+describe('a failed renewal is not always the end', () => {
+  test('offline: the network error comes back and the session stays', async () => {
+    const offline = () => new TypeError('Network request failed');
+    const { client, expired } = build({ failFirst: 1, refreshError: offline });
+
+    await expect(client.call('/students')).rejects.toThrow('Network request failed');
+    expect(expired).toEqual([]);
+  });
+
+  test('a server restarting (502) or a busy limiter (429) keeps the session', async () => {
+    for (const status of [429, 502, 503]) {
+      const busy = () => Object.assign(new Error('busy'), { status });
+      const { client, expired } = build({ failFirst: 1, refreshError: busy });
+
+      await expect(client.call('/x')).rejects.toMatchObject({ status });
+      expect(expired).toEqual([]);
+    }
+  });
+
+  test('a refusal (400, 401, 403) ends the session', async () => {
+    for (const status of [400, 401, 403]) {
+      const refused = () => Object.assign(new Error('refused'), { status });
+      const { client, expired } = build({ failFirst: 1, refreshError: refused });
+
+      await expect(client.call('/x')).rejects.toBeInstanceOf(SessionExpiredError);
+      expect(expired).toEqual(['refused']);
+    }
+  });
+
+  test('after a network failure, the next call may try the renewal again', async () => {
+    let attempts = 0;
+    let failures = 2;
+    const client = createSessionClient({
+      request: async () => {
+        if (failures > 0) { failures -= 1; throw authError(); }
+        return 'ok';
+      },
+      refresh: async () => {
+        attempts += 1;
+        if (attempts === 1) throw new TypeError('offline');
+      }
+    });
+
+    await expect(client.call('/x')).rejects.toThrow('offline');
+    await expect(client.call('/x')).resolves.toBe('ok');
+    expect(attempts).toBe(2);
+  });
+
+  test('what counts as a refusal can be redefined', async () => {
+    const client = createSessionClient({
+      request: async () => { throw authError(); },
+      refresh: async () => { throw Object.assign(new Error('gone'), { code: 'INVALID_GRANT' }); },
+      isRefusal: (error) => error.code === 'INVALID_GRANT'
+    });
+
+    await expect(client.call('/x')).rejects.toBeInstanceOf(SessionExpiredError);
   });
 });

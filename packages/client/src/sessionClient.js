@@ -47,6 +47,9 @@ class SessionExpiredError extends Error {
  * @param {Function} [options.onSessionExpired] called once per definitive
  *   expiry — the place to clear storage and route to the login screen.
  * @param {Function} [options.isAuthError] (error) => boolean. Default: status === 401.
+ * @param {Function} [options.isRefusal] (refreshError) => boolean. Only a refusal
+ *   ends the session. Default: the server answered 400, 401 or 403. A network cut,
+ *   a 5xx or a 429 keeps the session: the next call will try again.
  */
 function createSessionClient(options = {}) {
   const request = options.request;
@@ -61,6 +64,8 @@ function createSessionClient(options = {}) {
   const excluded = new Set(options.excluded || []);
   const onSessionExpired = options.onSessionExpired || null;
   const isAuthError = options.isAuthError || ((error) => error && error.status === 401);
+  const isRefusal = options.isRefusal
+    || ((error) => Boolean(error) && [400, 401, 403].includes(error.status));
 
   /* The single flight. Everybody who hits a 401 while a refresh is running
      awaits the SAME promise — one refresh-token spend, not five. */
@@ -87,6 +92,9 @@ function createSessionClient(options = {}) {
       try {
         await refreshOnce();
       } catch (refreshError) {
+        /* A failed renewal is not always the end: offline, a server restarting or
+           a busy limiter must not throw a person out of the app. Only a refusal does. */
+        if (!isRefusal(refreshError)) throw refreshError;
         /* Definitively out. Announce it ONCE, then surface a typed error the
            interface can route on. */
         if (onSessionExpired) {

@@ -1,0 +1,335 @@
+{
+  "memory": {
+    "numTotalTestSuites": 24,
+    "numPassedTestSuites": 24,
+    "numFailedTestSuites": 0,
+    "numTotalTests": 348,
+    "numPassedTests": 348,
+    "numFailedTests": 0,
+    "numPendingTests": 0,
+    "suites": [
+      {
+        "file": "nativeRisk.test.js",
+        "passed": 9,
+        "failed": 0,
+        "failuresOnlyEperm": true
+      },
+      {
+        "file": "configuredRouter.test.js",
+        "passed": 36,
+        "failed": 0,
+        "failuresOnlyEperm": true
+      },
+      {
+        "file": "localModels.test.js",
+        "passed": 15,
+        "failed": 0,
+        "failuresOnlyEperm": true
+      },
+      {
+        "file": "voiceServices.test.js",
+        "passed": 15,
+        "failed": 0,
+        "failuresOnlyEperm": true
+      },
+      {
+        "file": "nativeTools.test.js",
+        "passed": 16,
+        "failed": 0,
+        "failuresOnlyEperm": true
+      },
+      {
+        "file": "agentLoop.test.js",
+        "passed": 19,
+        "failed": 0,
+        "failuresOnlyEperm": true
+      },
+      {
+        "file": "sources.test.js",
+        "passed": 17,
+        "failed": 0,
+        "failuresOnlyEperm": true
+      },
+      {
+        "file": "masking.test.js",
+        "passed": 22,
+        "failed": 0,
+        "failuresOnlyEperm": true
+      },
+      {
+        "file": "providerRouter.test.js",
+        "passed": 8,
+        "failed": 0,
+        "failuresOnlyEperm": true
+      },
+      {
+        "file": "breakers.test.js",
+        "passed": 20,
+        "failed": 0,
+        "failuresOnlyEperm": true
+      },
+      {
+        "file": "responseCleaner.test.js",
+        "passed": 38,
+        "failed": 0,
+        "failuresOnlyEperm": true
+      },
+      {
+        "file": "openaiCompatible.test.js",
+        "passed": 17,
+        "failed": 0,
+        "failuresOnlyEperm": true
+      },
+      {
+        "file": "pendingActions.test.js",
+        "passed": 18,
+        "failed": 0,
+        "failuresOnlyEperm": true
+      },
+      {
+        "file": "gemini.test.js",
+        "passed": 8,
+        "failed": 0,
+        "failuresOnlyEperm": true
+      },
+      {
+        "file": "languageAndLimits.test.js",
+        "passed": 16,
+        "failed": 0,
+        "failuresOnlyEperm": true
+      },
+      {
+        "file": "toolRegistry.test.js",
+        "passed": 3,
+        "failed": 0,
+        "failuresOnlyEperm": true
+      },
+      {
+        "file": "routing.test.js",
+        "passed": 13,
+        "failed": 0,
+        "failuresOnlyEperm": true
+      },
+      {
+        "file": "passages.test.js",
+        "passed": 11,
+        "failed": 0,
+        "failuresOnlyEperm": true
+      },
+      {
+        "file": "answerText.test.js",
+        "passed": 14,
+        "failed": 0,
+        "failuresOnlyEperm": true
+      },
+      {
+        "file": "webSearch.test.js",
+        "passed": 3,
+        "failed": 0,
+        "failuresOnlyEperm": true
+      },
+      {
+        "file": "routingState.test.js",
+        "passed": 5,
+        "failed": 0,
+        "failuresOnlyEperm": true
+      },
+      {
+        "file": "providerLimits.test.js",
+        "passed": 3,
+        "failed": 0,
+        "failuresOnlyEperm": true
+      },
+      {
+        "file": "formatInstructions.test.js",
+        "passed": 10,
+        "failed": 0,
+        "failuresOnlyEperm": true
+      },
+      {
+        "file": "fallback.test.js",
+        "passed": 12,
+        "failed": 0,
+        "failuresOnlyEperm": true
+      }
+    ]
+  },
+  "http": {
+    "numTotalTestSuites": 26,
+    "numPassedTestSuites": 21,
+    "numFailedTestSuites": 5,
+    "numTotalTests": 367,
+    "numPassedTests": 287,
+    "numFailedTests": 80,
+    "numPendingTests": 0,
+    "suites": [
+      {
+        "file": "llamaCpp.test.js",
+        "passed": 4,
+        "failed": 11,
+        "failuresOnlyEperm": true
+      },
+      {
+        "file": "eventStream.test.js",
+        "passed": 1,
+        "failed": 3,
+        "failuresOnlyEperm": true
+      },
+      {
+        "file": "nativeRisk.test.js",
+        "passed": 9,
+        "failed": 0,
+        "failuresOnlyEperm": true
+      },
+      {
+        "file": "configuredRouter.test.js",
+        "passed": 0,
+        "failed": 36,
+        "failuresOnlyEperm": true
+      },
+      {
+        "file": "voiceServices.test.js",
+        "passed": 0,
+        "failed": 15,
+        "failuresOnlyEperm": true
+      },
+      {
+        "file": "nativeTools.test.js",
+        "passed": 16,
+        "failed": 0,
+        "failuresOnlyEperm": true
+      },
+      {
+        "file": "localModels.test.js",
+        "passed": 0,
+        "failed": 15,
+        "failuresOnlyEperm": true
+      },
+      {
+        "file": "sources.test.js",
+        "passed": 17,
+        "failed": 0,
+        "failuresOnlyEperm": true
+      },
+      {
+        "file": "agentLoop.test.js",
+        "passed": 19,
+        "failed": 0,
+        "failuresOnlyEperm": true
+      },
+      {
+        "file": "providerRouter.test.js",
+        "passed": 8,
+        "failed": 0,
+        "failuresOnlyEperm": true
+      },
+      {
+        "file": "breakers.test.js",
+        "passed": 20,
+        "failed": 0,
+        "failuresOnlyEperm": true
+      },
+      {
+        "file": "masking.test.js",
+        "passed": 22,
+        "failed": 0,
+        "failuresOnlyEperm": true
+      },
+      {
+        "file": "openaiCompatible.test.js",
+        "passed": 17,
+        "failed": 0,
+        "failuresOnlyEperm": true
+      },
+      {
+        "file": "responseCleaner.test.js",
+        "passed": 38,
+        "failed": 0,
+        "failuresOnlyEperm": true
+      },
+      {
+        "file": "pendingActions.test.js",
+        "passed": 18,
+        "failed": 0,
+        "failuresOnlyEperm": true
+      },
+      {
+        "file": "formatInstructions.test.js",
+        "passed": 10,
+        "failed": 0,
+        "failuresOnlyEperm": true
+      },
+      {
+        "file": "languageAndLimits.test.js",
+        "passed": 16,
+        "failed": 0,
+        "failuresOnlyEperm": true
+      },
+      {
+        "file": "routingState.test.js",
+        "passed": 5,
+        "failed": 0,
+        "failuresOnlyEperm": true
+      },
+      {
+        "file": "gemini.test.js",
+        "passed": 8,
+        "failed": 0,
+        "failuresOnlyEperm": true
+      },
+      {
+        "file": "routing.test.js",
+        "passed": 13,
+        "failed": 0,
+        "failuresOnlyEperm": true
+      },
+      {
+        "file": "answerText.test.js",
+        "passed": 14,
+        "failed": 0,
+        "failuresOnlyEperm": true
+      },
+      {
+        "file": "fallback.test.js",
+        "passed": 12,
+        "failed": 0,
+        "failuresOnlyEperm": true
+      },
+      {
+        "file": "toolRegistry.test.js",
+        "passed": 3,
+        "failed": 0,
+        "failuresOnlyEperm": true
+      },
+      {
+        "file": "providerLimits.test.js",
+        "passed": 3,
+        "failed": 0,
+        "failuresOnlyEperm": true
+      },
+      {
+        "file": "passages.test.js",
+        "passed": 11,
+        "failed": 0,
+        "failuresOnlyEperm": true
+      },
+      {
+        "file": "webSearch.test.js",
+        "passed": 3,
+        "failed": 0,
+        "failuresOnlyEperm": true
+      }
+    ]
+  },
+  "commands": {
+    "memory": "AI_TEST_TRANSPORT=memory npm test -- --runInBand --testPathIgnorePatterns='llamaCpp.test.js|eventStream.test.js'",
+    "http": "npm test -- --runInBand",
+    "mutations": "AI_TEST_TRANSPORT=memory node scripts/verify-mutations.cjs",
+    "typecheck": "npm run typecheck (repository root, after the full HTTP test run)"
+  },
+  "typecheckExit": 0,
+  "targetedEslintExit": 0,
+  "diffCheckExit": 0,
+  "existingTestCount": 284,
+  "newTestCount": 83
+}

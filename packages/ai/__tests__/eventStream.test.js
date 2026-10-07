@@ -4,7 +4,10 @@ const { openEventStream } = require('../src');
 /* Un serveur à un seul flux ; `onOpen` le reçoit une fois ouvert. */
 async function serve(onOpen) {
   const server = http.createServer((req, res) => onOpen(openEventStream(res), res));
-  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  await new Promise((resolve, reject) => {
+    server.once('error', reject);
+    server.listen(0, '127.0.0.1', resolve);
+  });
   return { server, url: `http://127.0.0.1:${server.address().port}/` };
 }
 

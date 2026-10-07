@@ -1,3 +1,4 @@
+const { readRetryAfter } = require('./providerLimits');
 /**
  * L'API Gemini de Google (generateContent) : la même requête que le format
  * OpenAI (consigne, transcription, outils, photos), traduite dans la sienne,
@@ -80,10 +81,13 @@ async function askGeminiModel(model, request, io = {}) {
   const response = await io.fetch(`${io.endpoint || DEFAULT_ENDPOINT}/${model}:generateContent`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', 'x-goog-api-key': io.key },
-    body: JSON.stringify(requestBody(model, request, io.noSystemInstruction || noSystemInstructionByDefault)),
+    body: JSON.stringify({ ...requestBody(model, request, io.noSystemInstruction || noSystemInstructionByDefault), ...(io.extra || {}) }),
     signal
   });
-  if (!response.ok) return { status: response.status };
+  if (!response.ok) {
+    const retryAfterMs = readRetryAfter(response);
+    return { status: response.status, ...(retryAfterMs === null ? {} : { retryAfterMs }) };
+  }
   const answer = await response.json();
   const candidate = (answer && answer.candidates && answer.candidates[0]) || {};
   const parts = (candidate.content && candidate.content.parts) || [];
@@ -125,6 +129,7 @@ function createGeminiProvider(options = {}) {
   return {
     id,
     models: options.models || [],
+    ...(options.external === false ? { external: false } : {}),
     ...(typeof options.lane === 'function' ? { lane: options.lane } : {}),
     async available(ctx = {}) {
       return Boolean(await options.getKey(ctx));
@@ -142,7 +147,8 @@ function createGeminiProvider(options = {}) {
         signal: ctx.signal,
         timeoutMs: ctx.timeoutMs || options.timeoutMs,
         endpoint: options.endpoint,
-        noSystemInstruction: options.noSystemInstruction
+        noSystemInstruction: options.noSystemInstruction,
+        extra: { ...(options.extra || {}), ...(model.extra || {}) }
       });
       return providerResult(id, answer, options.detailed);
     }

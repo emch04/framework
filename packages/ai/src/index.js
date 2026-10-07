@@ -18,5 +18,13 @@ module.exports = {
   ...require('./gemini'),
   ...require('./nativeTools'),
   ...require('./eventStream'),
-  ...require('./webSearch')
+  ...require('./webSearch'),
+  ...require('./managedRouter'),
+  ...require('./routingState'),
+  ...require('./aiConfig'),
+  ...require('./localModels'),
+  ...require('./serviceHttp'),
+  ...require('./serviceLanguage'),
+  ...require('./voice'),
+  ...require('./providerLimits')
 };

@@ -1,3 +1,4 @@
+const { readRetryAfter } = require('./providerLimits');
 /**
  * Providers that speak the OpenAI chat format (Groq, Mistral, Cloudflare
  * Workers AI, gateways…): one request shape, one way to read the answer.
@@ -82,7 +83,10 @@ async function askChatModel(target, request, io = {}) {
     }),
     signal
   });
-  if (!response.ok) return { status: response.status };
+  if (!response.ok) {
+    const retryAfterMs = readRetryAfter(response);
+    return { status: response.status, ...(retryAfterMs === null ? {} : { retryAfterMs }) };
+  }
   const answer = await response.json();
   const choice = (answer && answer.choices && answer.choices[0]) || {};
   const message = choice.message || {};

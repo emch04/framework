@@ -3,6 +3,24 @@
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Chaque package Astratra est versionné indépendamment.
 
+## 2026-10-08 — `@astratra/ai`: configured routing, local models and voice 1.7.0
+
+### Added
+- `createConfiguredRouter` above the existing provider router: per-usage and
+  complexity/intent selection, OpenAI/Gemini provider configuration, rotating
+  keys, vision/context filtering, model extras, quotas with safety margins,
+  cooldowns/degradation, 12s/45s deadlines, and fallback without tools.
+- Atomic injectable routing state: memory, Redis CAS and PostgreSQL transaction
+  adapters; `readAiConfigFromEnv` with configurable variable prefix.
+- `createLocalModelsClient`: Scolaris rerank/NLI/entities/vectors/Whisper HTTP
+  contracts, Bearer file cache, validated results and independent route circuits.
+- Local-first transcription (Whisper → Groq → Cloudflare), speech (Gemini TTS
+  en ligne d'abord, Piper local en repli ; `order` pour inverser), WAV helpers and fastText service language detection with heuristic fallback.
+- Opt-in native tool risk validation and threshold confirmation, undo-aware
+  low-risk execution and injected untrusted-source exposure policy.
+- Public TypeScript declarations, usage examples, contract tests and three
+  mutation checks. Existing APIs/defaults retained; package version unchanged.
+
 ## 2026-10-07 — `@astratra/centrale` 1.0.0 et `@astratra/centrale-cli` 1.0.0 : nouveaux paquets
 
 Venus du dépôt de Centrale LJ (`paquets/`), où ils sont nés.

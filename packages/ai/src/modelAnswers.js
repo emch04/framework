@@ -104,6 +104,7 @@ function providerResult(id, answer, detailed) {
     /* The status reaches the router (429 → cooldown); the key never does. */
     const failure = new Error(`Provider "${id}" answered ${answer.status}.`);
     failure.statusCode = answer.status;
+    if (answer.retryAfterMs != null) failure.retryAfterMs = answer.retryAfterMs;
     throw failure;
   }
   if (detailed) return { text: answer.text === undefined ? null : answer.text, toolCalls: answer.toolCalls || [], cut: Boolean(answer.cut) };

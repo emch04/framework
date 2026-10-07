@@ -28,6 +28,7 @@
  */
 
 const { AppError } = require('@astratra/core');
+const { TOOL_RISKS } = require('./toolRegistry');
 
 const KINDS = ['read', 'write', 'confirm'];
 const NAME = /^[a-z][a-z0-9_]{0,63}$/;
@@ -82,6 +83,11 @@ function validateNativeTools(tools, options = {}) {
       }
       if (!isPlain(values) || !Object.values(values).every(isValue)) refuse('its summary does not give an object of strings and numbers');
     }
+    if (options.requireRisk) {
+      if (!['LOW', 'MEDIUM', 'HIGH'].includes(tool.risk)) refuse('its risk must be LOW, MEDIUM or HIGH');
+      if (tool.kind === 'write' && tool.risk !== 'LOW') refuse('a tool that writes alone must be LOW');
+      if (tool.kind === 'confirm' && tool.risk === 'LOW' && typeof tool.undo !== 'function') refuse('a LOW confirmation tool needs undo');
+    }
     if (typeof tool.run !== 'function') refuse('its run is not a function');
     if (tool.kind === 'confirm' && typeof tool.perform !== 'function') refuse('a tool to confirm needs perform');
     if (tool.kind === 'write' && typeof tool.undo !== 'function') refuse('a tool that writes alone needs undo');
@@ -117,7 +123,10 @@ class ToolTimeout extends Error {}
 
 /* Une promesse qui abandonne quand le signal s'interrompt, avec la raison du signal. */
 function abortable(promise, signal) {
-  if (signal.aborted) return Promise.reject(signal.reason);
+  if (signal.aborted) {
+    promise.catch(() => {});
+    return Promise.reject(signal.reason);
+  }
   return new Promise((resolve, reject) => {
     const stop = () => reject(signal.reason);
     signal.addEventListener('abort', stop, { once: true });
@@ -158,6 +167,8 @@ function createToolCaller(options = {}) {
   const resultMax = options.resultMax || DEFAULT_RESULT_MAX;
   const messages = { ...MESSAGES, ...(options.messages || {}) };
   let steps = 0;
+  const exposure = options.exposure || context.exposure || { untrusted: false };
+  const useExposure = options.confirmationPolicy !== undefined || options.readsUntrusted || options.exposure || context.exposure;
 
   function bounded(data) {
     const json = JSON.stringify(data ?? null);
@@ -178,10 +189,24 @@ function createToolCaller(options = {}) {
       if (!tool) throw new Error(messages.unknownTool(name));
       if (invalid) throw new Error(messages.invalidArguments({ name, invalidReason, invalidDetail }));
       const toolSignal = globalThis.AbortSignal.any([signal, timeout.signal]);
-      const found = await abortable(Promise.resolve().then(() => tool.run(args, { ...context, signal: toolSignal })), toolSignal);
+      toolSignal.throwIfAborted();
+      const toolContext = { ...context, signal: toolSignal, ...(useExposure ? { exposure } : {}) };
+      let effectiveTool = tool;
+      const found = await abortable(Promise.resolve().then(async () => {
+        const prepared = await tool.run(args, toolContext);
+        toolSignal.throwIfAborted();
+        if (options.readsUntrusted?.(tool, prepared)) exposure.untrusted = true;
+        if (tool.kind !== 'confirm' || options.confirmationPolicy === undefined) return prepared;
+        const waits = waitsForToolConfirmation(tool, { policy: options.confirmationPolicy, untrusted: exposure.untrusted || prepared?.confirm === true });
+        if (waits) return prepared;
+        if (typeof tool.undo !== 'function') throw new Error('Automatic confirmation requires undo.');
+        const done = await tool.perform(args, toolContext);
+        effectiveTool = { ...tool, kind: 'write' };
+        return done;
+      }), toolSignal);
       keep(found?.sources, found?.data);
-      if (record) await record({ tool, args, found: found ?? {} });
-      result = tool.kind === 'confirm' ? { data: bounded(found?.data), status: messages.waiting } : bounded(found?.data);
+      if (record) await record({ tool: effectiveTool, args, found: found ?? {} });
+      result = effectiveTool.kind === 'confirm' || (options.confirmationPolicy !== undefined && found?.confirm === true) ? { data: bounded(found?.data), status: messages.waiting } : bounded(found?.data);
     } catch (error) {
       if (signal.aborted) throw signal.reason;
       ok = false;
@@ -253,4 +278,18 @@ async function runToolLoop(options = {}) {
   return answerOf(await turn({ system: final, messages, tools: [] }));
 }
 
-module.exports = { validateNativeTools, toolSpecs, stepParams, createToolCaller, runToolLoop, NATIVE_TOOL_KINDS: KINDS };
+/** A missing risk always waits when a confirmation policy is enabled. */
+function toolRiskOf(tool) {
+  const risk = String(tool?.risk || '').toUpperCase();
+  return Object.hasOwn(TOOL_RISKS, risk) ? risk : 'UNKNOWN';
+}
+function waitsForToolConfirmation(tool, { policy = { threshold: 'MEDIUM' }, untrusted = false } = {}) {
+  if (tool?.kind !== 'confirm') return false;
+  if (untrusted || toolRiskOf(tool) === 'UNKNOWN') return true;
+  if (policy === 'always') return true;
+  if (policy === 'never') return false;
+  const threshold = policy.threshold || 'MEDIUM';
+  return TOOL_RISKS[toolRiskOf(tool)] >= (TOOL_RISKS[threshold] ?? TOOL_RISKS.UNKNOWN);
+}
+
+module.exports = { toolRiskOf, waitsForToolConfirmation, validateNativeTools, toolSpecs, stepParams, createToolCaller, runToolLoop, NATIVE_TOOL_KINDS: KINDS };

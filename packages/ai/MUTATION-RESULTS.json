@@ -1,0 +1,38 @@
+{
+  "transport": "memory",
+  "mutations": [
+    {
+      "mutation": "Quota reservation bypass",
+      "file": "src/managedRouter.js",
+      "failedTests": [
+        "enforces rpm margins and shares atomic reservations between routers"
+      ],
+      "failed": 1,
+      "passed": 0,
+      "exit": 1,
+      "restored": true
+    },
+    {
+      "mutation": "Wrong embedding space accepted",
+      "file": "src/localModels.js",
+      "failedTests": [
+        "rejects malformed /vecteurs response"
+      ],
+      "failed": 1,
+      "passed": 1,
+      "exit": 1,
+      "restored": true
+    },
+    {
+      "mutation": "High risk confirmation bypass",
+      "file": "src/nativeTools.js",
+      "failedTests": [
+        "HIGH confirmation waits; run prepares but perform never executes"
+      ],
+      "failed": 1,
+      "passed": 0,
+      "exit": 1,
+      "restored": true
+    }
+  ]
+}

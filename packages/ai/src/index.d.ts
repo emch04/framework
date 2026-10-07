@@ -602,7 +602,7 @@ export function askChatModel(
   target: { url: string; key: string; model: string; extra?: Record<string, unknown> },
   request: { system?: string; messages: ChatMessage[]; tools?: Array<Record<string, unknown>>; maxTokens?: number; temperature?: number },
   io: { fetch: FetchLike; signal?: AbortSignal; timeoutMs?: number }
-): Promise<{ status: number; text?: string | null; toolCalls?: ChatToolCall[]; cut?: boolean }>;
+): Promise<{ status: number; text?: string | null; toolCalls?: ChatToolCall[]; cut?: boolean; retryAfterMs?: number }>;
 
 export function readToolArguments(raw: unknown): { args: Record<string, unknown> | null; invalid: boolean; reason?: 'not_json' | 'not_object'; detail?: string };
 
@@ -650,12 +650,14 @@ export function createOpenAICompatibleProvider(options: ChatProviderOptions & {
 export function askGeminiModel(
   model: string,
   request: ChatRequest,
-  io: { key: string; fetch: FetchLike; signal?: AbortSignal; timeoutMs?: number; endpoint?: string; noSystemInstruction?: (model: string) => boolean }
-): Promise<{ status: number; text?: string | null; toolCalls?: ChatToolCall[]; cut?: boolean }>;
+  io: { key: string; fetch: FetchLike; signal?: AbortSignal; timeoutMs?: number; endpoint?: string; noSystemInstruction?: (model: string) => boolean; extra?: Record<string, unknown> }
+): Promise<{ status: number; text?: string | null; toolCalls?: ChatToolCall[]; cut?: boolean; retryAfterMs?: number }>;
 
 export function createGeminiProvider(options: ChatProviderOptions & {
   id?: string;
   endpoint?: string;
+  external?: boolean;
+  extra?: Record<string, unknown>;
   /** Défaut : les modèles Gemma, qui ne prennent pas de consigne système. */
   noSystemInstruction?: (model: string) => boolean;
 }): Provider;
@@ -677,6 +679,7 @@ export interface NativeTool<Ctx = Record<string, unknown>> {
   description: string;
   parameters: { type: 'object'; [key: string]: unknown };
   kind: NativeToolKind;
+  risk?: DeclaredToolRisk;
   summary?: (args: Record<string, unknown>) => Record<string, string | number>;
   run(args: Record<string, unknown>, ctx: Ctx & { signal: AbortSignal }): Awaitable<NativeToolResult | null | undefined>;
   perform?(args: Record<string, unknown>, ctx: Ctx): Awaitable<NativeToolResult | null | undefined>;
@@ -684,7 +687,7 @@ export interface NativeTool<Ctx = Record<string, unknown>> {
 }
 
 export const NATIVE_TOOL_KINDS: string[];
-export function validateNativeTools<T extends NativeTool<any>>(tools: T[], options?: { kinds?: string[]; requireSummary?: boolean }): T[];
+export function validateNativeTools<T extends NativeTool<any>>(tools: T[], options?: { kinds?: string[]; requireSummary?: boolean; requireRisk?: boolean }): T[];
 export function toolSpecs(tools: NativeTool<any>[]): Array<{ name: string; description: string; parameters: Record<string, unknown> }>;
 export function stepParams(tool: NativeTool<any> | null | undefined, args: unknown, options?: { max?: number }): Record<string, string | number>;
 
@@ -707,6 +710,9 @@ export interface ToolMessage {
 export function createToolCaller<Ctx = Record<string, unknown>>(options: {
   tools: Map<string, NativeTool<Ctx>> | NativeTool<Ctx>[];
   context?: Ctx;
+  confirmationPolicy?: 'always' | 'never' | { threshold: ToolRisk };
+  exposure?: { untrusted: boolean };
+  readsUntrusted?: (tool: NativeTool<Ctx>, found: NativeToolResult | null | undefined) => boolean;
   signal?: AbortSignal;
   timeoutMs?: number;
   now?: () => number;
@@ -817,3 +823,283 @@ export function createLlamaCppProvider(options?: LlamaCppConfigInput & {
   fetch?: (url: string, init: object) => Awaitable<Response>;
   sleep?: (ms: number) => Promise<void>;
 }): LlamaCppProvider;
+
+/* Configured routing, local model services and voice. */
+export type AiUsage = 'quick' | 'chat' | 'tools' | 'pilot' | 'json' | 'vision';
+export interface RoutingState {
+  day: string;
+  rpmWindow: number[];
+  rpdUsed: number;
+  tpdUsed: number;
+  cooldownUntil: number;
+  degradedUntil: number;
+  failures: number;
+  disabled: boolean;
+}
+/** update must be atomic across all users of the store. The callback is synchronous
+ * and side-effect free: a CAS adapter may call it more than once. */
+export interface RoutingStateStore {
+  read(key: string): Awaitable<RoutingState | null>;
+  update<T>(key: string, change: (state: RoutingState | null) => { state: RoutingState | null; value?: T }): Awaitable<T | undefined>;
+}
+export function createMemoryRoutingStore(): RoutingStateStore;
+export interface RoutingRedisClient {
+  get(key: string): Promise<string | null>;
+  eval(script: string, options: { keys: string[]; arguments: string[] }): Promise<unknown>;
+}
+export function createRedisRoutingStore(options: { client: RoutingRedisClient; prefix?: string; ttlMs?: number; maxRetries?: number }): RoutingStateStore;
+export interface RoutingPgConnection {
+  query(sql: string, params?: unknown[]): Promise<{ rows: Array<{ state?: RoutingState }> }>;
+  release(): void;
+}
+export interface RoutingPgPool {
+  query(sql: string, params?: unknown[]): Promise<{ rows: Array<{ state?: RoutingState }> }>;
+  connect(): Promise<RoutingPgConnection>;
+}
+export function createPostgresRoutingStore(options: { pool: RoutingPgPool; table?: string }): RoutingStateStore & { initialize(): Promise<void> };
+export type AiKeys = string[] | string | ((ctx: Record<string, unknown>) => Awaitable<string[] | string | null | undefined>);
+export interface ConfiguredProviderModel extends ProviderModel {
+  vision?: boolean;
+  visionOnly?: boolean;
+  extra?: Record<string, unknown>;
+  maxTokens?: number;
+  disabled?: boolean;
+  preview?: boolean;
+  languages?: string[];
+  noAnalytics?: boolean;
+  maxInputTokens?: number;
+}
+export interface ConfiguredProvider {
+  id: string;
+  format: 'openai' | 'gemini';
+  /** Full OpenAI chat URL, or Gemini models endpoint (without the model). */
+  url: string;
+  keys?: AiKeys;
+  keysByUsage?: Record<string, AiKeys>;
+  keyLane?: (ctx: Record<string, unknown>) => string | null | undefined;
+  /** False by default. Local providers work without API credentials. */
+  local?: boolean;
+  vision?: boolean;
+  extra?: Record<string, unknown>;
+  models: ConfiguredProviderModel[];
+  /** Share model quotas between credentials when they belong to one account. */
+  sharedKeyQuotas?: boolean;
+  maxConcurrent?: number;
+  maxQueue?: number;
+  /** Provider variable stem used by readAiConfigFromEnv. */
+  envName?: string;
+}
+export interface ConfiguredRouterConfig {
+  cooldownJitterMs?: number;
+  providers?: ConfiguredProvider[];
+  usages?: Partial<Record<AiUsage, RouteCandidate[]>>;
+  intentRouting?: Record<string, { preferred: string[] }>;
+  store?: RoutingStateStore;
+  statePrefix?: string;
+  fetch?: FetchLike;
+  now?: () => number;
+  quotaMargin?: number | { rpm?: number; rpd?: number; tpd?: number };
+  tokenBuffer?: number;
+  cooldownMs?: number;
+  degradedMs?: number;
+  maxFailures?: number;
+  waitedTimeoutMs?: number;
+  backgroundTimeoutMs?: number;
+  whenAllCooling?: 'skip' | 'try';
+  reserveVision?: boolean;
+}
+export interface ConfiguredRouteOptions {
+  usage?: AiUsage;
+  complexity?: string;
+  intent?: string;
+  candidates?: RouteCandidate[];
+  exclude?: string[];
+  language?: string;
+  hasAnalytics?: boolean;
+  estimatedTokens?: number;
+  purpose?: string;
+  waitedOn?: boolean;
+  timeoutMs?: number;
+  signal?: AbortSignal;
+  context?: Record<string, unknown>;
+  json?: boolean;
+  fallbackWithoutTools?: boolean;
+  accepts?: (answer: DetailedAnswer) => boolean;
+}
+export interface ConfiguredRouteResult extends RouteResult<DetailedAnswer> {
+  stateKey: string;
+  usage: AiUsage;
+  complexity: string;
+  fallback: boolean;
+}
+export interface ConfiguredRouter {
+  route(input: ChatRequest | string, options?: ConfiguredRouteOptions, context?: Record<string, unknown>): Promise<ConfiguredRouteResult>;
+  ask(input: ChatRequest | string, options?: ConfiguredRouteOptions, context?: Record<string, unknown>): Promise<DetailedAnswer>;
+  getStats(): Promise<Record<string, RoutingState>>;
+  /** Resets only state keys seen by this instance. */
+  reset(): Promise<void>;
+  stop(): void;
+  store: RoutingStateStore;
+}
+export function createConfiguredRouter(config?: ConfiguredRouterConfig): ConfiguredRouter;
+export function estimateRequestComplexity(input: ChatRequest | string): 'simple' | 'medium' | 'complex';
+export function estimateRequestTokens(request: ChatRequest): number;
+export function readEnvironmentKeys(env: Record<string, string | undefined>, name: string): string[];
+export interface AiEnvironmentConfig extends ConfiguredRouterConfig {
+  localModels: LocalModelsOptions;
+  language: ServiceLanguageOptions;
+  voice: SpeechServiceOptions & TranscriptionServiceOptions;
+}
+export function readAiConfigFromEnv(options?: { env?: Record<string, string | undefined>; prefix?: string }): AiEnvironmentConfig;
+
+export class AiServiceError extends Error {
+  constructor(code: string, status?: number | null);
+  code: string;
+  status: number | null;
+  statusCode: number | null;
+}
+export type ServiceFetch = (url: string, init: RequestInit) => Promise<Pick<Response, 'ok' | 'status' | 'json' | 'arrayBuffer'>>;
+export function createTokenFileReader(options?: {
+  tokenFile?: string;
+  read?: (path: string, encoding: 'utf8') => Promise<string>;
+  now?: () => number;
+  refreshMs?: number;
+}): () => Promise<string | null>;
+export interface ServiceRequestOptions {
+  fetch?: ServiceFetch;
+  timeoutMs?: number;
+  signal?: AbortSignal;
+  headers?: Record<string, string>;
+  body?: unknown;
+  rawBody?: BodyInit;
+  read?: 'json' | 'bytes';
+}
+export function serviceRequest(url: string | null | undefined, options?: ServiceRequestOptions & { read?: 'json' }): Promise<any>;
+export function serviceRequest(url: string | null | undefined, options: ServiceRequestOptions & { read: 'bytes' }): Promise<Buffer>;
+export function endpoint(base: string | null | undefined, path: string): string | null;
+export const LOCAL_VECTOR_MODEL: string;
+export const LOCAL_VECTOR_DIMENSIONS: number;
+export function validPcmAudio(audio: unknown): boolean;
+export interface LocalModelsOptions {
+  baseUrl?: string;
+  tokenFile?: string;
+  readTokenFile?: (path: string, encoding: 'utf8') => Promise<string>;
+  tokenRefreshMs?: number;
+  timeoutMs?: number;
+  maxFailures?: number;
+  cooldownMs?: number;
+  now?: () => number;
+  fetch?: ServiceFetch;
+  vectorModel?: string;
+  vectorDimensions?: number;
+  onError?: (error: AiServiceError, route: string) => void;
+}
+export interface LocalCallOptions { timeoutMs?: number; signal?: AbortSignal }
+export interface NliPair { premisse: string; hypothese: string }
+export interface NliResult { accord: number; neutre: number; contradiction: number }
+export interface LocalEntity { texte: string; type: string; debut: number; fin: number; score: number }
+export type LocalVectors = number[][] & { readonly modele: string; readonly dimensions: number };
+export interface LocalTranscription { texte: string; langue: string; logprob: number; sansParole: number; dureeMs: number }
+export interface LocalModelsClient {
+  rerank(question: string, passages: string[], options?: LocalCallOptions): Promise<number[] | null>;
+  compare(pairs: Array<{ premise: string; hypothesis: string }>, options?: LocalCallOptions): Promise<Array<{ entailment: number; neutral: number; contradiction: number }> | null>;
+  entities(text: string, labels: string[], options?: LocalCallOptions): Promise<Array<{ text: string; type: string; start: number; end: number; score: number }> | null>;
+  embed(texts: string[], options?: LocalCallOptions): Promise<LocalVectors | null>;
+  reclasser(question: string, passages: string[], options?: LocalCallOptions): Promise<number[] | null>;
+  nli(pairs: NliPair[], options?: LocalCallOptions): Promise<NliResult[] | null>;
+  comparer(pairs: NliPair[], options?: LocalCallOptions): Promise<NliResult[] | null>;
+  entites(text: string, labels: string[], options?: LocalCallOptions): Promise<LocalEntity[] | null>;
+  vecteurs(texts: string[], options?: LocalCallOptions): Promise<LocalVectors | null>;
+  transcrire(audio: string, options?: LocalCallOptions & { langue?: string; vocabulaire?: string }): Promise<LocalTranscription | null>;
+  disponible(route: string): boolean;
+  available(route: string): boolean;
+}
+export function createLocalModelsClient(options?: LocalModelsOptions): LocalModelsClient;
+export const DEFAULT_LANGUAGE_WORDS: Readonly<Record<string, string[]>>;
+export interface ServiceLanguageOptions extends Omit<Parameters<typeof createLanguageDetector>[0], 'words' | 'identify'> {
+  words?: Record<string, string[]>;
+  baseUrl?: string;
+  fetch?: ServiceFetch;
+  timeoutMs?: number;
+}
+export function createServiceLanguageDetector(options?: ServiceLanguageOptions): LanguageDetector;
+
+export interface VoiceProviderOptions {
+  keys?: string[] | string | (() => Awaitable<string[] | string | undefined | null>);
+  models?: string[];
+  timeoutMs?: number;
+  cooldownMs?: number;
+}
+export interface TranscriptionServiceOptions {
+  local?: Pick<LocalModelsClient, 'transcrire'>;
+  localModels?: LocalModelsOptions;
+  localTimeoutMs?: number;
+  groq?: VoiceProviderOptions & { url?: string };
+  cloudflare?: VoiceProviderOptions & { url?: string | ((model: string) => string) };
+  fetch?: ServiceFetch;
+  now?: () => number;
+  maxAudioBytes?: number;
+  noSpeechThreshold?: number;
+  logprobThreshold?: number;
+  stockPhrases?: readonly string[];
+}
+export interface TranscriptionInput {
+  /** PCM16 little-endian, 16kHz mono by default; base64 or bytes. */
+  audio: string | Uint8Array;
+  format?: 'pcm16' | 'wav' | 'file';
+  language?: string;
+  vocabulary?: string;
+  filename?: string;
+  mimeType?: string;
+  signal?: AbortSignal;
+  allowRemote?: boolean;
+}
+export interface TranscriptionResult {
+  text: string;
+  language: string | null;
+  provider: 'local' | 'groq' | 'cloudflare';
+  model: string;
+  fallback: boolean;
+  confidence?: number;
+  noSpeech?: boolean;
+}
+export function createTranscriptionService(options?: TranscriptionServiceOptions): { transcribe(input: TranscriptionInput): Promise<TranscriptionResult> };
+export interface SpeechServiceOptions {
+  /** Synthesis order. Default: Gemini (online) first, Piper (local) as fallback. */
+  order?: Array<'gemini' | 'piper'>;
+  piper?: {
+    baseUrl?: string;
+    tokenFile?: string;
+    readTokenFile?: (path: string, encoding: 'utf8') => Promise<string>;
+    timeoutMs?: number;
+    cooldownMs?: number;
+  };
+  gemini?: VoiceProviderOptions & { endpoint?: string; voice?: string };
+  now?: () => number;
+  fetch?: ServiceFetch;
+  prepareText?: (text: string) => string;
+}
+export interface SpeechResult {
+  audio: Buffer;
+  format: 'wav';
+  mimeType: 'audio/wav';
+  sampleRate: number;
+  channels: number;
+  provider: 'piper' | 'gemini';
+  model: string | null;
+  fallback: boolean;
+}
+export function createSpeechService(options?: SpeechServiceOptions): { synthesize(input: { text: string; language?: string; signal?: AbortSignal; allowRemote?: boolean }): Promise<SpeechResult> };
+export function pcmToWav(pcm: Uint8Array, options?: { sampleRate?: number; channels?: number }): Buffer;
+export function readPcmWav(audio: Uint8Array): { pcm: Buffer; sampleRate: number; channels: number };
+export function speakableText(text: string, maxChars?: number): string;
+export function doubtfulTranscription(text: string, options?: { stockPhrases?: readonly string[] }): boolean;
+export const WHISPER_STOCK_PHRASES: readonly string[];
+export function toolRiskOf(tool: { risk?: string } | null | undefined): ToolRisk;
+export function waitsForToolConfirmation(tool: { risk?: string; kind?: string } | null | undefined, options?: { policy?: 'always' | 'never' | { threshold: ToolRisk }; untrusted?: boolean }): boolean;
+
+export function readRetryAfter(response: { headers?: { get(name: string): string | null } }, now?: number): number | null;
+export function createInferenceQueue(options?: { maxConcurrent?: number; maxQueue?: number }): {
+  run<T>(task: () => Awaitable<T>, options?: { signal?: AbortSignal }): Promise<T>;
+  stats(): { active: number; waiting: number };
+};

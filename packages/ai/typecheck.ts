@@ -263,3 +263,56 @@ async function exerciseLlamaCpp(): Promise<void> {
   void [state, models, answer, streamed, openai, llamaCppConfig.baseUrl];
 }
 void exerciseLlamaCpp;
+
+import {
+  createConfiguredRouter, estimateRequestComplexity, estimateRequestTokens,
+  createMemoryRoutingStore, createRedisRoutingStore, createPostgresRoutingStore,
+  readAiConfigFromEnv, readEnvironmentKeys, createLocalModelsClient,
+  createServiceLanguageDetector, createTranscriptionService, createSpeechService,
+  pcmToWav, readPcmWav, speakableText, doubtfulTranscription,
+  toolRiskOf, waitsForToolConfirmation, createTokenFileReader, serviceRequest,
+  AiServiceError, LOCAL_VECTOR_MODEL, LOCAL_VECTOR_DIMENSIONS
+} from '@astratra/ai';
+import type { RoutingPgPool, RoutingRedisClient, ConfiguredRouteResult, LocalVectors, SpeechResult, TranscriptionResult } from '@astratra/ai';
+
+const configured = createConfiguredRouter({
+  providers: [{ id: 'local', format: 'openai', url: 'http://127.0.0.1:8080/v1/chat/completions', local: true, models: [{ id: 'm', vision: true, rpm: 20, extra: { include_reasoning: false } }] }],
+  usages: { quick: [{ provider: 'local', model: 'm' }] },
+  store: createMemoryRoutingStore(), quotaMargin: { rpm: 0.75 },
+  intentRouting: { report: { preferred: ['local:m'] } }
+});
+const environmentConfig = readAiConfigFromEnv({ prefix: 'ARIA_', env: { ARIA_PROVIDERS: '[]' } });
+const modelServices = createLocalModelsClient({ baseUrl: 'http://127.0.0.1:5007', tokenFile: '/path/to/token', vectorModel: LOCAL_VECTOR_MODEL, vectorDimensions: LOCAL_VECTOR_DIMENSIONS, onError: (error, route) => `${error.code}:${route}` });
+async function exerciseConfiguredServices(): Promise<void> {
+  const routed: ConfiguredRouteResult = await configured.route('hi', { usage: 'quick', waitedOn: true, estimatedTokens: 20, accepts: (answer) => Boolean(answer.text) });
+  const response = await configured.ask({ messages: [{ role: 'user', text: 'hi' }] });
+  const counts = await configured.getStats(); await configured.reset(); configured.stop();
+  const vectors: LocalVectors | null = await modelServices.vecteurs(['one']);
+  await modelServices.reclasser('query', ['passage']);
+  await modelServices.rerank('query', ['passage']);
+  await modelServices.embed(['passage']);
+  await modelServices.compare([{ premise: 'a', hypothesis: 'b' }]);
+  await modelServices.entities('Ada', ['person']);
+  await modelServices.nli([{ premisse: 'premise', hypothese: 'hypothesis' }]);
+  await modelServices.comparer([{ premisse: 'premise', hypothese: 'hypothesis' }]);
+  await modelServices.entites('Ada', ['person']);
+  const transcription: TranscriptionResult = await createTranscriptionService({ ...environmentConfig.voice, local: modelServices }).transcribe({ audio: Buffer.alloc(6400), format: 'pcm16', allowRemote: false });
+  const speech: SpeechResult = await createSpeechService(environmentConfig.voice).synthesize({ text: 'hello', language: 'en' });
+  const pcm = readPcmWav(pcmToWav(Buffer.alloc(6400))).pcm;
+  const detector = createServiceLanguageDetector({ ...environmentConfig.language, words: { fr: ['merci'], en: ['thanks'] } });
+  const language = await detector.reply('thanks', 'fr');
+  const token: string | null = await createTokenFileReader({ tokenFile: '/token' })();
+  const bytes: Buffer = await serviceRequest('http://127.0.0.1:5005/tts', { body: {}, read: 'bytes' });
+  void [routed, response, counts, vectors?.modele, vectors?.dimensions, transcription, speech, pcm, language, token, bytes];
+}
+declare const configuredRedis: RoutingRedisClient;
+declare const configuredPg: RoutingPgPool;
+createRedisRoutingStore({ client: configuredRedis, prefix: 'app:' });
+createPostgresRoutingStore({ pool: configuredPg }).initialize();
+validateNativeTools(nativeTools, { requireRisk: true });
+createToolCaller({ tools: nativeTools, confirmationPolicy: { threshold: 'MEDIUM' }, exposure: { untrusted: false }, readsUntrusted: (tool, found) => tool.name === 'read_page' || Boolean(found?.sources?.length) });
+void [exerciseConfiguredServices, estimateRequestComplexity('hi'), estimateRequestTokens({ messages: [] }), readEnvironmentKeys({}, 'ARIA_KEY'), speakableText('hello'), doubtfulTranscription('hello'), toolRiskOf({ risk: 'LOW' }), waitsForToolConfirmation({ kind: 'confirm', risk: 'LOW' }), AiServiceError];
+
+import { createInferenceQueue, readRetryAfter } from '@astratra/ai';
+createInferenceQueue({ maxConcurrent: 2, maxQueue: 4 }).run(async () => 'ok').then((answer: string) => answer);
+readRetryAfter({ headers: { get: () => '2' } });

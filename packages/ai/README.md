@@ -4,7 +4,9 @@ Routing IA multi-provider générique, registre d'outils et une boucle
 d'agent minimale à tool-calling. Dépend de `@astratra/core`.
 
 Ce package ne fournit volontairement aucun catalogue de modèles, aucun SDK
-provider, aucun outil métier — tout ça vient du projet consommateur. Ce
+provider, aucun outil métier — tout ça vient du projet consommateur. Le routeur
+configuré, les clients de modèles locaux et les services vocaux ci-dessous
+partagent désormais les mécanismes utilisés par Oracle et Tertius. Ce
 qu'il fournit, c'est le mécanisme durement acquis : suivi de quota, ordre de
 fallback, cooldown/dégradation, deux adaptateurs HTTP sans dépendance (le
 format OpenAI et Gemini), et deux boucles d'agent (protocole écrit, ou
@@ -260,10 +262,9 @@ plus élevé entre l'outil et les analyseurs l'emporte. Les appels à confirmer
 sont enregistrés par `pendingActions.propose()` et attendent l'approbation
 via le cycle de vie déjà fourni par `createPendingActions`.
 
-**Périmètre V0 — toujours volontairement exclu :** gestion d'images/vision.
-Fonctionnalité non triviale dont une boucle d'agent de production a besoin,
-mais dont le portage fidèle reste jugé trop ambitieux pour ce package. À
-construire dans votre propre boucle, ou à couvrir dans un futur spec.
+**Vision :** les adaptateurs HTTP et `runToolLoop` acceptent les images.
+`createConfiguredRouter` les filtre selon les capacités déclarées. La boucle
+textuelle historique `runAgentLoop` garde son protocole de texte.
 
 ## Un disjoncteur par fournisseur, jamais un pour tous
 
@@ -308,7 +309,7 @@ const { createReversibleMasker } = require('@astratra/ai');
 const masker = createReversibleMasker({
   names: registreDeLEcole,                                // sensible à la casse
   patterns: [{ type: 'EMAIL', pattern: /[\w.+-]+@[\w-]+\.[\w.]+/g }],
-  detect: (texte) => serviceLocal.entites(texte),         // NER local, jamais distant
+  detect: (texte) => serviceLocal.entities(texte, ['person']),         // NER local, jamais distant
 });
 
 // Routeur : un fournisseur externe reçoit le texte masqué, la réponse revient démasquée
@@ -629,3 +630,345 @@ absente ou inconnue vaut **téléphone** : se tromper vers le petit coûte une l
 là où un tableau tenait, se tromper vers le grand coûte un tableau illisible.
 La règle `paragraphs` est **obligatoire** : un pack de langue qui ne l'a pas est
 refusé à la création, pas découvert sur un écran.
+
+## Configured routing (Oracle and Tertius)
+
+`createConfiguredRouter` builds HTTP providers and routes by usage on top of
+`createProviderRouter`. Existing exports and their defaults remain compatible.
+The model catalogue belongs to your application: names, quotas and capabilities
+are explicit configuration, not historical assumptions baked into the package.
+
+```js
+const { createConfiguredRouter } = require('@astratra/ai');
+const router = createConfiguredRouter({
+  providers: [
+    { id: 'groq', format: 'openai',
+      url: 'https://api.groq.com/openai/v1/chat/completions',
+      keys: () => [process.env.GROQ_API_KEY, process.env.GROQ_API_KEY_2],
+      models: [{ id: 'your-fast-model', rpm: 30, rpd: 1000, tpd: 200000,
+        complexity: ['simple', 'medium'], extra: { include_reasoning: false } }] },
+    { id: 'gemini', format: 'gemini',
+      url: 'https://generativelanguage.googleapis.com/v1beta/models',
+      keys: () => [process.env.GEMINI_API_KEY, process.env.GEMINI_API_KEY_2],
+      keysByUsage: { news: () => [process.env.GEMINI_NEWS_KEY] },
+      vision: true,
+      models: [{ id: 'your-vision-model', rpm: 10, rpd: 200 }] },
+    { id: 'ollama', format: 'openai', local: true,
+      url: 'http://127.0.0.1:11434/v1/chat/completions',
+      models: [{ id: 'your-local-model' }] }
+  ],
+  usages: {
+    quick: [{ provider: 'groq', model: 'your-fast-model' }, { provider: 'ollama', model: 'your-local-model' }],
+    chat: [{ provider: 'gemini', model: 'your-vision-model' }, { provider: 'groq', model: 'your-fast-model' }],
+    tools: [{ provider: 'groq', model: 'your-fast-model' }], // pilot is an alias list
+    json: [{ provider: 'groq', model: 'your-fast-model', extra: { response_format: { type: 'json_object' } } }],
+    vision: [{ provider: 'gemini', model: 'your-vision-model' }]
+  },
+  intentRouting: { report: { preferred: ['gemini:your-vision-model'] } },
+  quotaMargin: { rpm: 0.75, rpd: 0.90, tpd: 0.85 },
+  tokenBuffer: 1.2, cooldownMs: 120000, maxFailures: 3, degradedMs: 300000,
+  waitedTimeoutMs: 12000, backgroundTimeoutMs: 45000,
+  statePrefix: 'my-app:', whenAllCooling: 'skip'
+});
+
+const result = await router.route({
+  system: 'Answer from the supplied information.',
+  messages: [{ role: 'user', text: 'Compare these proposals.' }], maxTokens: 1200
+}, { usage: 'chat', waitedOn: true, intent: 'report', signal });
+// { value: { text, toolCalls, cut }, provider, model, key, stateKey,
+//   usage, complexity, partial, fallback }
+await router.ask('Hello');             // detailed answer only
+await router.getStats();              // async, counters and rests; never credentials
+await router.reset();                 // only state keys used by this router
+router.stop();                        // rejects subsequent calls; no owned DB connection
+```
+
+Without `usage`, tools select `tools`, images select `vision`, explicit `json:
+true` selects `json`, simple requests select `quick`, and the rest selects
+`chat`. `estimateRequestComplexity` retains Oracle's word/keyword rules (with
+English equivalents); you can override `complexity`. Within a list, intent
+preferences come first, then compatible complexity, then other models; preview
+models come last. Without a usage list, provider/model declaration order is the
+fallback order. Thus Oracle's Groq → Mistral → Gemini → Vercel → Ollama and
+Tertius's distinct quick/chat/pilot orders are both expressible.
+
+Model fields: `vision`, `visionOnly`, `complexity`, `extra`, `maxTokens`,
+`maxInputTokens`, `noAnalytics`, `languages`, `preview`, `disabled`, `rpm`, `rpd`,
+`tpd`. `exclude` uses `provider:model`. Declared models are required; unknown
+candidates are ignored. Provider and candidate `extra` objects merge, with
+candidate values taking precedence (nested values replace whole fields).
+Gemini `extra` fields merge at the top of its JSON body. JSON usage is an
+explicit selection, not a keyword guess or automatic validation: configure its
+format through `extra` and/or supply `accepts`.
+
+Images are filtered for every usage, including tool fallback. Vision capability
+must be declared on the provider or model; `vision: false` on a model overrides
+a provider's capability. With `reserveVision: true`, `visionOnly` models are
+kept for images. `local: true` works without credentials and preserves the
+existing masking boundary: only external providers receive masked requests.
+Ollama uses `/v1/chat/completions`; `createLlamaCppProvider` remains available
+for health, loading, streaming and direct llama.cpp calls.
+
+Reservations happen atomically before sending. RPM uses a rolling 60-second
+window; RPD/TPD reset on the UTC date. Quotas with no field are unlimited;
+zero or a margin-rounded limit of zero forbids calls. Reservations include the
+system prompt, transcript, tool schemas and output ceiling; explicit
+`estimatedTokens` must already include the full call. Failed calls conservatively
+keep their reservation. A 429 or 503 or timeout rests the credential/model;
+three consecutive actual failures exclude it for five minutes. A 429 does not
+count as an actual failure. Request errors 400/413/414/422 do not penalize health;
+404 excludes the model until `reset()`. Caller cancellation stops immediately
+and does not mark a failure. `whenAllCooling: 'try'` can retry resting models
+when all rest; it never bypasses quotas, exclusion or degradation.
+
+Keys are deduplicated, re-read per request and tried in rotating order, with a
+fallback to the next credential. State identifies credentials by ordinal
+(`provider:model@key-1`), never by any part of a key. Replacing a credential in
+one slot keeps that slot's existing accounting until it expires or is reset.
+`keysByUsage` isolates dedicated pools (for example news from chat);
+`keyLane(ctx)` identifies custom dynamic pools. Keys default to independent
+quotas; set `sharedKeyQuotas: true` when they share one account's model quota.
+All instances sharing a store must use the same pool order and state prefix.
+
+`route` rejects empty answers and unknown tool names, keeps partial text as a
+last resort, and trims it to whole sentences. If no tool-capable answer is
+accepted, it retries the chat/vision list with `tools: []` and keeps the read
+transcript. `fallbackWithoutTools: false` disables that retry. Tools are never
+executed by the router. An agent can use `runToolLoop({ turn: async request => {
+const r = await router.route(request); return { ...r.value, model: r.key }; },
+... })`. Business retrieval and source collection remain injected.
+
+Errors have clean codes: `AI_NO_PROVIDER`, `AI_NO_MATCH`, `AI_UNAVAILABLE`,
+`AI_STATE_UNAVAILABLE`, `AI_ROUTER_STOPPED`. State outages fail closed instead of
+silently losing a distributed quota. Transport messages and credentials are
+not included in these errors.
+
+### Injectable state: memory, Redis, PostgreSQL
+
+```js
+const { createMemoryRoutingStore, createRedisRoutingStore,
+  createPostgresRoutingStore } = require('@astratra/ai');
+const memory = createMemoryRoutingStore();
+const redisStore = createRedisRoutingStore({ client: connectedRedis, prefix: 'app:ai:' });
+const postgresStore = createPostgresRoutingStore({ pool, table: 'ai_routing_state' });
+await postgresStore.initialize(); // explicit table creation, once during setup
+const router = createConfiguredRouter({ ...config, store: postgresStore });
+```
+
+Memory is local to a process unless you share the same object. Redis uses
+optimistic CAS in Lua with a two-day TTL (configurable, at least one day), and
+retries contention. PostgreSQL locks even first insertion using a transaction
+advisory lock and stores JSONB. Connections and database drivers belong to the
+consumer; the package does not connect, install a driver, or close their pool.
+A custom Redis/PostgreSQL/other adapter implements:
+
+```ts
+interface RoutingStateStore {
+  read(key: string): Promise<RoutingState | null>;
+  update<T>(key: string, change: (old: RoutingState | null) => {
+    state: RoutingState | null; value?: T;
+  }): Promise<T | undefined>;
+}
+```
+
+`update` must serialize each key across processes. The synchronous callback
+must be side-effect free and may run multiple times. `state: null` deletes the
+key. `read` returns an independent snapshot.
+
+### Environment configuration
+
+`readAiConfigFromEnv({ env: process.env, prefix: 'IA_' })` reads only the supplied
+object, never an `.env` file. `ARIA_` or another prefix works identically.
+
+| Variable (default prefix) | Value |
+| --- | --- |
+| `IA_PROVIDERS` | JSON array of `{ id, format, url, local?, vision?, models, extra?, sharedKeyQuotas?, envName? }` |
+| `IA_<ID>_URL`, `IA_<ID>_LOCAL` | Optional provider overrides; local accepts true/false/1/0 |
+| `IA_<ID>_KEY`, `IA_<ID>_KEY_2` … | Keys, read at every request; sparse suffixes are supported; ID uppercased with non-alphanumeric characters replaced by `_` (or `envName`) |
+| `IA_MODELS_QUICK`, `IA_MODELS_CHAT`, `IA_MODELS_TOOLS`, `IA_MODELS_PILOT`, `IA_MODELS_JSON`, `IA_MODELS_VISION` | JSON arrays of `{ provider, model, extra? }` |
+| `IA_INTENT_ROUTING` | JSON object `{ intent: { preferred: ['provider:model'] } }` |
+| `IA_QUOTA_MARGIN` | JSON number or object `{ rpm, rpd, tpd }`; defaults .75/.90/.85 |
+| `IA_TOKEN_BUFFER` | Number; default 1.2 |
+| `IA_WAITED_TIMEOUT_MS`, `IA_BACKGROUND_TIMEOUT_MS` | Defaults 12000/45000 |
+| `IA_COOLDOWN_MS`, `IA_DEGRADED_MS`, `IA_MAX_FAILURES` | Defaults 120000/300000/3 |
+| `IA_STATE_PREFIX`, `IA_WHEN_ALL_COOLING`, `IA_RESERVE_VISION` | Namespace, skip/try, true/false |
+| `IA_MODELS_URL`, `IA_MODELS_TOKEN_FILE` | Optional Scolaris model server and its Bearer file |
+| `IA_TTS_URL`, `IA_TTS_TOKEN_FILE` | Optional Piper server and Bearer file |
+| `IA_LANGUAGE_URL`, `IA_LANGUAGE_TIMEOUT_MS` | Optional fastText server; default timeout 800 |
+| `IA_GROQ_WHISPER_URL`, `IA_GROQ_WHISPER_MODELS` | Full endpoint, JSON model IDs; defaults Groq transcription endpoint and turbo/large-v3 |
+| `IA_CLOUDFLARE_ACCOUNT_ID`, `IA_CLOUDFLARE_WHISPER_URL` | Account for the default Whisper run URL, or explicit full URL |
+| `IA_GEMINI_TTS_ENDPOINT`, `IA_GEMINI_TTS_MODELS`, `IA_GEMINI_TTS_VOICE` | Models base URL, JSON model IDs, voice; defaults Gemini endpoint, gemini-2.5-flash-preview-tts, Aoede |
+
+Voice uses `IA_GROQ_KEY[_N]`, `IA_CLOUDFLARE_KEY[_N]` and
+`IA_GEMINI_KEY[_N]`. No provider catalogue is auto-created: `IA_PROVIDERS`
+is required to configure text routing. Voice/local sections are returned as
+`config.voice`, `config.localModels`, `config.language`. Inject the store in
+code after reading the configuration. Invalid JSON is reported by variable
+name only, never by its value. Endpoint/model defaults are configurable
+protocol examples, not a claim that a model or free tier remains available.
+
+```js
+const { readAiConfigFromEnv, createConfiguredRouter } = require('@astratra/ai');
+const config = readAiConfigFromEnv({ prefix: 'ARIA_' });
+const router = createConfiguredRouter({ ...config, store });
+```
+
+## Local models (Scolaris HTTP protocol)
+
+```js
+const { createLocalModelsClient } = require('@astratra/ai');
+const models = createLocalModelsClient({
+  baseUrl: 'http://127.0.0.1:5007', tokenFile: '/etc/my-app/models-token',
+  onError: (error, route) => metrics.count(route, error.code)
+});
+await models.reclasser('question', ['passage']);             // number[] | null
+await models.nli([{ premisse: 'premise', hypothese: 'claim' }]); // comparer alias
+await models.entites('Ada', ['person']);                    // UTF-16 spans
+const vectors = await models.vecteurs(['text']);            // vectors.modele/dimensions
+await models.transcrire(pcm16Base64, { langue: 'fr', vocabulaire: '', timeoutMs: 15000 });
+models.disponible('/vecteurs');                             // available alias
+```
+
+Without `baseUrl`, each operation returns `null` and availability is false.
+Invalid input, malformed results, downtime or deadlines also return `null`;
+`onError` receives a clean `AiServiceError` and route. Caller abort throws its
+reason. Limits match the source server: 50 passages, 20 NLI pairs, entity text
+8000 UTF-16 units, 10 labels of 50 characters, 32 vector texts of 2000 characters,
+and PCM16 mono 16kHz for .2–30 seconds, vocabulary 600 characters. Whisper accepts
+fr/en/es/ln. Vector results must come from `bge-m3-onnx-int8`, 1024 dimensions
+(configurable when the server's embedding space changes); mismatches are refused.
+
+The Bearer file is cached for one minute, including concurrent reads. If a file
+is explicitly configured but unreadable, calls fail closed; without a file no
+authentication header is sent. The server receives `X-Delai-Ms`. Defaults per
+route: rerank 1000ms, NLI/vector 1500ms, entities 800ms, transcription 15000ms.
+Each route has its own three-failure/60-second circuit, with one recovery probe;
+4xx refusals do not open it. Python engines, ONNX runtimes and weights are not
+bundled or downloaded by this client. Tertius's generic in-process embedding
+and native voice primitives remain in `@astratra/rag` and `@astratra/voice`.
+
+## Transcription, speech and language
+
+```js
+const { readAiConfigFromEnv, createTranscriptionService,
+  createSpeechService, createServiceLanguageDetector } = require('@astratra/ai');
+const config = readAiConfigFromEnv({ prefix: 'IA_' });
+const transcription = createTranscriptionService({ ...config.voice, localModels: config.localModels });
+const heard = await transcription.transcribe({
+  audio: pcm16Bytes, format: 'pcm16', language: 'fr', vocabulary: '', signal,
+  allowRemote: false // optional: confidential calls remain on this machine
+});
+const speech = createSpeechService(config.voice);
+const spoken = await speech.synthesize({ text: '**Hello**', language: 'en', signal });
+// { audio: Buffer, format: 'wav', mimeType: 'audio/wav', sampleRate, channels,
+//   provider: 'piper' | 'gemini', model, fallback }
+const language = createServiceLanguageDetector(config.language);
+await language.reply('hello', 'fr'); // fastText first, then small-word heuristic
+```
+
+Transcription tries local Whisper, then Groq (multipart with a WAV file for PCM),
+then Cloudflare (raw file base64 in `{ audio }`, including `success:false` checks).
+`format: 'pcm16'` is little-endian 16kHz mono; `'wav'` can use the local server
+when it contains that same PCM format. `'file'` forwards compressed audio to
+remote services; this client does not transcode it. Base64 or byte input works.
+Local silence is a valid empty transcription and stops the chain. Low logprob,
+stock subtitle hallucinations or repeated words are rejected; `stockPhrases`,
+`noSpeechThreshold`, `logprobThreshold` are configurable. Remote language remains
+`null` if the service did not identify it. Limits, timeouts, key rotation and
+rests are enforced, and an aborted request never proceeds to the next provider.
+
+Speech tries Gemini TTS first (online, rotating keys/models), then Piper `/tts`
+(`{ text, lang }` → validated WAV) as the local fallback. `order: ['piper', 'gemini']`
+reverses it; `allowRemote: false` keeps everything local. Gemini PCM is wrapped in a WAV header with the supplied
+sample rate (24kHz by default), never mislabeled as an existing WAV file.
+`speakableText` removes markup/emoji and limits text to 6000 characters;
+`prepareText` can provide your app's pronunciation rules. A missing Piper
+language rests only that language. Local timeout is 30s, Gemini timeout 45s;
+keys/models rest for 120s after failure, configurable per provider. A whole
+synthesis uses one provider. Native segmentation, prosody, AAC finishing and
+voice caching are separate existing `@astratra/voice` primitives.
+
+`AI_TRANSCRIPTION_UNAVAILABLE` and `AI_SPEECH_UNAVAILABLE` identify exhausted
+chains; input errors use `AI_AUDIO_INPUT`/`AI_SPEECH_INPUT`. Unconfigured optional
+services never initiate an implicit local request. Language supports fr/en/es
+by default; custom word lists can extend it. Statistical confidence defaults to
+0.5, or 0.9 for fewer than three words; unsupported/uncertain results keep the
+app language or a clear heuristic result.
+
+## Native tool risk and confirmation
+
+```js
+validateNativeTools(tools, { requireSummary: true, requireRisk: true });
+const ledger = createSourceLedger();
+const exposure = { untrusted: false };
+const callTool = createToolCaller({
+  tools, context: { userId }, timeoutMs: 20000, signal,
+  confirmationPolicy: { threshold: 'MEDIUM' }, exposure,
+  readsUntrusted: (tool, result) => tool.name === 'read_shared_page'
+    || result?.sources?.some((source) => source.kind === 'web'),
+  keep: ledger.keep,
+  record: async ({ tool, args, found }) => saveAction(tool.kind, args, found)
+});
+await runToolLoop({ system, messages, tools: toolSpecs(tools), turn, callTool,
+  maxTurns: 6, maxMs: 60000, signal,
+  finalInstruction: 'Answer now with what you have read: no more tools.' });
+ledger.sources(); ledger.evidence();
+```
+
+All new options are opt-in. `requireRisk` enforces LOW/MEDIUM/HIGH, LOW-only
+standalone writes, and undo for LOW confirmation tools. Under a confirmation
+policy, a `confirm` tool runs its preparation; MEDIUM/HIGH (or UNKNOWN),
+untrusted exposure or a result's `confirm: true` wait and never run `perform`.
+A LOW tool below the threshold can perform immediately, only with an undo
+handler; `record` then receives its effective `kind: 'write'` and undo data.
+The preparation must be read-only. Without a policy, the original behavior
+remains: all `confirm` tools prepare and wait. `toolRiskOf` and
+`waitsForToolConfirmation` expose the same decisions. Unknown risk always waits,
+even under `'never'`; untrusted exposure also forces waiting.
+
+`readsUntrusted` is application policy, not a fixed list of business tools. All
+calls share `exposure`; subsequent tools see the reads already completed.
+Tools in a parallel batch are concurrent: do not schedule a write alongside
+an untrusted read when its decision depends on that read. Tool handlers must
+honor their injected AbortSignal; timed-out preparation cannot subsequently
+start `perform`. Existing source ledger, legacy registry risk policy/pending
+actions, and loop budgets are reused. Loop `maxMs` is checked between turns;
+model and tool deadlines bound individual operations, and the final no-tool
+turn remains allowed after the budget boundary.
+
+### Verification commands
+
+```sh
+cd packages/ai
+npm test -- --runInBand
+node scripts/verify-mutations.cjs
+cd ../..
+npm run typecheck
+```
+
+HTTP contract tests start only loopback servers. If the execution environment
+forbids sockets, `AI_TEST_TRANSPORT=memory` explicitly uses simulated HTTP
+responses for the new suites. That mode proves behavior and serialization,
+not actual socket transport; the existing socket suites still require loopback
+permission. No test makes a remote provider call.
+
+Local configured providers also accept `maxConcurrent` (default 8) and
+`maxQueue` (default 20): inference is bounded and queued cancellation consumes
+no quota. The queue wait is bounded by the model deadline. `Retry-After`
+(seconds or HTTP date) takes precedence over the configured 429/503 rest;
+`cooldownJitterMs` (environment: `IA_COOLDOWN_JITTER_MS`, default 0) adds optional
+jitter only when no provider delay was announced. `readRetryAfter` and
+`createInferenceQueue` are available separately.
+
+The local client also exposes English adapters: `rerank`/`embed` are aliases;
+`compare` maps `{ premise, hypothesis }` to `{ entailment, neutral,
+contradiction }`; `entities` maps UTF-16 spans to `{ text, type, start, end,
+score }`. They connect directly to existing package primitives:
+
+```js
+await rerankResults(query, found, { score: models.rerank });
+await findContradiction(answer, excerpts, { compare: models.compare });
+const masker = createReversibleMasker({
+  detect: (text) => models.entities(text, ['person'])
+});
+```

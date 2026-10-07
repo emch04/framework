@@ -1,0 +1,41 @@
+{
+  "name": "@astratra/centrale-cli",
+  "version": "1.0.0",
+  "description": "Outil en ligne de commande de Centrale LJ : identifiants de débogage dans les builds, envoi des cartes de code, déclaration des déploiements.",
+  "type": "module",
+  "bin": {
+    "centrale": "./dist/cli.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "build": "rm -rf dist && tsc -p tsconfig.build.json && chmod +x dist/cli.js",
+    "prepack": "npm run build",
+    "test": "node --test \"test/**/*.test.ts\"",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "keywords": [
+    "astratra",
+    "centrale",
+    "source-maps",
+    "debug-id",
+    "cli"
+  ],
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  }
+}

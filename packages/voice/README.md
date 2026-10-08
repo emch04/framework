@@ -83,6 +83,44 @@ after a zero exit code. If finishing fails, the partial file is removed and
 the WAV is returned. A cache outage is treated as a miss and never suppresses
 speech. `createMemoryVoiceCache()` is provided for tests and local use.
 
+`createBoundedVoiceCache({ maxEntries, maxBytes, now })` is the in-process cache
+for production: the same interface, bounded by number of readings, by bytes of
+audio, or both, the least recently used leaving first (a phrase heard again
+stays). With neither limit it keeps 256 readings. It honours the time to live
+the service passes (`cacheTtlSeconds`: an expired reading is a miss), refuses a
+reading bigger than `maxBytes`, and exposes `size` and `bytes`.
+
+```js
+const cache = createBoundedVoiceCache({ maxEntries: 500, maxBytes: 64 * 1024 * 1024 });
+createProviderVoiceService({ providers, cache });   // or createVoiceService({ ..., cache })
+```
+
+### Cancelling
+
+`synthesize({ text, language, signal })` takes an `AbortSignal` — the client who
+left, a timeout of yours — on `createVoiceService`, `createProviderVoiceService`
+and `createPieceVoiceService`. The signal goes down to the work: the running
+`piper` or `ffmpeg` is killed (`runProcess` takes `signal` too), the request of
+a provider is cancelled (`createGeminiTtsAdapter`, `createPiperHttpProvider`,
+`createWhisperHttpEngine` and `asVoiceProvider` forward it to `fetch`), the
+temporary files are removed. The error is always the same: `name: 'AbortError'`,
+`code: 'ABORTED'`, the signal's reason as `cause`. A cancellation is **not a
+failure of a provider**: the chain tries no other provider, rests no key,
+records no attempt and caches nothing. An already aborted signal does nothing
+at all. Your own providers receive `signal` in their request; hand it to your
+`fetch`. Without a signal, nothing changes.
+
+```js
+const controller = new AbortController();
+req.on('close', () => { if (!res.writableEnded) controller.abort(); });
+try {
+  const spoken = await chain.synthesize({ text, language, signal: controller.signal });
+} catch (error) {
+  if (error.code === 'ABORTED') return;     // nobody is listening any more
+  throw error;
+}
+```
+
 The injected file adapter's `remove` method must be idempotent and return a
 Promise. The injected `spawn` follows Node's `child_process.spawn` shape.
 
@@ -113,6 +151,42 @@ so a key can never name a path). A reading heard again is touched; one not heard
 for `retainDays` (60) is removed by `prune`, which a write runs by itself at
 most every six hours. It is a `VoiceCache`, so `get` gives
 `{ audio, format, mimeType }`.
+
+## Piper over HTTP
+
+`createPiperHttpProvider({ url, token | tokenFile, ... })` is a provider for a
+Piper service on the machine or the network: `POST {url}/tts` with
+`{ text, lang }` as JSON, a bearer token, audio in the answer. It goes in the
+chain next to a cloud voice (or instead of the command-line Piper above).
+
+```js
+const { createProviderVoiceService, createGeminiTtsAdapter, createPiperHttpProvider,
+  createBoundedVoiceCache } = require('@astratra/voice');
+
+const piper = createPiperHttpProvider({
+  url: 'http://127.0.0.1:5000',
+  tokenFile: '/run/secrets/piper-token',   // read at every request: a rotation needs no restart
+  defaultLanguage: 'fr',                   // replaces 'auto' when the request names no language
+  timeoutMs: 30000
+});
+const chain = createProviderVoiceService({ providers: [cloud, piper], cache: createBoundedVoiceCache({ maxEntries: 64 }) });
+```
+
+| option | default | |
+| --- | --- | --- |
+| `url` | required | `http` or `https` address; trailing slashes are ignored |
+| `token` / `tokenFile` | none | a string, a function returning one, or a file (not both). No token, no `Authorization` header. An unreadable file is an `AUTH` failure and never names the path |
+| `readFile` | `node:fs/promises` | how `tokenFile` is read (injectable for tests) |
+| `fetch` | `globalThis.fetch` | injectable |
+| `path`, `id`, `voice`, `headers` | `/tts`, `piper-http`, none, none | `id` and `voice` are part of the cache identity |
+| `timeoutMs` | 30000 | a timeout is a `TRANSIENT` failure |
+| `defaultLanguage` | none | |
+| `buildBody` | `{ text, lang, voice? }` | for a service with another body |
+
+An HTTP error carries `status`, so `classifyProviderError` ranks it (429
+`QUOTA`, 401/403 `AUTH`, 5xx `TRANSIENT`) and the chain moves on. The format of
+the audio follows the `Content-Type` of the answer (WAV by default). A caller's
+`signal` cancels the request (see "Cancelling").
 
 ## Persistent Piper server contract
 

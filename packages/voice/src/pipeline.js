@@ -9,14 +9,23 @@ const {
   mimeTypeForAudio,
   normalizeLanguage
 } = require('./builders');
+const { abortError, throwIfAborted } = require('./abort');
 
 function errorMessage(error) {
   return error instanceof Error ? error.message : String(error);
 }
 
-/** Run a child process through an injected spawn implementation; resolves with the end of what it wrote on stderr (ffmpeg's loudness measure comes this way). */
+/**
+ * Run a child process through an injected spawn implementation; resolves with the end of what it wrote on stderr (ffmpeg's loudness measure comes this way).
+ * `options.signal` (an AbortSignal) kills the process and rejects with an AbortError (code 'ABORTED').
+ */
 function runProcess(spawn, command, args, options = {}) {
   return new Promise((resolve, reject) => {
+    const signal = options.signal;
+    if (signal && signal.aborted) {
+      reject(abortError(signal));
+      return;
+    }
     let child;
     try {
       child = spawn(command, args);
@@ -31,12 +40,18 @@ function runProcess(spawn, command, args, options = {}) {
     const timer = clock.setTimeout(() => {
       if (typeof child.kill === 'function') child.kill('SIGKILL');
     }, options.timeoutMs);
+    const onAbort = () => {
+      if (typeof child.kill === 'function') child.kill('SIGKILL');
+      finish(() => reject(abortError(signal)));
+    };
     const finish = (callback) => {
       if (settled) return;
       settled = true;
       clock.clearTimeout(timer);
+      if (signal) signal.removeEventListener('abort', onAbort);
       callback();
     };
+    if (signal) signal.addEventListener('abort', onAbort, { once: true });
     if (child.stderr && typeof child.stderr.on === 'function') {
       child.stderr.on('data', (chunk) => {
         if (head.length < 200) head += String(chunk);
@@ -99,9 +114,12 @@ function createVoiceService(options = {}) {
     }
   }
 
+  /* `request.signal` (an AbortSignal) cancels the synthesis: the running piper or ffmpeg is killed, the temporary files removed, and it ends with an AbortError (code 'ABORTED'). */
   async function synthesize(request = {}) {
     const text = String(request.text ?? '').trim();
     if (!text) throw new Error('synthesize: text is required.');
+    const signal = request.signal;
+    throwIfAborted(signal);
     const requestedLanguage = normalizeLanguage(request.language, defaultLanguage);
     /* A fallback model must also take its own language and speaker. Passing an
        unsupported language's speaker id to the default model can select a
@@ -111,6 +129,7 @@ function createVoiceService(options = {}) {
     if (!modelPath) throw new Error(`synthesize: no model configured for language "${language}".`);
     const cacheKey = buildVoiceCacheKey(text, { language, version: voiceVersion });
     const cached = await safeGet(cacheKey);
+    throwIfAborted(signal);
     if (cached && cached.audio !== undefined && cached.audio !== null) {
       return { ...cached, audio: Buffer.from(cached.audio), cacheKey, cached: true };
     }
@@ -120,7 +139,7 @@ function createVoiceService(options = {}) {
     const wavPath = `${base}.wav`;
     const partialPath = `${base}.part.m4a`;
     const m4aPath = `${base}.m4a`;
-    const runOptions = { clock, timeoutMs };
+    const runOptions = { clock, timeoutMs, signal };
     try {
       await runProcess(options.spawn, piperPath, buildPiperArgs({
         modelPath,
@@ -138,12 +157,15 @@ function createVoiceService(options = {}) {
         await filesystem.rename(partialPath, m4aPath);
         result = { audio: Buffer.from(await filesystem.readFile(m4aPath)), format: 'm4a', mimeType: mimeTypeForAudio('m4a') };
       } catch (_finishError) {
+        /* Cancelled while finishing: no WAV fallback to hand to someone who left. */
+        throwIfAborted(signal);
         await filesystem.remove(partialPath).catch(() => undefined);
         result = { audio: Buffer.from(await filesystem.readFile(wavPath)), format: 'wav', mimeType: mimeTypeForAudio('wav') };
       }
       await safeSet(cacheKey, result);
       return { ...result, audio: Buffer.from(result.audio), cacheKey, cached: false };
     } catch (error) {
+      if (error && error.code === 'ABORTED') throw error;
       throw new Error(`Voice synthesis failed: ${errorMessage(error)}`);
     } finally {
       await Promise.all([

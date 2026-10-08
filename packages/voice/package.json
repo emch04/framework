@@ -1,7 +1,7 @@
 {
   "name": "@astratra/voice",
-  "version": "1.0.0",
-  "description": "Server-side text-to-speech finishing and caching: deterministic voice-version keys, Piper and ffmpeg argument builders, injected process and file adapters, and a memory cache for tests.",
+  "version": "1.1.0",
+  "description": "Server-side text-to-speech finishing and caching: deterministic voice-version keys, Piper (command line and HTTP) and ffmpeg builders, cancellation by AbortSignal, injected process and file adapters, and memory caches (bounded LRU included).",
   "engines": {
     "node": ">=20"
   },

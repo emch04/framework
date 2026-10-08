@@ -20,8 +20,8 @@ function fakeLoader({ mongoString = 'mongodb://127.0.0.1:49153', pgUri = 'postgr
 describe('démarrage des conteneurs (doublure)', () => {
   test('MongoDB : URI avec nom de base et directConnection, arrêt idempotent', async () => {
     const { loader, stopped } = fakeLoader();
-    const db = await startMongo({ loader, env: {}, database: 'scolaris_test' });
-    expect(db.uri).toBe('mongodb://127.0.0.1:49153/scolaris_test?directConnection=true');
+    const db = await startMongo({ loader, env: {}, database: 'app_test' });
+    expect(db.uri).toBe('mongodb://127.0.0.1:49153/app_test?directConnection=true');
     await db.stop();
     await db.stop();
     expect(stopped).toEqual(['mongo']);

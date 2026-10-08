@@ -1,5 +1,5 @@
 /**
- * Retirer une carte déjà ajoutée (extraction Barber Clean, 23/09/2026).
+ * Retirer une carte déjà ajoutée (extraction d'une application de prise de rendez-vous, 23/09/2026).
  * L'émetteur ne peut pas effacer une carte du téléphone de quelqu'un : il
  * peut la griser chez Apple (`voided`), la passer inactive chez Google, et
  * oublier les appareils qui la portaient.

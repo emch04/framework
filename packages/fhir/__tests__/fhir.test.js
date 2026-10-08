@@ -24,7 +24,7 @@ describe('références', () => {
 
 describe('Patient', () => {
   test('un patient construit est valide', () => {
-    const p = buildPatient({ id: 'p1', family: 'Mukendi', given: 'Grace', gender: 'female', birthDate: '1990-04-12', phone: '+243 81 234 5678', email: 'g@example.test', identifier: { system: 'urn:scolaris', value: '42' } });
+    const p = buildPatient({ id: 'p1', family: 'Mukendi', given: 'Grace', gender: 'female', birthDate: '1990-04-12', phone: '+243 81 234 5678', email: 'g@example.test', identifier: { system: 'urn:exemple', value: '42' } });
     expect(validatePatient(p)).toEqual({ valid: true, issues: [] });
   });
   test('dates partielles acceptées, jour inexistant et format refusés', () => {

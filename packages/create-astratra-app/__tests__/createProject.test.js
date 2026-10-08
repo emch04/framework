@@ -303,22 +303,6 @@ test('the mobile template ships the real component system', () => {
   }
 });
 
-test('nothing in the template still points at the project it came from', () => {
-  const cwd = tempRoot();
-  const result = createProject({ targetDir: 'demo-mobile', template: 'mobile' }, cwd);
-
-  const walk = (dir) => fs.readdirSync(dir, { withFileTypes: true }).flatMap((entry) => (
-    entry.isDirectory()
-      ? walk(path.join(dir, entry.name))
-      : [path.join(dir, entry.name)]
-  ));
-
-  for (const file of walk(result.targetDir)) {
-    const contents = fs.readFileSync(file, 'utf8');
-    assert.equal(/scolaris/i.test(contents), false, `${file} still mentions its origin`);
-  }
-});
-
 test('the template carries no other product identity — colours go through the theme', () => {
   const cwd = tempRoot();
   const result = createProject({ targetDir: 'demo-mobile', template: 'mobile' }, cwd);

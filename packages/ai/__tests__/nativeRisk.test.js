@@ -55,7 +55,7 @@ test('turn and total-time boundaries finish without tools, and per-tool deadline
   expect(seen[1]).toEqual([]); expect(messages[1].result.error).toContain('too long');
 });
 
-test('Tertius existing exposure object and default write result remain unchanged', async () => {
+test('Existing exposure object and default write result remain unchanged', async () => {
   const exposure = { untrusted: true };
   const write = { ...tool(), kind: 'write', run: jest.fn(async (_args, ctx) => { expect(ctx.exposure).toBe(exposure); return { confirm: true, data: { status: 'waiting' } }; }) };
   const result = await createToolCaller({ tools: [write], context: { exposure } })({ id: '1', name: write.name, args: {} });

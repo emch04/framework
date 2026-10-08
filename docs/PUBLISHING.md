@@ -1,7 +1,7 @@
 # Publication npm
 
 Les paquets Astratra sont publiés depuis le poste de développement, par le
-compte npm `emch99`, avec `scripts/publish-all.sh`. C'est la seule méthode
+compte npm du mainteneur, avec `scripts/publish-all.sh`. C'est la seule méthode
 réellement utilisée : aucune version en ligne ne porte de provenance npm.
 
 ## Versions : plus de 0.x
@@ -166,13 +166,11 @@ telle quelle, elle bloque le push.
 ## Workflow GitHub Actions (non utilisé)
 
 `.github/workflows/publish.yml` publie un workspace avec provenance npm, sans
-jeton npm dans GitHub. Il n'a jamais servi et ne fonctionnerait pas en l'état :
+jeton npm dans GitHub. Il n'est pas utilisé et ne fonctionnerait pas en l'état :
 
 - aucun `package.json` ne déclare de champ `repository`, que la provenance
   exige pour relier le paquet au dépôt ;
 - chaque paquet devrait être déclaré sur npm avec un **trusted publisher**
-  GitHub Actions (compte `emch04`, dépôt `framework`, workflow
-  `.github/workflows/publish.yml`, environnement `npm`), et l'environnement
-  `npm` créé dans GitHub avec validation manuelle ;
-- le compte GitHub doit pouvoir lancer des Actions : en septembre 2026, il est
-  bloqué pour un problème de facturation, et aucune CI ne tourne.
+  GitHub Actions (dépôt, workflow `.github/workflows/publish.yml`,
+  environnement `npm`), et l'environnement `npm` créé dans GitHub avec
+  validation manuelle.

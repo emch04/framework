@@ -40,7 +40,7 @@ describe('EAS commands and answers', () => {
   });
 
   test('file names: app-platform-version-build.ext, sanitized, template allowed', () => {
-    expect(artifactFileName({ appName: 'Scolaris', platform: 'ios', version: '1.1.6', buildNumber: '12' })).toBe('Scolaris-ios-1.1.6-12.ipa');
+    expect(artifactFileName({ appName: 'MonApp', platform: 'ios', version: '1.1.6', buildNumber: '12' })).toBe('MonApp-ios-1.1.6-12.ipa');
     expect(artifactFileName({ appName: 'My App/x', platform: 'android', version: '1.0.0', buildNumber: null })).toBe('My-App-x-android-1.0.0-x.aab');
     expect(artifactFileName({ appName: 'T', platform: 'android', version: '2.0.0', buildNumber: '7', template: '{app}-{platform}-{build}.{ext}' })).toBe('T-android-7.aab');
     expect(() => artifactFileName({ appName: 'T', platform: 'ios', version: '1', buildNumber: '1', template: '../{app}.{ext}' })).toThrow(expect.objectContaining({ code: 'PUBLISH_FILENAME_INVALID' }));

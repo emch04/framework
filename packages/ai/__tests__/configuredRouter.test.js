@@ -18,7 +18,7 @@ test.each(['quick', 'chat', 'tools', 'json', 'vision'])('chooses configured usag
   expect(result.key).toContain('@key-1');
 });
 
-test('complexity mirrors Oracle and infers quick, chat, tools and explicit JSON', async () => {
+test('complexity mirrors the reference assistant and infers quick, chat, tools and explicit JSON', async () => {
   const router = createConfiguredRouter({ providers: [provider()], usages: lists });
   expect(estimateRequestComplexity('bonjour')).toBe('simple');
   expect(estimateRequestComplexity('explique ce mot')).toBe('medium');

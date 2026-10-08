@@ -5,7 +5,7 @@ sur serveur comme dans le navigateur. Le paquet n'a aucune dépendance à
 l'exécution. Il fournit une interface de fournisseur inspirée d'OpenFeature,
 sans SDK ni protocole propriétaire.
 
-## Exemple : Oracle à 10 % des écoles d'un pays
+## Exemple : une fonction à 10 % des établissements d'un pays
 
 ```js
 const { createFlagProvider, createMemorySource } = require('@astratra/flags');
@@ -21,7 +21,7 @@ const result = await flags.resolveBoolean('oracle', false, {
   targetingKey: 'school-42', // identifiant stable de l'école
   attributes: { country: 'FR', role: 'teacher', plan: 'pro', organization: 'school-42', platform: 'web', appVersion: '2.4.0' }
 });
-if (result.value) { /* activer Oracle */ }
+if (result.value) { /* activer la fonction */ }
 ```
 
 `rollout` est un pourcentage de 0 à 100. Le seau est dérivé du hachage FNV-1a

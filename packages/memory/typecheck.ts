@@ -6,6 +6,9 @@ import {
   patternRule,
   readExtraction,
   createLocalLock,
+  createPostgresMemoryStore,
+  postgresMemorySchema,
+  DEFAULT_MAX_ACTIVE,
   runStoreContract,
   worksWithoutAi,
   DEFAULT_KINDS,
@@ -29,7 +32,9 @@ const memory: MemoryService = createMemory({
   now: () => new Date(),
   generateId: () => 'id',
   logger: { warn: () => undefined },
-  maxActive: 300,
+  maxActive: 1000,
+  trimAbove: 1100,
+  onDuplicate: 'reinforce',
   duplicateThreshold: 0.92,
   minSimilarity: null,
   transcriptKeep: 'end'
@@ -61,11 +66,22 @@ async function usage(): Promise<void> {
   const answer = await tools[0].handler({ text: 'x', kind: 'fact' }, { userId: 'u1' });
   if (answer.ok && answer.code === 'memory_saved') void answer.memory.id;
 
+  const reinforced = await memory.remember(where, { text: 'Likes tea', kind: 'preference', onDuplicate: 'reinforce' });
+  if (reinforced.ok && reinforced.reinforced) void reinforced.memory.id;
+  const used: number = await memory.markUsed(where, ['m1']);
+  const paused: boolean = await memory.pause(where);
+  const resumed: boolean = await memory.resume(where);
+  void [used, paused, resumed, DEFAULT_MAX_ACTIVE];
+
+  const pgStore = createPostgresMemoryStore({ query: async () => ({ rows: [], rowCount: 0 }) }, { vectors: 'pgvector', scopeType: 'uuid', search: true });
+  const schema: string = postgresMemorySchema({ table: 'ia.memories', vectors: 'pgvector', vectorDimensions: 768, scopeReferences: 'organisations(id)' });
+  void [pgStore.claimRef, pgStore.search, schema];
+
   const handlers = createMemoryHandlers({ memory, isAiEnabled: async () => false });
   const listed = await handlers.list(where);
-  void [listed.paused, worksWithoutAi('erase')];
+  void [listed.paused, worksWithoutAi('erase'), await handlers.pause(where), await handlers.resume(where)];
 }
 
 void usage;
 void runStoreContract;
-void ((): void => runStoreContract(() => store, { newId: () => 'id' }));
+void ((): void => runStoreContract(() => store, { newId: () => 'id', makeScope: async (name) => name, makeOwner: (name) => name, vectorDimensions: 2 }));

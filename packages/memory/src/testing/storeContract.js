@@ -11,6 +11,16 @@
  * methods (search, claimRef/releaseRef, listNeedingVector) are checked only
  * when the store has them.
  *
+ * Places: a store whose scope (or owner) is a foreign key, or has a shape, passes
+ * `makeScope(name, store)` / `makeOwner(name, store)`. They are called with the
+ * names the suite uses ('scope-1', 'scope-2'; 'owner-a', 'owner-b', 'owner-z')
+ * and return the value to use in their place — creating the organisation row
+ * first when the store needs it. The same name must give the same value within
+ * one store.
+ *
+ * Vectors: a store whose vectors have a fixed size (a pgvector column) passes
+ * `vectorDimensions`; the suite pads its test vectors with zeros to that size.
+ *
  * Ids: a store whose ids have a shape (a UUID column) passes `newId`, which
  * makes every id the suite uses, the missing ones included. A store must answer
  * "not found" — never throw — for an id of another shape.
@@ -18,15 +28,16 @@
 const { miniExpect } = require('./miniExpect');
 
 let sequence = 0;
-let newId = () => `contract-${sequence}-${Math.random().toString(36).slice(2, 8)}`;
+const defaultNewId = () => `contract-${sequence}-${Math.random().toString(36).slice(2, 8)}`;
 
-function record(overrides = {}) {
+/* `places` is the world of one store ({ A1, ... }); without it, the plain names. */
+function record(overrides = {}, places = null, newId = defaultNewId) {
   sequence += 1;
   const at = overrides.createdAt || new Date(Date.UTC(2026, 0, 1, 0, 0, sequence));
   return {
     id: newId(),
-    ownerId: 'owner-a',
-    scope: 'scope-1',
+    ownerId: places ? places.A1.ownerId : 'owner-a',
+    scope: places ? places.A1.scope : 'scope-1',
     role: 'member',
     text: 'likes long walks',
     kind: 'preference',
@@ -50,22 +61,39 @@ function runStoreContract(makeStore, runner = {}) {
   if (typeof describe !== 'function' || typeof test !== 'function') {
     throw new Error('runStoreContract needs describe and test (pass them, or run it inside jest).');
   }
-  if (runner.newId) newId = runner.newId;
+  const newId = runner.newId || defaultNewId;
+  /* A vector of the size the store holds (a pgvector column has a fixed one): the given numbers, then zeros. */
+  const vec = (...head) => (runner.vectorDimensions ? [...head, ...new Array(Math.max(0, runner.vectorDimensions - head.length)).fill(0)] : head);
+  const makeScope = runner.makeScope || ((name) => name);
+  const makeOwner = runner.makeOwner || ((name) => name);
 
-  const A1 = { ownerId: 'owner-a', scope: 'scope-1' };
-  const A2 = { ownerId: 'owner-a', scope: 'scope-2' };
-  const B1 = { ownerId: 'owner-b', scope: 'scope-1' };
+  /* The places of one store: owners and scopes made by the injected factories. */
+  async function world(store) {
+    const owner = async (name) => String(await makeOwner(name, store));
+    const scope = async (name) => String(await makeScope(name, store));
+    const [a, b, z, s1, s2] = [await owner('owner-a'), await owner('owner-b'), await owner('owner-z'), await scope('scope-1'), await scope('scope-2')];
+    const places = {
+      A1: { ownerId: a, scope: s1 },
+      A2: { ownerId: a, scope: s2 },
+      B1: { ownerId: b, scope: s1 },
+      a, b, z, s1, s2
+    };
+    /* A record of this world, owned by A1 unless the overrides move it. */
+    places.rec = (overrides = {}) => record(overrides, places, newId);
+    return places;
+  }
   const time = (value) => new Date(value).getTime();
 
   describe('memory store contract', () => {
     test('insert then get returns the same record, and returned objects are copies', async () => {
       const store = await makeStore();
-      const row = record({ source: { channel: 'auto', ref: 'c1' }, vector: [0.1, 0.2], vectorSource: 'm1' });
+      const { A1, rec: record, a: ownerA, s1: scope1 } = await world(store);
+      const row = record({ source: { channel: 'auto', ref: 'c1' }, vector: vec(0.1, 0.2), vectorSource: 'm1' });
       await store.insert(row);
       const got = await store.get(A1, row.id);
-      expect(got).toMatchObject({ id: row.id, ownerId: 'owner-a', scope: 'scope-1', text: row.text, kind: 'preference', importance: 3, supersededBy: null });
+      expect(got).toMatchObject({ id: row.id, ownerId: ownerA, scope: scope1, text: row.text, kind: 'preference', importance: 3, supersededBy: null });
       expect(got.source).toEqual({ channel: 'auto', ref: 'c1' });
-      expect(got.vector).toEqual([0.1, 0.2]);
+      expect(got.vector).toEqual(vec(0.1, 0.2));
       expect(got.vectorSource).toBe('m1');
       expect(time(got.createdAt)).toBe(time(row.createdAt));
       got.text = 'changed outside';
@@ -74,6 +102,7 @@ function runStoreContract(makeStore, runner = {}) {
 
     test('a record is invisible from another owner or another scope', async () => {
       const store = await makeStore();
+      const { A1, A2, B1, rec: record } = await world(store);
       const row = record();
       await store.insert(row);
       expect(await store.get(B1, row.id)).toBeNull();
@@ -88,6 +117,7 @@ function runStoreContract(makeStore, runner = {}) {
 
     test('list: active by default, newest first, with state, kinds, channel, seen, dates and limit filters', async () => {
       const store = await makeStore();
+      const { A1, rec: record } = await world(store);
       const old = record({ createdAt: new Date('2026-01-01T00:00:00Z'), kind: 'goal' });
       const mid = record({ createdAt: new Date('2026-02-01T00:00:00Z'), source: { channel: 'background' } });
       const recent = record({ createdAt: new Date('2026-03-01T00:00:00Z'), source: { channel: 'background' }, seenAt: new Date('2026-03-02T00:00:00Z') });
@@ -106,7 +136,8 @@ function runStoreContract(makeStore, runner = {}) {
 
     test('list with withVector: false leaves the vector out, and hasVector says whether there was one', async () => {
       const store = await makeStore();
-      const printed = record({ vector: [0.5, 0.5], vectorSource: 'm1' });
+      const { A1, rec: record } = await world(store);
+      const printed = record({ vector: vec(0.5, 0.5), vectorSource: 'm1' });
       const bare = record();
       await store.insert(printed);
       await store.insert(bare);
@@ -116,15 +147,16 @@ function runStoreContract(makeStore, runner = {}) {
       expect(byId[printed.id].vector === null || byId[printed.id].vector === undefined).toBe(true);
       expect(byId[printed.id].hasVector).toBe(true);
       expect(byId[bare.id].hasVector === true).toBe(false);
-      expect((await store.list(A1)).find((row) => row.id === printed.id).vector).toEqual([0.5, 0.5]);
+      expect((await store.list(A1)).find((row) => row.id === printed.id).vector).toEqual(vec(0.5, 0.5));
     });
 
     test('update patches in place, never moves a record, and onlyActive refuses a superseded one', async () => {
       const store = await makeStore();
+      const { A1, rec: record, a: ownerA, b: ownerB, s1: scope1, s2: scope2 } = await world(store);
       const row = record();
       await store.insert(row);
-      const updated = await store.update(A1, row.id, { importance: 5, ownerId: 'owner-b', scope: 'scope-2' });
-      expect(updated).toMatchObject({ id: row.id, importance: 5, ownerId: 'owner-a', scope: 'scope-1' });
+      const updated = await store.update(A1, row.id, { importance: 5, ownerId: ownerB, scope: scope2 });
+      expect(updated).toMatchObject({ id: row.id, importance: 5, ownerId: ownerA, scope: scope1 });
       expect(await store.update(A1, row.id, { supersededBy: newId() }, { onlyActive: true })).not.toBeNull();
       expect(await store.update(A1, row.id, { importance: 1 }, { onlyActive: true })).toBeNull();
       expect((await store.get(A1, row.id)).importance).toBe(5);
@@ -134,9 +166,10 @@ function runStoreContract(makeStore, runner = {}) {
 
     test('remove and removeAll count what they erased, in their place only', async () => {
       const store = await makeStore();
+      const { A1, A2, rec: record, s2: scope2 } = await world(store);
       const a = record();
       const b = record();
-      const other = record({ scope: 'scope-2' });
+      const other = record({ scope: scope2 });
       for (const row of [a, b, other]) await store.insert(row);
       expect(await store.remove(A1, [a.id, newId()])).toBe(1);
       expect(await store.removeAll(A1)).toBe(1);
@@ -146,12 +179,13 @@ function runStoreContract(makeStore, runner = {}) {
 
     test('purgeOwner erases one owner in every scope, settings included, and nobody else', async () => {
       const store = await makeStore();
-      const mine = [record(), record({ scope: 'scope-2' })];
-      const theirs = record({ ownerId: 'owner-b' });
+      const { A1, A2, B1, rec: record, a: ownerA, b: ownerB, s2: scope2 } = await world(store);
+      const mine = [record(), record({ scope: scope2 })];
+      const theirs = record({ ownerId: ownerB });
       for (const row of [...mine, theirs]) await store.insert(row);
       await store.setSettings(A1, { paused: true });
       await store.setSettings(B1, { paused: true });
-      const counts = await store.purgeOwner('owner-a');
+      const counts = await store.purgeOwner(ownerA);
       expect(counts.memories).toBe(2);
       expect(counts.settings).toBeGreaterThanOrEqual(1);
       expect(await store.list(A1, { state: 'all' })).toEqual([]);
@@ -163,6 +197,7 @@ function runStoreContract(makeStore, runner = {}) {
 
     test('settings default to not paused and belong to one place', async () => {
       const store = await makeStore();
+      const { A1, A2, B1 } = await world(store);
       expect((await store.getSettings(A1)).paused).toBe(false);
       expect((await store.setSettings(A1, { paused: true })).paused).toBe(true);
       expect((await store.getSettings(A1)).paused).toBe(true);
@@ -173,6 +208,7 @@ function runStoreContract(makeStore, runner = {}) {
 
     test('claimRef (optional) claims once per place; releaseRef frees it', async () => {
       const store = await makeStore();
+      const { A1, B1 } = await world(store);
       if (typeof store.claimRef !== 'function') return;
       expect(await store.claimRef(A1, 'conversation-1')).toBe(true);
       expect(await store.claimRef(A1, 'conversation-1')).toBe(false);
@@ -185,24 +221,26 @@ function runStoreContract(makeStore, runner = {}) {
 
     test('search (optional) stays in its place, skips superseded records and compares one vector source only', async () => {
       const store = await makeStore();
+      const { A1, rec: record, b: ownerB } = await world(store);
       if (typeof store.search !== 'function') return;
-      const near = record({ text: 'plays the violin every evening', vector: [1, 0], vectorSource: 'm1' });
-      const otherSource = record({ text: 'unrelated', vector: [1, 0], vectorSource: 'm2' });
-      const replaced = record({ text: 'plays the violin badly', vector: [1, 0], vectorSource: 'm1', supersededBy: near.id });
-      const stranger = record({ ownerId: 'owner-b', text: 'plays the violin too', vector: [1, 0], vectorSource: 'm1' });
+      const near = record({ text: 'plays the violin every evening', vector: vec(1, 0), vectorSource: 'm1' });
+      const otherSource = record({ text: 'unrelated', vector: vec(1, 0), vectorSource: 'm2' });
+      const replaced = record({ text: 'plays the violin badly', vector: vec(1, 0), vectorSource: 'm1', supersededBy: near.id });
+      const stranger = record({ ownerId: ownerB, text: 'plays the violin too', vector: vec(1, 0), vectorSource: 'm1' });
       for (const row of [near, otherSource, replaced, stranger]) await store.insert(row);
-      const found = await store.search(A1, { text: 'violin evening', vector: [1, 0], vectorSource: 'm1', limit: 10 });
+      const found = await store.search(A1, { text: 'violin evening', vector: vec(1, 0), vectorSource: 'm1', limit: 10 });
       expect(found.semantic.map((row) => row.id)).toEqual([near.id]);
       expect(found.lexical.map((row) => row.id)).toEqual([near.id]);
     });
 
     test('listNeedingVector (optional) returns active records without a vector, or from another source', async () => {
       const store = await makeStore();
+      const { rec: record, z: ownerZ } = await world(store);
       if (typeof store.listNeedingVector !== 'function') return;
-      const missing = record({ ownerId: 'owner-z' });
-      const other = record({ ownerId: 'owner-z', vector: [1], vectorSource: 'old' });
-      const fine = record({ ownerId: 'owner-z', vector: [1], vectorSource: 'new' });
-      const replaced = record({ ownerId: 'owner-z', supersededBy: fine.id });
+      const missing = record({ ownerId: ownerZ });
+      const other = record({ ownerId: ownerZ, vector: vec(1), vectorSource: 'old' });
+      const fine = record({ ownerId: ownerZ, vector: vec(1), vectorSource: 'new' });
+      const replaced = record({ ownerId: ownerZ, supersededBy: fine.id });
       for (const row of [missing, other, fine, replaced]) await store.insert(row);
       const ids = (await store.listNeedingVector({ limit: 50, source: 'new' })).map((row) => row.id);
       expect(ids).toEqual(expect.arrayContaining([missing.id, other.id]));

@@ -2,8 +2,10 @@
 
 const { createHash } = require('node:crypto');
 const { VOICE_VERSION, buildVoiceCacheKey, normalizeLanguage } = require('./builders');
+const { abortError, throwIfAborted, combineSignals } = require('./abort');
 
 function classifyProviderError(error) {
+  if (error?.code === 'ABORTED') return 'ABORTED';
   const status = Number(error?.status);
   if (status === 429 || ['QUOTA', 'QUOTA_EXCEEDED', 'RATE_LIMITED'].includes(error?.code)) return 'QUOTA';
   if (status === 401 || status === 403 || error?.code === 'AUTH') return 'AUTH';
@@ -47,9 +49,17 @@ function createProviderVoiceService(options = {}) {
     return null;
   }
 
+  /*
+   * `request.signal` (an AbortSignal) cancels the synthesis: it is handed to
+   * the provider being tried, and once it is aborted the service stops with an
+   * AbortError (code 'ABORTED') — no other provider is tried, no key is put at
+   * rest, nothing is cached.
+   */
   async function synthesize(request = {}) {
     const text = String(request.text ?? '').trim();
     if (!text) throw Object.assign(new Error('TEXT_REQUIRED'), { code: 'TEXT_REQUIRED' });
+    const signal = request.signal;
+    throwIfAborted(signal);
     const language = normalizeLanguage(request.language, 'auto');
     const version = String(request.voiceVersion || voiceVersion);
     const attempts = [];
@@ -66,6 +76,7 @@ function createProviderVoiceService(options = {}) {
       const voice = request.voice ?? provider.voice ?? null;
       const cacheKey = providerCacheKey(text, language, version, providerId, voice);
       const hit = await cached(cacheKey, providerId, position > 0, attempts);
+      throwIfAborted(signal);
       if (hit) {
         if (position > 0 && request.fallbackScope) {
           try { await options.fallbackStore?.set(request.fallbackScope, providerId, options.fallbackTtlSeconds ?? 300); } catch (_error) { /* Optional scope store. */ }
@@ -89,6 +100,7 @@ function createProviderVoiceService(options = {}) {
       }
       const ordered = options.restingLast ? [...choices.filter((choice) => !choice.resting), ...choices.filter((choice) => choice.resting)] : choices.filter((choice) => !choice.resting);
       for (const { model, key, id } of ordered) {
+        throwIfAborted(signal);
         const dayId = `${new Date(clock.now()).toISOString().slice(0, 10)}:${id}`;
         if (options.usageStore && key !== undefined) {
           try {
@@ -108,6 +120,8 @@ function createProviderVoiceService(options = {}) {
           }
           return { ...entry, audio: Buffer.from(entry.audio), cacheKey, cached: false, provider: providerId, model: model ?? null, fallback: position > 0, attempts };
         } catch (error) {
+          /* The caller gave up: not the provider's fault, so no rest and no other provider. */
+          if (signal && signal.aborted) throw abortError(signal);
           const code = classifyProviderError(error);
           attempts.push({ provider: providerId, model: model ?? null, code });
           const restMs = options.cooldownMsByCode?.[code] ?? (code === 'QUOTA' ? cooldownMs : 0);
@@ -121,7 +135,7 @@ function createProviderVoiceService(options = {}) {
 }
 
 function createPiperProvider(service, id = 'piper') {
-  return { id, synthesize: ({ text, language }) => service.synthesize({ text, language }) };
+  return { id, synthesize: ({ text, language, signal }) => service.synthesize({ text, language, signal }) };
 }
 
 function pcm16ToWav(pcm, rate) {
@@ -140,14 +154,14 @@ function createGeminiTtsAdapter({ fetch, endpoint, model, models, voice, voices,
   if (typeof fetch !== 'function' || typeof endpoint !== 'function') throw new TypeError('FETCH_AND_ENDPOINT_REQUIRED');
   return {
     id, keys, model, models, voice,
-    async synthesize({ text, key, language, model: selectedModel, voice: requestedVoice }) {
+    async synthesize({ text, key, language, model: selectedModel, voice: requestedVoice, signal }) {
       const chosenModel = selectedModel || model;
       const chosenVoice = requestedVoice || voices?.[language] || voice;
       const generationConfig = wireStyle === 'camel'
         ? { responseModalities: ['AUDIO'], speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: chosenVoice } } } }
         : { response_modalities: ['AUDIO'], speech_config: { voice_config: { prebuilt_voice_config: { voice_name: chosenVoice } } } };
       const response = await fetch(endpoint(chosenModel), {
-        method: 'POST', signal: globalThis.AbortSignal.timeout(timeoutMs),
+        method: 'POST', signal: combineSignals([signal], timeoutMs),
         headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
         body: JSON.stringify({ contents: [{ parts: [{ text }] }], generationConfig })
       });

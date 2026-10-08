@@ -6,6 +6,8 @@ import {
   buildPiperArgs,
   buildVoiceCacheKey,
   createMemoryVoiceCache,
+  createBoundedVoiceCache,
+  createPiperHttpProvider,
   createVoiceService,
   createProviderVoiceService,
   createPiperProvider,
@@ -132,6 +134,24 @@ async function exercise(): Promise<void> {
   ];
 }
 
+const bounded = createBoundedVoiceCache({ maxEntries: 500, maxBytes: 64 * 1024 * 1024, now: () => 1 });
+const boundedAsCache: VoiceCache = bounded;
+const piperHttp = createPiperHttpProvider({
+  url: 'http://127.0.0.1:5000',
+  tokenFile: '/run/secrets/piper',
+  defaultLanguage: 'fr',
+  timeoutMs: 20000,
+  readFile: async () => 'token'
+});
+async function exerciseAbort(): Promise<void> {
+  const controller = new AbortController();
+  const chain = createProviderVoiceService({ providers: [piperHttp], cache: boundedAsCache });
+  const spoken = await chain.synthesize({ text: 'Bonjour', language: 'fr', signal: controller.signal });
+  const local = await service.synthesize({ text: 'Hello', signal: controller.signal });
+  void [spoken.provider, local.cacheKey, bounded.size, bounded.bytes];
+}
+void exerciseAbort;
+
 const assembler = createReadingAssembler({ spawn, clock });
 const pool = createResidentPiperPool({ spawn: () => ({}), partMaxMs: 1000 });
 const fileCache = createFileVoiceCache({
@@ -154,7 +174,7 @@ void [
   VOICE_FINISH, VOICE_LOUDNESS, buildReadingGraph([{ pitch: 1, after: 0.25 }]), assembler.assemble({ takes: [{ file: 'a.wav' }], output: 'o.m4a' }),
   buildResidentPiperArgs({ modelPath: 'voice.onnx' }), pool.say({ model: 'voice.onnx', pace: 1, pause: 0.3 }, 'Hello', 'o.wav'), pool.size,
   fileCache.get('key'), fileCache.prune(), gate.push('AAAA'), segmenter.push('AAAA'), segmenter.finish(),
-  runProcess(spawn, 'ffmpeg', [], { clock, timeoutMs: 1000 }), pcm16ToWav(new Uint8Array(2), 24000),
+  runProcess(spawn, 'ffmpeg', [], { clock, timeoutMs: 1000, signal: new AbortController().signal }), pcm16ToWav(new Uint8Array(2), 24000),
   createProviderVoiceService({ providers: [], restingLast: true })
 ];
 void exercise;

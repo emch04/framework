@@ -87,7 +87,9 @@ function createMemoryTools(options = {}) {
         ok: true,
         code: 'memory_saved',
         memory: { id: result.memory.id, text: result.memory.text, kind: result.memory.kind, importance: result.memory.importance },
-        undo: { id: result.memory.id }
+        /* A memory only reinforced has nothing to take back: undo would erase it. */
+        undo: result.reinforced ? null : { id: result.memory.id },
+        ...(result.reinforced ? { reinforced: true } : {})
       }, ctx);
     })
   };

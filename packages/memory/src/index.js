@@ -1,6 +1,7 @@
 module.exports = {
   ...require('./memory'),
   ...require('./memoryStore'),
+  ...require('./postgres'),
   ...require('./tools'),
   ...require('./handlers'),
   ...require('./rules'),

@@ -1,5 +1,7 @@
 'use strict';
 
+const { abortError } = require('./abort');
+
 function splitSpeechPieces(text, { maxChars = 600 } = {}) {
   if (!Number.isInteger(maxChars) || maxChars < 1) throw new RangeError('INVALID_PIECE_SIZE');
   const input = String(text ?? '').trim().replace(/\s+/gu, ' ');
@@ -37,6 +39,7 @@ function createPieceVoiceService({ providers = [], maxConcurrent = 3 } = {}) {
     async synthesize(input, request = {}) {
       const texts = Array.isArray(input) ? input : splitSpeechPieces(input, request);
       if (!texts.length) throw Object.assign(new Error('TEXT_REQUIRED'), { code: 'TEXT_REQUIRED' });
+      const signal = request.signal;
       const attempts = [];
       for (let providerIndex = 0; providerIndex < providers.length; providerIndex += 1) {
         const provider = providers[providerIndex];
@@ -44,14 +47,17 @@ function createPieceVoiceService({ providers = [], maxConcurrent = 3 } = {}) {
         const pieces = new Array(texts.length);
         let next = 0;
         let failed = false;
+        if (signal && signal.aborted) throw abortError(signal);
         const workers = Array.from({ length: Math.min(maxConcurrent, texts.length) }, async () => {
-          while (!failed && next < texts.length) {
+          while (!failed && next < texts.length && !(signal && signal.aborted)) {
             const index = next++;
             try { pieces[index] = await provider.synthesize({ ...request, text: texts[index], index }); }
             catch (_error) { failed = true; }
           }
         });
         await Promise.all(workers);
+        /* Cancelled: no other provider takes over. */
+        if (signal && signal.aborted) throw abortError(signal);
         if (!failed) return { pieces, provider: provider.id || `provider_${providerIndex}`, fallback: providerIndex > 0, attempts };
         attempts.push({ provider: provider.id || `provider_${providerIndex}`, code: 'PIECE_FAILED' });
       }

@@ -8,6 +8,7 @@ module.exports = {
   ...require('./resident'),
   ...require('./filecache'),
   ...require('./providers'),
+  ...require('./piperHttp'),
   ...require('./segments'),
   ...require('./microphone'),
   ...require('./utterances'),

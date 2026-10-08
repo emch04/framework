@@ -38,7 +38,7 @@ function asVoiceProvider(speech, { voices = {}, defaultVoice = null } = {}) {
   if (!speech.capabilities.synthesize) throw new TypeError('SYNTHESIS_NOT_CONFIGURED');
   return {
     id: speech.id,
-    synthesize: ({ text, language, voice }) => speech.synthesize({ text, voice: voice ?? voices[language] ?? defaultVoice })
+    synthesize: ({ text, language, voice, signal }) => speech.synthesize({ text, voice: voice ?? voices[language] ?? defaultVoice, signal })
   };
 }
 

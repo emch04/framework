@@ -4,7 +4,7 @@
  * d'activation, et ce qui n'a pas été utilisé ne se reporte pas. Au-delà du
  * quota, le passage ne compte plus : il se paie normalement.
  *
- * Extrait de la carte d'abonnement de Barber Clean (23/09/2026).
+ * Extrait de la carte d'abonnement d'une application de prise de rendez-vous (23/09/2026).
  *
  * Le compteur n'est jamais stocké : il se relit dans l'historique des
  * passages. C'est ce qui rend l'annulation d'un passage sans risque, et la

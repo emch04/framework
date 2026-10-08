@@ -1,11 +1,11 @@
 # @astratra/centrale
 
-Le paquet de collecte de **Centrale LJ** : erreurs, plantages, vues, usages, sessions et appels d'IA, masqués à la source puis envoyés par lots au backend.
+Le paquet de collecte d'un tableau de bord de surveillance auto-hébergé : erreurs, plantages, vues, usages, sessions et appels d'IA, masqués à la source puis envoyés par lots au backend.
 
 - **Aucune dépendance** à l'exécution, aucun autre paquet Astratra.
 - **Ne lève jamais** chez l'appelant et ne bloque jamais le projet hôte.
 - Écrit en TypeScript, publié en JavaScript avec ses types (`dist/`, construit par `npm run build` avant chaque publication).
-- Porte le contrat d'envoi (`@astratra/centrale/envoi`) et le masquage (`@astratra/centrale/masquage`) : le backend de Centrale LJ les reprend d'ici, il n'y a qu'une seule source.
+- Porte le contrat d'envoi (`@astratra/centrale/envoi`) et le masquage (`@astratra/centrale/masquage`) : le backend du tableau de bord les reprend d'ici, il n'y a qu'une seule source.
 
 ## Installation
 
@@ -67,7 +67,7 @@ Si le build est passé par `centrale injecter` (paquet `@astratra/centrale-cli`)
 - Masquage **avant tout envoi** : e-mails, téléphones, cartes, IBAN, clés, jetons, mots de passe, et les `noms` fournis.
 - Adresses ramenées à leur gabarit (`/eleve/123?token=x` devient `/eleve/:id`).
 - Utilisateur : seulement une empreinte SHA-256 salée, jamais l'identifiant brut.
-- Mode `strict` (Scolaris) : ni utilisateur, ni appareil précis.
+- Mode `strict` : ni utilisateur, ni appareil précis.
 - Usages : propriétés simples seulement (texte court, nombre, booléen).
 
 ## Tests

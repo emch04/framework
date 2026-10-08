@@ -17,19 +17,19 @@ test('hachage et variante sont déterministes; la distribution suit les poids', 
 });
 
 test('déploiement progressif conserve tous les utilisateurs déjà inclus', async () => {
-  const source = createMemorySource(rules({ oracle: { type: 'boolean', default: false, value: true, rollout: 10 } }));
+  const source = createMemorySource(rules({ assistant: { type: 'boolean', default: false, value: true, rollout: 10 } }));
   const provider = createFlagProvider({ source });
   const before = new Set();
-  for (let i = 0; i < 10_000; i++) if ((await provider.resolveBoolean('oracle', false, { targetingKey: `school-${i}` })).value) before.add(i);
-  await source.set(rules({ oracle: { type: 'boolean', default: false, value: true, rollout: 50 } }));
-  for (const i of before) expect((await provider.resolveBoolean('oracle', false, { targetingKey: `school-${i}` })).value).toBe(true);
+  for (let i = 0; i < 10_000; i++) if ((await provider.resolveBoolean('assistant', false, { targetingKey: `school-${i}` })).value) before.add(i);
+  await source.set(rules({ assistant: { type: 'boolean', default: false, value: true, rollout: 50 } }));
+  for (const i of before) expect((await provider.resolveBoolean('assistant', false, { targetingKey: `school-${i}` })).value).toBe(true);
   expect(before.size).toBeGreaterThan(850);
 });
 
 test('cible l utilisateur par pays, rôle et attributs d organisation', async () => {
-  const p = createFlagProvider({ source: createMemorySource(rules({ oracle: { type: 'boolean', default: false, value: true, target: { country: ['FR', 'BE'], role: 'admin', organization: 'school-1' } } })) });
-  const ok = await p.resolveBoolean('oracle', false, { targetingKey: 'a', attributes: { country: 'FR', role: 'admin', organization: 'school-1', platform: 'web', appVersion: '2.1' } });
-  const no = await p.resolveBoolean('oracle', false, { targetingKey: 'b', attributes: { country: 'US', role: 'admin', organization: 'school-1' } });
+  const p = createFlagProvider({ source: createMemorySource(rules({ assistant: { type: 'boolean', default: false, value: true, target: { country: ['FR', 'BE'], role: 'admin', organization: 'school-1' } } })) });
+  const ok = await p.resolveBoolean('assistant', false, { targetingKey: 'a', attributes: { country: 'FR', role: 'admin', organization: 'school-1', platform: 'web', appVersion: '2.1' } });
+  const no = await p.resolveBoolean('assistant', false, { targetingKey: 'b', attributes: { country: 'US', role: 'admin', organization: 'school-1' } });
   expect(ok).toMatchObject({ value: true, reason: 'STATIC' });
   expect(no).toMatchObject({ value: false, reason: 'TARGETING_MISMATCH' });
 });

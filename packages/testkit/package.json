@@ -1,6 +1,6 @@
 {
   "name": "@astratra/testkit",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Disposable test databases (MongoDB or Postgres in a container), reproducible per-country fake data, and a guard that refuses any production-looking database URI.",
   "engines": {
     "node": ">=22.22"

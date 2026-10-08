@@ -111,6 +111,6 @@ de middleware de sécurité ni de format de réponse à la main.
 - Frontend / tableau de bord visuel.
 - Persistance réelle (MongoDB, Postgres...) — stores en mémoire dev-only
   seulement, à remplacer par le consommateur.
-- Intégration IA dans le starter (pas de route `/oracle` ou équivalent) —
+- Intégration IA dans le starter (pas de route dédiée ou équivalent) —
   `@astratra/ai` reste composable séparément si un projet en a besoin.
 - Gestion fine des permissions au-delà de `adminRoles` vs authentifié simple.

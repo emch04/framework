@@ -1,6 +1,6 @@
 # @astratra/centrale-cli
 
-L'outil en ligne de commande de **Centrale LJ** : il relie les erreurs minifiées à leur vraie ligne (cartes de code, par identifiant de débogage) et déclare les déploiements (version d'apparition, commit suspect). Aucune dépendance, aucun outil Sentry.
+L'outil en ligne de commande d'un tableau de bord de surveillance auto-hébergé : il relie les erreurs minifiées à leur vraie ligne (cartes de code, par identifiant de débogage) et déclare les déploiements (version d'apparition, commit suspect). Aucune dépendance, aucun outil Sentry.
 
 ## Commandes
 
@@ -10,7 +10,7 @@ export CENTRALE_JETON=clj_dep_…            # jeton de DÉPLOIEMENT du projet (
 
 npx centrale injecter dist                 # après le build, avant la mise en ligne
 npx centrale envoyer-cartes dist --version 2.14.0
-npx centrale deploiement --version 2.14.0 --commit "$GITHUB_SHA" --depot kongo/scolaris --environnement production
+npx centrale deploiement --version 2.14.0 --commit "$GITHUB_SHA" --depot exemple/app --environnement production
 ```
 
 | Commande | Ce qu'elle fait |

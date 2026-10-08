@@ -7,10 +7,10 @@ const phone: string = data.phone();
 const countries: string[] = supportedCountries();
 
 async function exercise(): Promise<void> {
-  assertSafeTestDatabaseUri('mongodb://localhost:27017/scolaris_test', { allowRemoteHosts: ['ci-db.internal.example'] });
+  assertSafeTestDatabaseUri('mongodb://localhost:27017/app_test', { allowRemoteHosts: ['ci-db.internal.example'] });
   const safe: boolean = isSafeTestDatabaseUri('mongodb+srv://x.mongodb.net/app');
   if (isDockerAvailable()) {
-    const mongo: TestDatabase = await startMongo({ database: 'scolaris_test' });
+    const mongo: TestDatabase = await startMongo({ database: 'app_test' });
     const pg: TestDatabase = await startPostgres();
     await mongo.stop();
     await pg.stop();

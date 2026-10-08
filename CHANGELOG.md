@@ -3,12 +3,17 @@
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Chaque package Astratra est versionné indépendamment.
 
-## 2026-10-08 — `@astratra/memory` 1.1.0 et `@astratra/voice` 1.1.0 : ce que les apps écrivaient autour
+## 2026-10-08 — `@astratra/memory` 2.0.0 et `@astratra/voice` 1.1.0 : ce que les apps écrivaient autour
 
 Deux apps (Centrale LJ et Muzika) ont basculé sur ces paquets mais ont dû écrire du code autour. Ces
-manques sont comblés dans les paquets. Tout est rétrocompatible, sauf un défaut relevé (voir « Modifié »).
+manques sont comblés dans les paquets. Tout est rétrocompatible, sauf un défaut relevé (voir « Rupture »).
 
-### `@astratra/memory` 1.1.0
+### `@astratra/memory` 2.0.0
+
+#### Rupture
+- Comportement par défaut modifié (règle de PUBLISHING.md : version majeure) : le plafond passe de 300 à 1000
+  souvenirs actifs par personne. Aucune signature ni export n'a changé ; pour retrouver l'ancien plafond,
+  `maxActive: 300`.
 
 #### Modifié
 - **Plafond de souvenirs : 1000 par personne au lieu de 300** (décision de Kongo). Une personne qui avait

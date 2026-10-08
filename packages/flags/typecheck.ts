@@ -3,7 +3,7 @@ import type { FlagRules, Resolution } from './src';
 
 const rules: FlagRules = { flags: {
   oracle: { type: 'boolean', default: false, value: true, rollout: 10, target: { country: 'FR' } },
-  mobileOracle: { type: 'boolean', default: false, value: true, target: { all: [
+  mobileAssistant: { type: 'boolean', default: false, value: true, target: { all: [
     { platform: 'ios' }, { version: { '>=': '1.1.9' } },
     { any: [{ plan: 'pro' }, { number: { attribute: 'studentCount', between: [1, 500] } }] }
   ] } }

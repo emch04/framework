@@ -4,10 +4,10 @@ const pcm = (samples) => Buffer.from(Int16Array.from(samples).buffer).toString('
 
 test('a sentence is cut at the silence after it and transcribed on its own, the silence not decoded', async () => {
   const decoded = [];
-  const segmenter = createUtteranceSegmenter({ transcribe: async (samples) => { decoded.push(samples.length); return 'Bonjour Tertius'; }, silenceMs: 80, minSpeechMs: 80, sampleRate: 1000 });
+  const segmenter = createUtteranceSegmenter({ transcribe: async (samples) => { decoded.push(samples.length); return 'Bonjour Léa'; }, silenceMs: 80, minSpeechMs: 80, sampleRate: 1000 });
   await segmenter.push(pcm(Array(100).fill(1000)));
   const out = await segmenter.push(pcm(Array(100).fill(0)));
-  expect(out.map(({ text }) => text)).toEqual(['Bonjour Tertius']);
+  expect(out.map(({ text }) => text)).toEqual(['Bonjour Léa']);
   expect(out[0].confidence).toBeNull();
   expect(out[0].durationMs).toBe(100);
   expect(Buffer.from(out[0].audio, 'base64')).toHaveLength(200);

@@ -22,7 +22,7 @@ const COUNTRIES = {
     },
     lastNames: ['Mukendi', 'Kasongo', 'Ilunga', 'Mwamba', 'Tshibangu', 'Kalala', 'Ngoy', 'Mbuyi', 'Banza', 'Kabeya', 'Kitenge', 'Lukusa', 'Mutombo', 'Nsimba', 'Kimbembe', 'Bakambu'],
     cities: ['Kinshasa', 'Lubumbashi', 'Goma', 'Mbuji-Mayi', 'Kisangani', 'Bukavu', 'Kananga', 'Likasi', 'Kolwezi', 'Matadi'],
-    regions: ['Kinshasa', 'Haut-Katanga', 'Nord-Kivu', 'Kasaï-Oriental', 'Tshopo', 'Sud-Kivu', 'Kasaï-Central', 'Kongo-Central'],
+    regions: ['Kinshasa', 'Haut-Katanga', 'Nord-Kivu', 'Kasaï-Oriental', 'Tshopo', 'Sud-Kivu', 'Kasaï-Central', 'Kwango'],
     streets: ['Avenue de la Libération', 'Avenue Kasa-Vubu', 'Boulevard du 30 Juin', 'Avenue de la Paix', 'Avenue Kabinda', 'Avenue de l\'Enseignement', 'Avenue du Commerce'],
     districts: ['Gombe', 'Limete', 'Ngaliema', 'Lemba', 'Kintambo', 'Matete', 'Bandalungwa']
   },

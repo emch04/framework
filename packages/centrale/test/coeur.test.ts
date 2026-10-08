@@ -35,10 +35,10 @@ test('envoi : adresse, en-têtes, enveloppe conforme au contrat', async () => {
 
 test('masquage appliqué avant envoi : message, miettes, propriétés, étiquettes, noms, adresses', async () => {
   const t = transportFactice();
-  const c = creerCentrale({ ...CONFIG, noms: ['Mbappé Kongo'] }, t.transport, SANS_MINUTERIE);
+  const c = creerCentrale({ ...CONFIG, noms: ['Mbappé Lefèvre'] }, t.transport, SANS_MINUTERIE);
   c.miette('requete', 'appel avec Bearer abcdefghijklmnop pour jean@exemple.fr');
   c.miette('autre', 'ok', { token: 'secret123', courriel: 'a@b.fr', n: 3 });
-  c.erreur(new Error('Échec pour jean.dupont@exemple.fr, tél +33 6 12 34 56 78, élève Mbappé Kongo, clé sk-proj-abcdefghijkl'), {
+  c.erreur(new Error('Échec pour jean.dupont@exemple.fr, tél +33 6 12 34 56 78, élève Mbappé Lefèvre, clé sk-proj-abcdefghijkl'), {
     etiquettes: { carte: '4111 1111 1111 1111', password: 'hunter2' },
     requete: { methode: 'GET', route: '/eleve/123?token=abc' }
   });
@@ -46,7 +46,7 @@ test('masquage appliqué avant envoi : message, miettes, propriétés, étiquett
   c.vue('/eleve/42/notes?token=zzz#haut');
   await c.vider();
   const texte = t.requetes.map((r) => r.corps).join('');
-  for (const fuite of ['jean.dupont@exemple.fr', 'jean@exemple.fr', '12 34 56 78', 'Mbappé Kongo', 'sk-proj-abcdefghijkl', 'abcdefghijklmnop',
+  for (const fuite of ['jean.dupont@exemple.fr', 'jean@exemple.fr', '12 34 56 78', 'Mbappé Lefèvre', 'sk-proj-abcdefghijkl', 'abcdefghijklmnop',
     '4111 1111 1111 1111', 'hunter2', 'secret123', 'a@b.fr', 'x@y.com', 'token=abc', 'zzz']) {
     assert.ok(!texte.includes(fuite), `fuite : ${fuite}`);
   }
@@ -291,7 +291,7 @@ test('utilisateur haché avec le sel, jamais l\'identifiant brut ; effacement ; 
   assert.equal(t.envois()[1].contexte.utilisateur, undefined);
 
   const t2 = transportFactice();
-  const strict = creerCentrale({ ...CONFIG, strict: true, contexte: { appareil: 'iPhone de Kongo', os: 'iOS 26' } }, t2.transport, SANS_MINUTERIE);
+  const strict = creerCentrale({ ...CONFIG, strict: true, contexte: { appareil: 'iPhone de Camille', os: 'iOS 26' } }, t2.transport, SANS_MINUTERIE);
   strict.definirUtilisateur('eleve-1');
   strict.definirContexte({ appareil: 'iPhone16,2' });
   strict.erreur(new Error('x'));

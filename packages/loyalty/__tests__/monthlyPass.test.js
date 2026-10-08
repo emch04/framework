@@ -1,5 +1,5 @@
 /**
- * La carte à quota mensuel (extraite de Barber Clean, 23/09/2026) : N
+ * La carte à quota mensuel (extraite d'une application de prise de rendez-vous, 23/09/2026) : N
  * passages par mois calendaire du fuseau du commerce, remise à zéro le 1er,
  * rien ne se reporte, au-delà le passage se paie.
  */

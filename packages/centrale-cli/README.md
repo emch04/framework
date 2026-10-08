@@ -1,6 +1,14 @@
 # @astratra/centrale-cli
 
-L'outil en ligne de commande de **Centrale LJ** : il relie les erreurs minifiées à leur vraie ligne (cartes de code, par identifiant de débogage) et déclare les déploiements (version d'apparition, commit suspect). Aucune dépendance, aucun outil Sentry.
+L'outil en ligne de commande d'un tableau de bord de surveillance auto-hébergé : il relie les erreurs minifiées à leur vraie ligne (cartes de code, par identifiant de débogage) et déclare les déploiements (version d'apparition, commit suspect). Aucune dépendance à l'exécution.
+
+## Installation
+
+```sh
+npm install --save-dev @astratra/centrale-cli
+```
+
+Node 24 ou plus récent. La commande `centrale` est alors disponible via `npx centrale`.
 
 ## Commandes
 
@@ -10,7 +18,7 @@ export CENTRALE_JETON=clj_dep_…            # jeton de DÉPLOIEMENT du projet (
 
 npx centrale injecter dist                 # après le build, avant la mise en ligne
 npx centrale envoyer-cartes dist --version 2.14.0
-npx centrale deploiement --version 2.14.0 --commit "$GITHUB_SHA" --depot kongo/scolaris --environnement production
+npx centrale deploiement --version 2.14.0 --commit "$GITHUB_SHA" --depot exemple/app --environnement production
 ```
 
 | Commande | Ce qu'elle fait |
@@ -18,6 +26,15 @@ npx centrale deploiement --version 2.14.0 --commit "$GITHUB_SHA" --depot kongo/s
 | `injecter <dossier>` | Pour chaque `.js`/`.mjs`/`.cjs` qui a une carte (commentaire `sourceMappingURL` ou `<fichier>.map`) : calcule un identifiant stable (SHA-256 du contenu, mis en forme d'UUID), insère en tête une ligne qui l'enregistre dans `globalThis.__centraleDebugIds`, ajoute `//# debugId=<id>` en fin de fichier et `debug_id` dans la carte. Relancer ne change rien. |
 | `envoyer-cartes <dossier> --version X` | Demande au backend les cartes qu'il a déjà, puis envoie les autres par lots compressés (16 Mio visés, 64 Mio au plus). Coupure, 5xx et 429 sont réessayés avec recul (`Retry-After` respecté). Relancer reprend où l'envoi s'est arrêté. |
 | `deploiement --version X --commit SHA` | Déclare un déploiement. `--environnement` vaut par défaut celui du jeton. Déclarer deux fois le même ne crée pas de doublon. |
+
+| Option | Commande | Rôle |
+| --- | --- | --- |
+| `--version X` | `envoyer-cartes`, `deploiement` | Version de l'app (obligatoire). |
+| `--commit SHA` | `deploiement` | Commit déployé (obligatoire). |
+| `--depot proprietaire/depot` | `deploiement` | Dépôt de code, par exemple `exemple/app`. |
+| `--environnement nom` | `deploiement` | Environnement ; par défaut, celui du jeton. |
+
+Les variables `CENTRALE_ADRESSE` (adresse du backend, en `http(s)://`) et `CENTRALE_JETON` (jeton de déploiement `clj_dep_…`) sont lues pour `envoyer-cartes` et `deploiement`.
 
 Codes de sortie : `0` réussi, `1` échec (réseau, jeton refusé, carte refusée), `2` commande mal formée.
 
@@ -43,7 +60,19 @@ Sans identifiant (bytecode Hermes, build non injecté), le backend cherche une c
 import { injecterDossier, envoyerCartes, declarerDeploiement } from '@astratra/centrale-cli';
 ```
 
+`envoyerCartes(connexion, { dossier, version })` et `declarerDeploiement(connexion, { version, commit, depot?, environnement? })` prennent une `connexion` `{ adresse, jeton }`. `injecterDossier(dossier)` rend la liste des fichiers traités.
+
 Le paquet est écrit en TypeScript à syntaxe effaçable (Node 24 l'exécute directement dans le dépôt) ; il sera compilé en JavaScript au moment de sa publication, comme `@astratra/centrale`.
+
+## Ce que l'outil ne fait pas
+
+- Il ne lance pas le build et ne supprime pas les cartes après l'envoi : c'est à votre CI de le faire.
+- Il n'envoie ni erreurs ni événements : c'est le rôle de `@astratra/centrale`.
+- Il ne gère pas les cartes de feuilles de style (`.css.map`), laissées de côté.
+
+## Licence
+
+MIT.
 
 ## Tests
 

@@ -1,7 +1,6 @@
 # @astratra/react
 
-Primitives React optionnelles pour une session, des permissions et des appels
-API. Le package n'impose ni endpoints, ni routes, ni ecrans, ni design.
+Primitives React optionnelles pour une session, des permissions et des appels API. Le paquet n'impose ni points d'accès, ni routes, ni écrans, ni design : l'application fournit les fonctions qui lisent, ouvrent et ferment la session, et le paquet gère l'état, les permissions et le client HTTP. Il vise les interfaces construites sur un backend à sessions par cookie `HttpOnly`.
 
 ## Installation
 
@@ -9,10 +8,9 @@ API. Le package n'impose ni endpoints, ni routes, ni ecrans, ni design.
 npm install @astratra/react react
 ```
 
-## Session injectee par l'application
+React 18 ou plus récent, Node 20 ou plus récent pour l'outillage.
 
-L'application garde le controle de son backend. Elle fournit seulement les
-fonctions qui lisent, ouvrent et ferment une session :
+## Exemple
 
 ```jsx
 import { createApiFetch, RequireAuth, SessionProvider, useSession } from '@astratra/react';
@@ -24,7 +22,7 @@ const signOut = () => apiFetch('/api/auth/logout', { method: 'POST' });
 
 function Account() {
   const { user, signOut: logout } = useSession();
-  return <button onClick={logout}>Deconnexion de {user.name}</button>;
+  return <button onClick={logout}>Déconnexion de {user.name}</button>;
 }
 
 export function App() {
@@ -36,45 +34,50 @@ export function App() {
 }
 ```
 
+`getSession` doit rendre un objet de session (`{ user, permissions?, roles? }`) ou `null` quand personne n'est connecté. Une erreur levée par `getSession` est traitée comme « anonyme ».
+
 ## Exports
 
-- `SessionProvider` : gere le chargement et l'etat de session a partir de callbacks fournis par l'application.
-- `useSession()` : retourne `status`, `session`, `user`, `signIn`, `signOut` et `refresh`.
-- `useUser()` : retourne l'utilisateur connecte ou `null`.
-- `usePermissions()` : retourne `permissions`, `has(permission)` et `hasAny(permissions)`.
-- `RequireAuth` et `RequireRole` : affichent un `fallback` lorsque l'acces manque. `RequireRole` lit `session.roles`, `user.roles` ou `user.role`.
-- `createApiFetch()` : fabrique un client avec cookies HttpOnly et erreurs `ApiError`.
+| Export | Rôle |
+| --- | --- |
+| `SessionProvider` | Charge et garde l'état de session à partir de `getSession`, `signIn` et `signOut`. |
+| `useSession()` | Rend `status` (`loading`, `authenticated` ou `anonymous`), `session`, `user`, `signIn`, `signOut` et `refresh`. |
+| `useUser()` | Rend l'utilisateur connecté ou `null`. |
+| `usePermissions()` | Rend `permissions`, `has(permission)` et `hasAny(permissions)`. |
+| `RequireAuth` | Affiche ses enfants si l'utilisateur est connecté, sinon `fallback`. |
+| `RequireRole` | Comme `RequireAuth`, avec la prop `role` ; lit `session.roles`, `user.roles` ou `user.role`. |
+| `createApiFetch(options)` | Fabrique un client `apiFetch(chemin, { method, headers, body })`. |
+| `ApiError` | Erreur levée pour une réponse en échec (`status`, `data`, `error`). |
 
-## Cookies et securite
+## Options de `createApiFetch`
 
-`createApiFetch` utilise toujours `credentials: 'include'`. Le backend doit
-configurer CORS, `HttpOnly`, `Secure`, `SameSite` et une protection CSRF adaptee
-a son environnement. Astratra ne remplace pas cette configuration —
-`@astratra/security` fournit ces primitives cote backend (voir son README).
+| Option | Rôle |
+| --- | --- |
+| `baseUrl` | Préfixe des chemins (vide par défaut). |
+| `onUnauthorized` | Fonction appelée sur une réponse 401. |
+| `fetchImpl` | Implémentation de `fetch` à utiliser (celle de l'environnement par défaut). |
+| `csrf` | `false` désactive l'ajout automatique du jeton CSRF (activé par défaut). |
+| `csrfCookieName` | Cookie lu pour le jeton (`astratra_csrf` par défaut). |
+| `csrfHeaderName` | En-tête portant le jeton (`x-csrf-token` par défaut). |
 
-**CSRF** : `createApiFetch` lit lui-meme le cookie
-`astratra_csrf` et l'attache en header `x-csrf-token` sur toute requete
-mutante (tout sauf `GET`/`HEAD`/`OPTIONS`) — les noms par defaut
-correspondent exactement a ceux de `@astratra/security`, aucune config
-requise pour la paire habituelle backend/frontend Astratra. N'ecrase jamais
-un header `x-csrf-token` deja fourni explicitement. Options :
+Le corps d'une requête est sérialisé en JSON s'il n'est pas déjà du texte. La réponse rendue est `payload.data` si elle existe, sinon la charge utile entière.
 
-```jsx
-createApiFetch({
-  csrf: false,                     // desactive completement l'auto-attachement
-  csrfCookieName: 'mon_cookie',    // si le backend ne suit pas les noms par defaut
-  csrfHeaderName: 'x-mon-header'
-});
-```
+## Cookies et sécurité
 
-## Par rapport a `@astratra/saas-kit-ui`
+`createApiFetch` utilise toujours `credentials: 'include'`. Le backend doit configurer CORS, `HttpOnly`, `Secure`, `SameSite` et une protection CSRF adaptée à son environnement ; `@astratra/security` fournit ces primitives côté backend.
 
-`@astratra/saas-kit-ui` expose aussi des primitives de session
-(`AuthProvider`/`useAuth`), mais avec un choix different : token JWT garde
-en memoire JS et attache en `Authorization: Bearer`, couple a son dashboard
-complet `AstratraDashboardApp`. Ce package-ci (`@astratra/react`) ne stocke
-aucun token cote client — la session reste dans un cookie `HttpOnly` gere
-par le backend — et n'impose ni dashboard ni ecran. Choisis `saas-kit-ui` si
-`AstratraDashboardApp` te convient tel quel ; choisis `@astratra/react` si
-tu construis ta propre interface par-dessus un backend en sessions cookie
-`HttpOnly`.
+Sur toute requête autre que `GET`, `HEAD` et `OPTIONS`, `createApiFetch` lit le cookie CSRF et l'envoie dans l'en-tête configuré, sans écraser un en-tête fourni explicitement. Les noms par défaut sont ceux de `@astratra/security`.
+
+## Ce que le paquet ne fait pas
+
+- Il ne stocke aucun jeton côté client : la session reste dans le cookie géré par le backend.
+- Il ne fournit ni écran de connexion, ni routeur, ni design.
+- Il ne remplace pas la configuration CORS, cookies et CSRF du backend.
+
+## Par rapport à `@astratra/saas-kit-ui`
+
+`@astratra/saas-kit-ui` expose aussi des primitives de session (`AuthProvider`, `useAuth`), mais garde un jeton JWT en mémoire, l'envoie en `Authorization: Bearer` et l'associe à son tableau de bord complet `AstratraDashboardApp`. Choisissez `saas-kit-ui` si ce tableau de bord vous convient tel quel ; choisissez `@astratra/react` si vous construisez votre propre interface sur un backend à sessions par cookie `HttpOnly`.
+
+## Licence
+
+MIT.

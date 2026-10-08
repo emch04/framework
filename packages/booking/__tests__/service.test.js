@@ -11,7 +11,7 @@ const {
   wallTimeToISO
 } = require('../src');
 
-/* Barber Clean, lundi 29 juin 2026 à Kinshasa : deux barbiers, une salle de 3 places. */
+/* Un salon, lundi 29 juin 2026 à Kinshasa : deux coiffeurs, une salle de 3 places. */
 const KIN = 'Africa/Kinshasa';
 const lundi = (heure) => wallTimeToISO('2026-06-29', heure, KIN);
 const RESSOURCES = [

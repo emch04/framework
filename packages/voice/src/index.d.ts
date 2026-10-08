@@ -56,6 +56,23 @@ export interface MemoryVoiceCache extends VoiceCache {
 
 export function createMemoryVoiceCache(): MemoryVoiceCache;
 
+export interface BoundedVoiceCacheOptions {
+  /** Most readings kept. With neither limit: 256. */
+  maxEntries?: number;
+  /** Most bytes of audio kept. A reading bigger than this is not kept at all. */
+  maxBytes?: number;
+  /** Clock in milliseconds, for the time to live. Default Date.now. */
+  now?: () => number;
+}
+
+export interface BoundedVoiceCache extends MemoryVoiceCache {
+  /** Bytes of audio held. */
+  readonly bytes: number;
+}
+
+/** An in-process cache bounded by readings and/or bytes, least recently used out first; honours the time to live `set` is given. */
+export function createBoundedVoiceCache(options?: BoundedVoiceCacheOptions): BoundedVoiceCache;
+
 export interface SpawnedProcess {
   stdin?: { write(value: string): unknown; end(): unknown };
   stderr?: { on(event: 'data', listener: (chunk: unknown) => void): unknown };
@@ -103,11 +120,12 @@ export interface VoiceResult extends VoiceCacheEntry {
 
 export interface VoiceService {
   readonly voiceVersion: string;
-  synthesize(request: { text: unknown; language?: string }): Promise<VoiceResult>;
+  /** `signal` cancels it: the running piper or ffmpeg is killed and the error is an AbortError (code 'ABORTED'). */
+  synthesize(request: { text: unknown; language?: string; signal?: AbortSignal }): Promise<VoiceResult>;
 }
 
 export function createVoiceService(options: VoiceServiceOptions): VoiceService;
-export function runProcess(spawn: Spawn, command: string, args: string[], options: { clock: Pick<VoiceClock, 'setTimeout' | 'clearTimeout'>; timeoutMs: number; input?: string }): Promise<string>;
+export function runProcess(spawn: Spawn, command: string, args: string[], options: { clock: Pick<VoiceClock, 'setTimeout' | 'clearTimeout'>; timeoutMs: number; input?: string; signal?: AbortSignal }): Promise<string>;
 
 export function buildReadingGraph(takes: Array<{ pitch?: number; after?: number }>, options?: { sampleRate?: number; sourceRate?: number; finish?: string | null; loudness?: string }): string;
 export function createReadingAssembler(options: {
@@ -166,7 +184,8 @@ export interface VoiceProvider {
   model?: string;
   models?: string[];
   keys?: string[] | (() => Awaitable<string[]>);
-  synthesize(request: { text: string; language: string; voice?: string | null; model?: string; key?: string; [key: string]: unknown }): Awaitable<VoiceCacheEntry>;
+  /** `signal`: the caller's cancellation, to hand to the network request or the process. */
+  synthesize(request: { text: string; language: string; voice?: string | null; model?: string; key?: string; signal?: AbortSignal; [key: string]: unknown }): Awaitable<VoiceCacheEntry>;
 }
 export interface ProviderVoiceOptions {
   providers: VoiceProvider[];
@@ -194,9 +213,40 @@ export interface ProviderVoiceResult extends VoiceResult {
 export function classifyProviderError(error: { status?: number; code?: string | number; name?: string } | null | undefined): string;
 export function createProviderVoiceService(options: ProviderVoiceOptions): {
   voiceVersion: string;
-  synthesize(request: { text: unknown; language?: string; voice?: string; voiceVersion?: string; fallbackScope?: string }): Promise<ProviderVoiceResult>;
+  /** `signal` cancels it: the provider being tried gets it, no other is tried, no key is rested, and the error is an AbortError (code 'ABORTED'). */
+  synthesize(request: { text: unknown; language?: string; voice?: string; voiceVersion?: string; fallbackScope?: string; signal?: AbortSignal }): Promise<ProviderVoiceResult>;
 };
 export function createPiperProvider(service: VoiceService, id?: string): VoiceProvider;
+
+export interface PiperHttpProviderOptions {
+  /** Base address of the Piper service, e.g. 'http://127.0.0.1:5000'. */
+  url: string;
+  /** Default 'piper-http'. */
+  id?: string;
+  /** Route. Default '/tts'. */
+  path?: string;
+  /** Bearer token: a string or a function returning one. Not with tokenFile. */
+  token?: string | (() => Awaitable<string>);
+  /** File holding the token, read at every request so a rotation needs no restart. */
+  tokenFile?: string;
+  /** Reads the token file. Default node:fs/promises readFile. */
+  readFile?: (path: string, encoding: 'utf8') => Awaitable<string>;
+  fetch?: (url: string, init: object) => Promise<{ ok: boolean; status: number; headers?: { get(name: string): string | null }; arrayBuffer(): Promise<ArrayBuffer> }>;
+  /** Default 30000. A timeout is a TRANSIENT failure. */
+  timeoutMs?: number;
+  /** Used instead of 'auto' when the request names no language. */
+  defaultLanguage?: string;
+  /** Default voice of the provider (part of the cache identity). */
+  voice?: string;
+  headers?: Record<string, string>;
+  /** Replaces the request body `{ text, lang, voice? }`. */
+  buildBody?: (request: { text: string; language: string; voice?: string | null }) => unknown;
+}
+/**
+ * A provider for a Piper HTTP service (POST {url}/tts, JSON { text, lang }, bearer token, audio back),
+ * for createProviderVoiceService. HTTP errors carry `status`; a caller's `signal` cancels the request.
+ */
+export function createPiperHttpProvider(options: PiperHttpProviderOptions): VoiceProvider;
 export function pcm16ToWav(pcm: Uint8Array, rate: number): Buffer;
 export function createGeminiTtsAdapter(options: {
   fetch: (url: string, init: object) => Promise<{ ok: boolean; status: number; json(): Promise<unknown> }>;
@@ -355,7 +405,7 @@ export function createPieceVoiceService<T>(options: {
   providers: Array<{ id?: string; synthesize(request: { text: string; index: number; [key: string]: unknown }): Awaitable<T> }>;
   maxConcurrent?: number;
 }): {
-  synthesize(piecesOrText: string[] | string, request?: { maxChars?: number; [key: string]: unknown }): Promise<{
+  synthesize(piecesOrText: string[] | string, request?: { maxChars?: number; signal?: AbortSignal; [key: string]: unknown }): Promise<{
     pieces: T[];
     provider: string;
     fallback: boolean;
@@ -400,7 +450,7 @@ export interface LocalSpeechEngine {
   capabilities: { transcribe: boolean; synthesize: boolean };
   /** `audio` : WAV (PCM 16 bits ou flottant) ou, pour sherpa, des échantillons Float32 mono. */
   transcribe(request: { audio: Uint8Array | Float32Array; language?: string | null; requestedLanguage?: string | null; mediaType?: string }): Promise<SpeechTranscription>;
-  synthesize(request: { text: string; voice?: string | number | null; speed?: number }): Promise<SpeechAudio>;
+  synthesize(request: { text: string; voice?: string | number | null; speed?: number; signal?: AbortSignal }): Promise<SpeechAudio>;
   close(): void;
 }
 
@@ -438,7 +488,7 @@ export function createLocalSpeech(options?: {
 
 export function asVoiceProvider(speech: LocalSpeechEngine, options?: { voices?: Record<string, string | number>; defaultVoice?: string | number | null }): {
   id: string;
-  synthesize(request: { text: string; language: string; voice?: string | null }): Promise<SpeechAudio>;
+  synthesize(request: { text: string; language: string; voice?: string | null; signal?: AbortSignal }): Promise<SpeechAudio>;
 };
 export function asTranscriptionProvider(speech: LocalSpeechEngine): {
   id: string;

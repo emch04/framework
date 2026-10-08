@@ -28,9 +28,15 @@ function createWhisperHttpEngine({
   }
   if (typeof fetchImpl !== 'function') throw new TypeError('FETCH_REQUIRED');
 
-  async function call(route, init) {
+  async function call(route, init, signal) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
+    /* A caller's signal cancels the request as well as the timeout does. */
+    const onAbort = () => controller.abort(signal.reason);
+    if (signal) {
+      if (signal.aborted) controller.abort(signal.reason);
+      else signal.addEventListener('abort', onAbort, { once: true });
+    }
     try {
       const response = await fetchImpl(`${base}${route}`, {
         ...init,
@@ -44,6 +50,7 @@ function createWhisperHttpEngine({
       return response;
     } finally {
       clearTimeout(timer);
+      if (signal) signal.removeEventListener('abort', onAbort);
     }
   }
 
@@ -66,14 +73,14 @@ function createWhisperHttpEngine({
     };
   }
 
-  async function synthesize({ text, voice = null } = {}) {
+  async function synthesize({ text, voice = null, signal } = {}) {
     if (!ttsModel) throw Object.assign(new Error('SYNTHESIS_NOT_CONFIGURED'), { code: 'NOT_CONFIGURED' });
     if (typeof text !== 'string' || !text.trim()) throw Object.assign(new Error('EMPTY_TEXT'), { code: 'EMPTY_TEXT' });
     const response = await call('/v1/audio/speech', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ model: ttsModel, input: text, voice: voice ?? ttsVoice, response_format: 'wav' })
-    });
+    }, signal);
     const audio = new Uint8Array(await response.arrayBuffer());
     if (!audio.length) throw Object.assign(new Error('EMPTY_AUDIO'), { code: 'EMPTY_AUDIO' });
     return { audio, format: 'wav', mimeType: 'audio/wav' };

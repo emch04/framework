@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * `centrale` : l'outil en ligne de commande de Centrale LJ.
+ * `centrale` : l'outil en ligne de commande d'un tableau de bord de surveillance auto-hébergé.
  *   centrale injecter <dossier>
  *   centrale envoyer-cartes <dossier> --version X
  *   centrale deploiement --version X --commit SHA [--depot owner/repo] [--environnement production]

@@ -126,8 +126,8 @@ describe('createReversibleMasker', () => {
   });
 
   test('keep() protects words that must stay (a product name)', () => {
-    const masker = createReversibleMasker({ names: ['Oracle', 'Kevin'], keep: (value) => value === 'Oracle' });
-    expect(masker.mask('Oracle aide Kevin')).toMatch(/^Oracle aide #PERSON_/);
+    const masker = createReversibleMasker({ names: ['Assistant', 'Kevin'], keep: (value) => value === 'Assistant' });
+    expect(masker.mask('Assistant aide Kevin')).toMatch(/^Assistant aide #PERSON_/);
   });
 
   test('a non-global pattern is refused: it would mask the first hit and leak the rest', () => {

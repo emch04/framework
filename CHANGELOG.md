@@ -3,9 +3,17 @@
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Chaque package Astratra est versionné indépendamment.
 
+## 2026-10-09 — documentation neutre : `@astratra/centrale`, `@astratra/centrale-cli`, `@astratra/loyalty`, `@astratra/testkit` 1.0.1
+
+### Documentation et commentaires neutres
+- Commentaires, descriptions et données de test des paquets retirent les noms de projets d'origine ; aucun comportement ne change.
+- `@astratra/centrale` et `@astratra/centrale-cli` gardent leur nom ; leur description est générique.
+- `@astratra/testkit` : la liste de régions de test remplace « Kongo-Central » par « Kwango » (donnée de test).
+- Licence : titulaire du copyright « Astratra contributors ».
+
 ## 2026-10-08 — `@astratra/memory` 2.0.0 et `@astratra/voice` 1.1.0 : ce que les apps écrivaient autour
 
-Deux apps (Centrale LJ et Muzika) ont basculé sur ces paquets mais ont dû écrire du code autour. Ces
+Deux applications existantes ont basculé sur ces paquets mais ont dû écrire du code autour. Ces
 manques sont comblés dans les paquets. Tout est rétrocompatible, sauf un défaut relevé (voir « Rupture »).
 
 ### `@astratra/memory` 2.0.0
@@ -16,7 +24,7 @@ manques sont comblés dans les paquets. Tout est rétrocompatible, sauf un défa
   `maxActive: 300`.
 
 #### Modifié
-- **Plafond de souvenirs : 1000 par personne au lieu de 300** (décision de Kongo). Une personne qui avait
+- **Plafond de souvenirs : 1000 par personne au lieu de 300** (décision de conception). Une personne qui avait
   entre 301 et 1000 souvenirs actifs en garde désormais tous. Pour l'ancien comportement :
   `maxActive: 300`.
 
@@ -98,7 +106,7 @@ manques sont comblés dans les paquets. Tout est rétrocompatible, sauf un défa
   cooldowns/degradation, 12s/45s deadlines, and fallback without tools.
 - Atomic injectable routing state: memory, Redis CAS and PostgreSQL transaction
   adapters; `readAiConfigFromEnv` with configurable variable prefix.
-- `createLocalModelsClient`: Scolaris rerank/NLI/entities/vectors/Whisper HTTP
+- `createLocalModelsClient`: rerank/NLI/entities/vectors/Whisper HTTP
   contracts, Bearer file cache, validated results and independent route circuits.
 - Local-first transcription (Whisper → Groq → Cloudflare), speech (Gemini TTS
   en ligne d'abord, Piper local en repli ; `order` pour inverser), WAV helpers and fastText service language detection with heuristic fallback.
@@ -109,10 +117,10 @@ manques sont comblés dans les paquets. Tout est rétrocompatible, sauf un défa
 
 ## 2026-10-07 — `@astratra/centrale` 1.0.0 et `@astratra/centrale-cli` 1.0.0 : nouveaux paquets
 
-Venus du dépôt de Centrale LJ (`paquets/`), où ils sont nés.
+Venus du dépôt d'un hub de surveillance auto-hébergé (`paquets/`), où ils sont nés.
 
 ### Ajoute
-- `@astratra/centrale` : le paquet de collecte de Centrale LJ (erreurs, plantages, vues, usages,
+- `@astratra/centrale` : le paquet de collecte d'un hub de surveillance auto-hébergé (erreurs, plantages, vues, usages,
   sessions, appels d'IA), masqués à la source et envoyés par lots. Entrées `/node`, `/navigateur`,
   `/expo`, `/ia`, plus `/envoi` (le contrat d'envoi) et `/masquage`, repris par le backend.
   Aucune dépendance.
@@ -298,11 +306,11 @@ Calculé par tri topologique des dépendances internes réelles (voir `docs/PUBL
 `create-astratra-app` en dernier. `bash scripts/publish-all.sh` suit cet ordre et saute les
 six paquets inchangés.
 
-## 2026-09-29 (34) — Tertius reprend ses briques depuis les paquets : ce que la production demandait
+## 2026-09-29 (34) — une application reprend ses briques depuis les paquets : ce que la production demandait
 
 `@astratra/memory` 0.2.0, `@astratra/rag` 0.2.0, `@astratra/ai` 1.5.0, `@astratra/voice` 0.3.0,
 `@astratra/live` 0.2.0 (dépend de `@astratra/voice` ^0.3.0 : publier `voice` d'abord) et
-`@astratra/tooling` 1.3.1, puis `create-astratra-app` 1.6.1. Tertius remplace sa mémoire, sa recherche, sa couche d'IA, sa voix,
+`@astratra/tooling` 1.3.1, puis `create-astratra-app` 1.6.1. L'application remplace sa mémoire, sa recherche, sa couche d'IA, sa voix,
 son direct et ses scripts de déploiement par ces paquets ; ce qui leur manquait y est ajouté.
 
 ### Ajoute
@@ -360,7 +368,7 @@ son direct et ses scripts de déploiement par ces paquets ; ce qui leur manquait
   manuelle ne marque plus l'empreinte native comme publiée ; un succès suivi d'une coupure SSH est
   signalé comme état inconnu.
 
-## 2026-09-28 (33) — extraction Oracle + Tertius : voix, direct, recherche, modèles, publication
+## 2026-09-28 (33) — extraction de deux assistants d'IA : voix, direct, recherche, modèles, publication
 
 Nouveaux paquets `@astratra/rag` 0.1.0, `@astratra/live` 0.1.0 et
 `@astratra/models` 0.1.0. `create-astratra-app` ne les installe pas.
@@ -409,7 +417,7 @@ Nouveaux paquets `@astratra/rag` 0.1.0, `@astratra/live` 0.1.0 et
   `@astratra/credentials` ^0.4.0 et `@astratra/privacy` ^0.3.0. À publier en
   dernier.
 
-## 2026-09-28 (32) — extraction Oracle + Tertius : les souvenirs d'un assistant
+## 2026-09-28 (32) — extraction de deux assistants d'IA : les souvenirs d'un assistant
 
 Nouveau paquet `@astratra/memory` 0.1.0. Aucun autre paquet ne change de
 version ; `create-astratra-app` ne l'installe pas.
@@ -417,7 +425,7 @@ version ; `create-astratra-app` ne l'installe pas.
 ### Ajoute
 
 - `@astratra/memory` (nouveau) — les souvenirs par personne d'un assistant
-  d'IA, extraits d'Oracle (Scolaris, MongoDB) et de Tertius (Postgres), le
+  d'IA, extraits de deux assistants existants (MongoDB et Postgres), le
   meilleur des deux. Un souvenir vit dans un lieu `{ ownerId, scope }` ;
   stockage, vecteurs, modèle, masquage, chiffrement, horloge et identifiants
   injectés, magasin en mémoire fourni avec sa suite de contrat
@@ -448,7 +456,7 @@ version ; `create-astratra-app` ne l'installe pas.
   cheveu (Reanimated, sur le fil UI). « Réduire les animations » : il pâlit
   seulement. Android garde l'onde seule, comme avant.
 
-## 2026-09-23 (30) — extraction Barber Clean : carte d'abonnement et retrait des cartes
+## 2026-09-23 (30) — extraction d'une app de prise de rendez-vous : carte d'abonnement et retrait des cartes
 
 `loyalty` 0.2.0 et `wallet` 0.2.0, ajouts seulement : rien ne change pour ce
 qui existait. Un caret sur une `0.x` ne franchit pas la mineure : passer à
@@ -469,7 +477,7 @@ son plancher ne bouge pas.
   `forgetPass(passType, serial)` sur les deux registres d'appareils. Le README
   explique l'ordre à respecter côté Apple.
 
-## 2026-09-22 (29) — extraction Barber Clean : fidélité et cartes Wallet
+## 2026-09-22 (29) — extraction d'une app de prise de rendez-vous : fidélité et cartes Wallet
 
 `pdf` 0.2.0 (ajouts seulement) ; nouveaux paquets en 0.1.0.
 `create-astratra-app` 1.5.1 écrit le nouveau plancher `@astratra/pdf` `^0.2.0`
@@ -495,7 +503,7 @@ son plancher ne bouge pas.
   coupe), `drawQrMatrix` (QR vectoriel depuis une matrice), `drawSocialLogo`
   (logos officiels Instagram, TikTok, Snapchat aux couleurs des marques).
 
-## 2026-09-19 (28) — extraction Scolaris, lot de septembre
+## 2026-09-19 (28) — extraction d'une application de gestion scolaire, lot de septembre
 
 Mineures seulement : chaque paquet ajoute des fonctions sans en retirer.
 `native` 0.2.0, `i18n-server` 0.2.0, `notify` 0.3.0, `ai` 1.3.0,
@@ -560,7 +568,7 @@ Mineures seulement : chaque paquet ajoute des fonctions sans en retirer.
 
 - `@astratra/notify` — `broadcast` envoyait un abonnement après l'autre : un
   fournisseur lent retenait tous les suivants. C'est ce schéma qui a retardé de
-  six heures les poussées Android de Scolaris le 16/09/2026. Envoi désormais en
+  six heures les poussées Android d'une application en production le 16/09/2026. Envoi désormais en
   parallèle borné (`concurrency`, 10 par défaut) avec une limite de temps par
   envoi (`timeoutMs`), forme de retour inchangée.
 - Racine — `npm test` lance désormais tous les espaces de travail, chacun avec

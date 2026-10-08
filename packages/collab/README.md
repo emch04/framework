@@ -1,7 +1,7 @@
 # @astratra/collab
 
 Édition collaborative en temps réel, pour un wiki (le module « Connaissances »
-de Cortex) ou tout document partagé : plusieurs personnes écrivent dans le
+d'un outil de gestion) ou tout document partagé : plusieurs personnes écrivent dans le
 même texte en même temps, chacune voit les autres en direct, et personne
 n'écrase personne.
 

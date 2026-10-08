@@ -68,7 +68,7 @@ un `env` et un `logFile` (sortie longue envoyée dans un fichier).
 `--dry-run` affiche la configuration effective sans prendre de verrou, lancer
 les tests, pousser, ouvrir SSH ni sonder la production. Le marqueur distant
 vaut `@@astratra` par défaut ; `deploy.remote.marker` permet par exemple
-`@@tertius`, et `showMarkers: true` les affiche aussi dans le terminal. Le
+`@@exemple`, et `showMarkers: true` les affiche aussi dans le terminal. Le
 commit poussé est vérifié avec `git ls-remote`, et un code SSH
 non nul reste un échec même si le serveur a imprimé `result=deployed`.
 

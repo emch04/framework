@@ -9,7 +9,7 @@ et émulateur Android contre une API générée.
 Les applications clientes arrivent avec leur programme, une par une. Chacune
 redemande les mêmes briques : se connecter, garder la session en lieu sûr,
 déverrouiller par biométrie, recevoir une notification, revenir d'une page de
-paiement. Ces briques existent, écrites et éprouvées, dans `scolaris-mobile`
+paiement. Ces briques existent, écrites et éprouvées, dans une application mobile existante
 — mêlées au métier scolaire.
 
 Ce travail les sort de là, sans le métier, pour qu'un projet client parte d'un

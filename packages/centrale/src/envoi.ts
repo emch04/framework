@@ -1,5 +1,5 @@
 /**
- * Le format d'envoi de Centrale LJ : ce que les paquets de collecte envoient au backend.
+ * Le format d'envoi du paquet de collecte : ce que les paquets de collecte envoient au backend.
  * C'est le contrat entre `paquets/centrale` (qui écrit) et `backend` (qui reçoit).
  * Aucune dépendance à Sentry : format propre, versionné par `version`.
  *

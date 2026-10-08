@@ -90,9 +90,9 @@ describe('a host with its own tools and its own prompt', () => {
     await s.session.close();
   });
   test('the instructions are the host\'s own, given as text or made from the call and its mode, and the shield masks them', async () => {
-    const built = setup({ instructions: 'You are Tertius, Marie.', shield: { input: (text) => text.replace('Marie', '[M]') } });
+    const built = setup({ instructions: 'You are Léa, Marie.', shield: { input: (text) => text.replace('Marie', '[M]') } });
     await built.session.start();
-    expect(built.provider.connect.mock.calls[0][0].instructions).toBe('You are Tertius, [M].');
+    expect(built.provider.connect.mock.calls[0][0].instructions).toBe('You are Léa, [M].');
     await built.session.close();
     const made = jest.fn(async ({ context, mode }) => `${context.userId} in ${mode}`);
     const s = setup({ instructions: made });
@@ -229,16 +229,16 @@ describe('the confidential path where the provider still speaks', () => {
   }
 
   test('the sound never reaches the provider: the sentences do, as text', async () => {
-    const s = relayed({ items: [[{ text: 'Bonjour Tertius', confidence: 0.9, audio: 'SEG' }]] });
+    const s = relayed({ items: [[{ text: 'Bonjour Léa', confidence: 0.9, audio: 'SEG' }]] });
     await s.session.start();
     expect(s.session.mode).toBe('confidential');
     expect(s.provider.connect).toHaveBeenCalledTimes(1);
     await s.session.receive(JSON.stringify({ type: 'audio', data: 'PCM' }));
     expect(s.transcriber.push).toHaveBeenCalledWith('PCM');
-    expect(s.line.sendText).toHaveBeenCalledWith('Bonjour Tertius');
+    expect(s.line.sendText).toHaveBeenCalledWith('Bonjour Léa');
     expect(s.line.sendAudio).not.toHaveBeenCalled();
-    expect(s.sent.find((message) => message.type === 'heard')).toEqual({ type: 'heard', text: 'Bonjour Tertius' });
-    expect(s.session.turns).toEqual([{ who: 'person', text: 'Bonjour Tertius' }]);
+    expect(s.sent.find((message) => message.type === 'heard')).toEqual({ type: 'heard', text: 'Bonjour Léa' });
+    expect(s.session.turns).toEqual([{ who: 'person', text: 'Bonjour Léa' }]);
     await s.session.close();
   });
   test('the filters come first, and a muted microphone sends nothing', async () => {

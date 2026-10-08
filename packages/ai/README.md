@@ -6,7 +6,7 @@ d'agent minimale à tool-calling. Dépend de `@astratra/core`.
 Ce package ne fournit volontairement aucun catalogue de modèles, aucun SDK
 provider, aucun outil métier — tout ça vient du projet consommateur. Le routeur
 configuré, les clients de modèles locaux et les services vocaux ci-dessous
-partagent désormais les mécanismes utilisés par Oracle et Tertius. Ce
+partagent désormais les mécanismes utilisés par deux assistants d'IA en production. Ce
 qu'il fournit, c'est le mécanisme durement acquis : suivi de quota, ordre de
 fallback, cooldown/dégradation, deux adaptateurs HTTP sans dépendance (le
 format OpenAI et Gemini), et deux boucles d'agent (protocole écrit, ou
@@ -631,7 +631,7 @@ là où un tableau tenait, se tromper vers le grand coûte un tableau illisible.
 La règle `paragraphs` est **obligatoire** : un pack de langue qui ne l'a pas est
 refusé à la création, pas découvert sur un écran.
 
-## Configured routing (Oracle and Tertius)
+## Configured routing (two production assistants)
 
 `createConfiguredRouter` builds HTTP providers and routes by usage on top of
 `createProviderRouter`. Existing exports and their defaults remain compatible.
@@ -685,12 +685,12 @@ router.stop();                        // rejects subsequent calls; no owned DB c
 
 Without `usage`, tools select `tools`, images select `vision`, explicit `json:
 true` selects `json`, simple requests select `quick`, and the rest selects
-`chat`. `estimateRequestComplexity` retains Oracle's word/keyword rules (with
+`chat`. `estimateRequestComplexity` retains the word/keyword rules of the reference assistant (with
 English equivalents); you can override `complexity`. Within a list, intent
 preferences come first, then compatible complexity, then other models; preview
 models come last. Without a usage list, provider/model declaration order is the
-fallback order. Thus Oracle's Groq → Mistral → Gemini → Vercel → Ollama and
-Tertius's distinct quick/chat/pilot orders are both expressible.
+fallback order. Thus one assistant's Groq → Mistral → Gemini → Vercel → Ollama and
+another assistant's distinct quick/chat/pilot orders are both expressible.
 
 Model fields: `vision`, `visionOnly`, `complexity`, `extra`, `maxTokens`,
 `maxInputTokens`, `noAnalytics`, `languages`, `preview`, `disabled`, `rpm`, `rpd`,
@@ -792,7 +792,7 @@ object, never an `.env` file. `ARIA_` or another prefix works identically.
 | `IA_WAITED_TIMEOUT_MS`, `IA_BACKGROUND_TIMEOUT_MS` | Defaults 12000/45000 |
 | `IA_COOLDOWN_MS`, `IA_DEGRADED_MS`, `IA_MAX_FAILURES` | Defaults 120000/300000/3 |
 | `IA_STATE_PREFIX`, `IA_WHEN_ALL_COOLING`, `IA_RESERVE_VISION` | Namespace, skip/try, true/false |
-| `IA_MODELS_URL`, `IA_MODELS_TOKEN_FILE` | Optional Scolaris model server and its Bearer file |
+| `IA_MODELS_URL`, `IA_MODELS_TOKEN_FILE` | Optional local model server and its Bearer file |
 | `IA_TTS_URL`, `IA_TTS_TOKEN_FILE` | Optional Piper server and Bearer file |
 | `IA_LANGUAGE_URL`, `IA_LANGUAGE_TIMEOUT_MS` | Optional fastText server; default timeout 800 |
 | `IA_GROQ_WHISPER_URL`, `IA_GROQ_WHISPER_MODELS` | Full endpoint, JSON model IDs; defaults Groq transcription endpoint and turbo/large-v3 |
@@ -813,7 +813,7 @@ const config = readAiConfigFromEnv({ prefix: 'ARIA_' });
 const router = createConfiguredRouter({ ...config, store });
 ```
 
-## Local models (Scolaris HTTP protocol)
+## Local models (HTTP protocol)
 
 ```js
 const { createLocalModelsClient } = require('@astratra/ai');
@@ -844,7 +844,7 @@ authentication header is sent. The server receives `X-Delai-Ms`. Defaults per
 route: rerank 1000ms, NLI/vector 1500ms, entities 800ms, transcription 15000ms.
 Each route has its own three-failure/60-second circuit, with one recovery probe;
 4xx refusals do not open it. Python engines, ONNX runtimes and weights are not
-bundled or downloaded by this client. Tertius's generic in-process embedding
+bundled or downloaded by this client. A generic in-process embedding
 and native voice primitives remain in `@astratra/rag` and `@astratra/voice`.
 
 ## Transcription, speech and language

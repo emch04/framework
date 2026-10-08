@@ -25,7 +25,7 @@ afterEach(async () => { await fixture?.close(); await rm(directory, { recursive:
 const client = (options = {}) => createLocalModelsClient({ baseUrl: fixture.url, ...options });
 const pcm = () => Buffer.alloc(6400).toString('base64');
 
-test('all five local routes follow the exact Scolaris wire contract and vector space', async () => {
+test('all five local routes follow the exact local model wire contract and vector space', async () => {
   const local = client();
   expect(await local.reclasser('question', ['one', 'two'])).toEqual([0, 0.1]);
   expect(await local.nli([{ premisse: 'a', hypothese: 'b' }])).toEqual([{ accord: 0.1, neutre: 0.1, contradiction: 0.8 }]);

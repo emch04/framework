@@ -1,7 +1,7 @@
 {
   "name": "@astratra/centrale-cli",
-  "version": "1.0.0",
-  "description": "Outil en ligne de commande de Centrale LJ : identifiants de débogage dans les builds, envoi des cartes de code, déclaration des déploiements.",
+  "version": "1.0.1",
+  "description": "Outil en ligne de commande pour un tableau de bord de surveillance auto-hébergé : identifiants de débogage dans les builds, envoi des cartes de code, déclaration des déploiements.",
   "type": "module",
   "bin": {
     "centrale": "./dist/cli.js"

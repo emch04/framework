@@ -12,7 +12,7 @@ const refuses = (uri, reason, options) => {
 describe('garde-fou des URI de base de test', () => {
   test('accepte les bases locales', () => {
     for (const uri of [
-      'mongodb://localhost:27017/scolaris_test',
+      'mongodb://localhost:27017/app_test',
       'mongodb://127.0.0.1:55000/?directConnection=true',
       'mongodb://user:pa%40ss@[::1]:27017/app',
       'postgres://test:test@localhost:5432/astratra_test',
@@ -38,7 +38,7 @@ describe('garde-fou des URI de base de test', () => {
   });
 
   test('refuse tout ce qui évoque la production', () => {
-    refuses('mongodb://localhost/scolaris_prod', 'PRODUCTION_NAME');
+    refuses('mongodb://localhost/app_prod', 'PRODUCTION_NAME');
     refuses('mongodb://localhost/production', 'PRODUCTION_NAME');
     refuses('mongodb://mongo-prod:27017/app_test', 'PRODUCTION_NAME');
     refuses('postgres://u:p@prod.localhost/app', 'PRODUCTION_NAME');
@@ -49,8 +49,8 @@ describe('garde-fou des URI de base de test', () => {
     refuses('mongodb://203.0.113.9:27017/app_test', 'REMOTE_HOST');
     refuses('mongodb://10.0.0.5:27017/app_test', 'REMOTE_HOST');
     const allow = { allowRemoteHosts: ['ci-db.example.org'] };
-    refuses('mongodb://ci-db.example.org:27017/scolaris', 'REMOTE_NOT_MARKED_TEST', allow);
-    expect(isSafeTestDatabaseUri('mongodb://ci-db.example.org:27017/scolaris_test', { env: {}, ...allow })).toBe(true);
+    refuses('mongodb://ci-db.example.org:27017/app', 'REMOTE_NOT_MARKED_TEST', allow);
+    expect(isSafeTestDatabaseUri('mongodb://ci-db.example.org:27017/app_test', { env: {}, ...allow })).toBe(true);
   });
 
   test('un hôte distant parmi plusieurs suffit à refuser', () => {
@@ -58,9 +58,9 @@ describe('garde-fou des URI de base de test', () => {
   });
 
   test('refuse l’URI de l’environnement tant que la base n’est pas marquée test', () => {
-    const env = { MONGODB_URI: 'mongodb://localhost:27017/scolaris' };
-    refuses('mongodb://localhost:27017/scolaris', 'SAME_AS_CONFIGURED', { env });
-    expect(isSafeTestDatabaseUri('mongodb://localhost:27017/scolaris_test', { env })).toBe(true);
+    const env = { MONGODB_URI: 'mongodb://localhost:27017/app' };
+    refuses('mongodb://localhost:27017/app', 'SAME_AS_CONFIGURED', { env });
+    expect(isSafeTestDatabaseUri('mongodb://localhost:27017/app_test', { env })).toBe(true);
   });
 
   test('refuse une URI illisible', () => {

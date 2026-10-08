@@ -17,10 +17,10 @@ function remoteConfig(root, overrides = {}) {
     deploy: {
       remote: {
         host: 'app-vps',
-        name: 'Tertius',
-        appUser: 'tertius',
-        appDir: '/home/tertius/app',
-        nodeDir: '/home/tertius/node',
+        name: 'Exemple',
+        appUser: 'exemple',
+        appDir: '/home/exemple/app',
+        nodeDir: '/home/exemple/node',
         pm2: { ecosystem: 'deploy/ecosystem.config.cjs' },
         preSteps: [{ name: 'tests serveur', command: 'npm test', cwd: 'apps/server' }],
         lockFile: path.join(root, '.deploy.lock'),
@@ -77,7 +77,7 @@ describe('remote deploy flow', () => {
     const order = runner.calls.map((call) => `${call.command} ${call.args[0]}`);
     expect(order.indexOf('git push')).toBeLessThan(order.findIndex((entry) => entry.startsWith('ssh')));
     const ssh = runner.calls.find((call) => call.command === 'ssh');
-    expect(ssh.args.slice(0, 9)).toEqual(['-o', 'BatchMode=yes', '-o', 'ConnectTimeout=15', 'app-vps', 'bash', '-s', '--', 'tertius']);
+    expect(ssh.args.slice(0, 9)).toEqual(['-o', 'BatchMode=yes', '-o', 'ConnectTimeout=15', 'app-vps', 'bash', '-s', '--', 'exemple']);
     expect(ssh.options.input).toBe(REMOTE_DEPLOY_SCRIPT);
     expect(ssh.args).toContain(SHA);
     expect(ssh.args).toContain("'pm2 startOrReload deploy/ecosystem.config.cjs --update-env && pm2 save'");
@@ -158,10 +158,10 @@ describe('remote deploy flow', () => {
   test('a project can show its remote marker lines in the terminal', async () => {
     const root = createTempProject();
     const output = createOutput();
-    const config = remoteConfig(root, { marker: '@@tertius', showMarkers: true });
-    const { result } = await deploy(root, gitWorld({ sshStdout: `@@tertius prev=${PREV}\n@@tertius result=deployed\n` }), { config, output });
+    const config = remoteConfig(root, { marker: '@@exemple', showMarkers: true });
+    const { result } = await deploy(root, gitWorld({ sshStdout: `@@exemple prev=${PREV}\n@@exemple result=deployed\n` }), { config, output });
     expect(result.exitCode).toBe(0);
-    expect(output.lines).toContain(`  @@tertius prev=${PREV}`);
+    expect(output.lines).toContain(`  @@exemple prev=${PREV}`);
   });
 
   test('dry run shows the plan without tests, push, ssh, public fetch or lock', async () => {
@@ -223,7 +223,7 @@ describe('remote deploy building blocks', () => {
     const remote = resolveRemoteConfig('/r', remoteConfig('/r'));
     const args = buildRemoteDeployArgs(remote, SHA);
     expect(args).toEqual([
-      'tertius', '/home/tertius/app', '/home/tertius/node', SHA, 'origin', 'main',
+      'exemple', '/home/exemple/app', '/home/exemple/node', SHA, 'origin', 'main',
       '(^|/)(package-lock\\.json|npm-shrinkwrap\\.json|package\\.json)$', 'npm ci --omit=dev',
       'pm2 startOrReload deploy/ecosystem.config.cjs --update-env && pm2 save',
       'http://127.0.0.1:3100/health\nhttp://127.0.0.1:3101/health', '12', '5', '5', '1', '@@astratra'
@@ -249,9 +249,9 @@ describe('remote deploy building blocks', () => {
   });
 
   test('project marker is used by the remote deploy script and understood locally', () => {
-    const remote = resolveRemoteConfig('/r', remoteConfig('/r', { marker: '@@tertius' }));
-    expect(buildRemoteDeployArgs(remote, SHA).at(-1)).toBe('@@tertius');
-    expect(parseMarkers('@@tertius prev=abc\n@@tertius result=rolled-back\n', '@@tertius')).toMatchObject({ prev: 'abc', result: 'rolled-back' });
+    const remote = resolveRemoteConfig('/r', remoteConfig('/r', { marker: '@@exemple' }));
+    expect(buildRemoteDeployArgs(remote, SHA).at(-1)).toBe('@@exemple');
+    expect(parseMarkers('@@exemple prev=abc\n@@exemple result=rolled-back\n', '@@exemple')).toMatchObject({ prev: 'abc', result: 'rolled-back' });
   });
 });
 
@@ -298,7 +298,7 @@ describe('health checks', () => {
 
   test('deploy:health gathers public, internal, pm2 and backup into one sentence', async () => {
     const root = createTempProject();
-    const config = remoteConfig(root, { status: { pm2Apps: ['api', 'ai'], backupLog: '/home/tertius/backup.log', backupPattern: 'backup sent', backupMaxAgeDays: 1 } });
+    const config = remoteConfig(root, { status: { pm2Apps: ['api', 'ai'], backupLog: '/home/exemple/backup.log', backupPattern: 'backup sent', backupMaxAgeDays: 1 } });
     const runner = createFakeRunner(() => ({
       stdout: [
         '@@astratra url=200 http://127.0.0.1:3100/health',
@@ -322,6 +322,6 @@ describe('health checks', () => {
     const fine = await runHealth(root, config, { output: createOutput(), runProcess: createFakeRunner(() => ({ stdout: '@@astratra url=200 a\n@@astratra url=200 b' })), fetch: okFetch() });
     expect(fine).toMatchObject({ exitCode: 0, sentence: 'Tout va bien.' });
     const down = await runHealth(root, config, { output: createOutput(), runProcess: createFakeRunner(() => ({ code: 255 })), fetch: okFetch() });
-    expect(down.problems).toEqual(['Tertius ne repond pas en SSH']);
+    expect(down.problems).toEqual(['Exemple ne repond pas en SSH']);
   });
 });

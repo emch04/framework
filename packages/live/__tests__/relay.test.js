@@ -25,11 +25,11 @@ function build({ items = [], failure = null, allowCloudFallback = true, finish =
 }
 
 test('a sure sentence is shown, then handed on as text', async () => {
-  const r = build({ items: [[{ text: ' Bonjour Tertius ', confidence: 0.9, audio: 'A' }, { text: '   ', confidence: 0.9 }]] });
+  const r = build({ items: [[{ text: ' Bonjour Léa ', confidence: 0.9, audio: 'A' }, { text: '   ', confidence: 0.9 }]] });
   await r.relay.push('PCM');
-  expect(r.sent).toEqual([{ type: 'heard', text: 'Bonjour Tertius' }]);
-  expect(r.heard).toEqual(['Bonjour Tertius']);
-  expect(r.sentences).toEqual(['Bonjour Tertius']);
+  expect(r.sent).toEqual([{ type: 'heard', text: 'Bonjour Léa' }]);
+  expect(r.heard).toEqual(['Bonjour Léa']);
+  expect(r.sentences).toEqual(['Bonjour Léa']);
 });
 test('a sentence without a confidence score is trusted', async () => {
   const r = build({ items: [[{ text: 'oui', confidence: null }, { text: 'non' }]] });

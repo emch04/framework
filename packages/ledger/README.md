@@ -85,7 +85,7 @@ Les crochets (`hooks`) servent à brancher un module Comptabilité ou une IA :
 
 ```js
 createLedger({
-  entity: { id: 'cortex' },
+  entity: { id: 'acme' },
   hooks: {
     onProposal: (ecriture, acteur) => notifier('Écriture à valider', ecriture),
     beforeValidate: (ecriture, acteur) => { if (!ecriture.reference) throw new Error('Pièce justificative manquante'); },

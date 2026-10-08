@@ -65,10 +65,10 @@ describe('remote deploy script, executed', () => {
   test('uses the project marker through a real local Git deploy', async () => {
     const { dev, appDir, log } = setup();
     const v2 = commit(dev, { 'version.txt': 'v2\n' }, 'v2');
-    const result = await runDeployScript({ appDir, target: v2, log, marker: '@@tertius' });
+    const result = await runDeployScript({ appDir, target: v2, log, marker: '@@exemple' });
     expect(result.code).toBe(0);
     expect(result.markers.result).toBe('deployed');
-    expect(result.stdout).toContain('@@tertius result=deployed');
+    expect(result.stdout).toContain('@@exemple result=deployed');
   });
   test('healthy release: reset to target, reload once, no install when dependencies did not move', async () => {
     const { dev, appDir, v1, log } = setup();

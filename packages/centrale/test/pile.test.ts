@@ -6,20 +6,20 @@ import { analyserPile, estFichierApp } from '../src/pile.ts';
 test('V8 / Node : fonctions, anonymes, async, new, internes, node_modules, racine', () => {
   const pile = [
     'TypeError: Cannot read properties of undefined (reading \'x\')',
-    '    at lireEleve (/srv/scolaris/src/eleves.ts:42:13)',
+    '    at lireEleve (/srv/app/src/eleves.ts:42:13)',
     '    at async Promise.all (index 0)',
-    '    at async chargerTout (file:///srv/scolaris/src/charger.ts:7:3)',
-    '    at new Service (/srv/scolaris/src/service.ts:3:9)',
-    '    at /srv/scolaris/src/anonyme.ts:1:2',
-    '    at Layer.handle [as handle_request] (/srv/scolaris/node_modules/express/lib/router/layer.js:95:5)',
+    '    at async chargerTout (file:///srv/app/src/charger.ts:7:3)',
+    '    at new Service (/srv/app/src/service.ts:3:9)',
+    '    at /srv/app/src/anonyme.ts:1:2',
+    '    at Layer.handle [as handle_request] (/srv/app/node_modules/express/lib/router/layer.js:95:5)',
     '    at Object.<anonymous> (C:\\projets\\app\\index.js:5:1)',
     '    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)',
     '    at Module._compile (internal/modules/cjs/loader.js:999:30)',
     '    at Array.map (<anonymous>)',
-    '    at eval (eval at construire (/srv/scolaris/src/dyn.ts:4:5), <anonymous>:1:1)',
+    '    at eval (eval at construire (/srv/app/src/dyn.ts:4:5), <anonymous>:1:1)',
     '    at JSON.parse (native)'
   ].join('\n');
-  const cadres = analyserPile(pile, { racine: '/srv/scolaris/' });
+  const cadres = analyserPile(pile, { racine: '/srv/app/' });
   assert.deepEqual(cadres, [
     { fichier: 'src/eleves.ts', fonction: 'lireEleve', ligne: 42, colonne: 13, app: true },
     { fichier: '<interne>', fonction: 'Promise.all', app: false },

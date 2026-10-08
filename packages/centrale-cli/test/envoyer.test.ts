@@ -97,9 +97,9 @@ test('un jeton refusé (401) arrête tout, sans réessayer', async () => {
 
 test('déclarer un déploiement', async () => {
   const b = backend();
-  await declarerDeploiement(b.connexion, { version: '2.14.0', commit: 'abc123', depot: 'kongo/scolaris', environnement: 'production' });
+  await declarerDeploiement(b.connexion, { version: '2.14.0', commit: 'abc123', depot: 'exemple/app', environnement: 'production' });
   assert.equal(b.requetes[0].url, 'https://centrale.exemple.fr/v1/deploiements');
-  assert.deepEqual(b.requetes[0].corps, { version: '2.14.0', commit: 'abc123', depot: 'kongo/scolaris', environnement: 'production' });
+  assert.deepEqual(b.requetes[0].corps, { version: '2.14.0', commit: 'abc123', depot: 'exemple/app', environnement: 'production' });
 });
 
 test('la commande : variables d\'environnement, options et codes de sortie', async () => {
@@ -122,8 +122,8 @@ test('la commande : variables d\'environnement, options et codes de sortie', asy
   const env = { CENTRALE_JETON: JETON, CENTRALE_ADRESSE: 'https://centrale.exemple.fr' };
   assert.equal(await executer(['envoyer-cartes', dossier, '--version=2.0.0'], { env, sorties, connexion: { fetch: b.fetch, attendre: async () => {} } }), 0);
   assert.match(lignes.at(-1) ?? '', /^1 carte\(s\) envoyée/);
-  assert.equal(await executer(['deploiement', '--version', '2.0.0', '--commit', 'deadbeef', '--depot', 'kongo/x'], { env, sorties, connexion: { fetch: b.fetch } }), 0);
-  assert.deepEqual(b.requetes.at(-1)?.corps, { version: '2.0.0', commit: 'deadbeef', depot: 'kongo/x' });
+  assert.equal(await executer(['deploiement', '--version', '2.0.0', '--commit', 'deadbeef', '--depot', 'exemple/x'], { env, sorties, connexion: { fetch: b.fetch } }), 0);
+  assert.deepEqual(b.requetes.at(-1)?.corps, { version: '2.0.0', commit: 'deadbeef', depot: 'exemple/x' });
   assert.equal(await executer(['deploiement', '--version', '2.0.0'], { env, sorties }), 2, 'sans commit');
 
   b.reponses.push({ statut: 401, json: { message: 'refusé' } });

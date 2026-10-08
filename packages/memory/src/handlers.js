@@ -11,7 +11,7 @@
  */
 const { REASONS } = require('./rules');
 
-const PRIVACY_OPERATIONS = Object.freeze(['list', 'listUnseen', 'markSeen', 'setPaused', 'undo', 'erase', 'eraseAll', 'purgeOwner']);
+const PRIVACY_OPERATIONS = Object.freeze(['list', 'listUnseen', 'markSeen', 'setPaused', 'pause', 'resume', 'undo', 'erase', 'eraseAll', 'purgeOwner']);
 const AI_OPERATIONS = Object.freeze(['update']);
 
 /** True when the operation keeps working with the AI switched off. */
@@ -46,6 +46,14 @@ function createMemoryHandlers(options = {}) {
 
     async setPaused(where, { paused } = {}) {
       return { ok: true, paused: await memory.setPaused(where, paused === true) };
+    },
+
+    async pause(where) {
+      return { ok: true, paused: await memory.pause(where) };
+    },
+
+    async resume(where) {
+      return { ok: true, paused: await memory.resume(where) };
     },
 
     async undo(where, { id } = {}) {

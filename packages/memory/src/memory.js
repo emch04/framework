@@ -28,6 +28,10 @@ const {
 const { cosine, keywordScore, fuseByRank, buildPortrait } = require('./ranking');
 const { readExtraction, defaultConsolidationPrompt, transcriptText } = require('./consolidation');
 
+/* Active memories kept per place before the least important are dropped. */
+const DEFAULT_MAX_ACTIVE = 1000;
+/* What happens when a memory is said again: 'replace' writes a new one, 'reinforce' keeps the same id. */
+const DUPLICATE_MODES = Object.freeze(['replace', 'reinforce']);
 const DEFAULT_KINDS = Object.freeze(['goal', 'preference', 'fact', 'person', 'event', 'feeling']);
 const CHANNELS = Object.freeze({ EXPLICIT: 'explicit', AUTO: 'auto', BACKGROUND: 'background' });
 const REQUIRED_STORE = ['insert', 'get', 'list', 'update', 'remove', 'removeAll', 'purgeOwner', 'getSettings', 'setSettings'];
@@ -109,7 +113,15 @@ function createMemory(options = {}) {
   const logger = { ...NOOP_LOGGER, ...(options.logger || {}) };
   const withLock = options.withLock || createLocalLock();
   const maxTextLength = options.maxTextLength ?? 500;
-  const maxActive = options.maxActive === undefined ? 300 : options.maxActive;
+  const maxActive = options.maxActive === undefined ? DEFAULT_MAX_ACTIVE : options.maxActive;
+  /* The clean-up only starts above this count and brings the person back down to maxActive (default: maxActive itself). */
+  const trimAbove = options.trimAbove === undefined || options.trimAbove === null
+    ? maxActive
+    : Math.max(maxActive || 0, options.trimAbove);
+  if (options.onDuplicate !== undefined && !DUPLICATE_MODES.includes(options.onDuplicate)) {
+    throw new MemoryError('invalid_option', `options.onDuplicate must be one of: ${DUPLICATE_MODES.join(', ')}.`);
+  }
+  const onDuplicate = options.onDuplicate || 'replace';
   const duplicateThreshold = options.duplicateThreshold ?? 0.92;
   const minSimilarity = options.minSimilarity ?? null;
   const consolidationPrompt = options.consolidationPrompt || defaultConsolidationPrompt;
@@ -238,10 +250,12 @@ function createMemory(options = {}) {
    * The cap: least important first, then the longest unused (never used
    * counts from its creation, not from the dawn of time).
    */
-  async function enforceCap(where) {
+  async function enforceCap(where, knownCount) {
     if (!maxActive) return 0;
+    /* A count the caller already holds spares the listing while the person is under the threshold. */
+    if (typeof knownCount === 'number' && knownCount <= trimAbove) return 0;
     const active = await store.list(where, { state: 'active', withVector: false });
-    if (active.length <= maxActive) return 0;
+    if (active.length <= trimAbove) return 0;
     const last = (row) => new Date(row.lastUsedAt || row.createdAt || 0).getTime();
     const victims = active
       .sort((a, b) => a.importance - b.importance || last(a) - last(b))
@@ -256,7 +270,11 @@ function createMemory(options = {}) {
   /**
    * Keep one memory. Returns { ok: true, memory, supersededId } or
    * { ok: false, reason }. A near duplicate (same meaning, or the same words)
-   * is replaced by the new one — undo() brings it back.
+   * is replaced by the new one — undo() brings it back. With
+   * `onDuplicate: 'reinforce'` (option, or `input.onDuplicate` for one call) the
+   * existing memory stays, same id, and takes the higher importance:
+   * { ok: true, memory, supersededId: null, reinforced: true }. There is then
+   * nothing to undo.
    */
   async function remember(whereInput, input = {}) {
     return keep(placeOf(whereInput), input, true);
@@ -287,6 +305,18 @@ function createMemory(options = {}) {
         || null;
 
       const at = now();
+      const mode = DUPLICATE_MODES.includes(input.onDuplicate) ? input.onDuplicate : onDuplicate;
+      if (duplicate && mode === 'reinforce') {
+        const patch = { importance: Math.max(duplicate.importance, candidate.importance), updatedAt: at };
+        /* A vector the memory lacked (or from another model) is worth taking. */
+        if (embedding && !comparable(duplicate, embedding)) {
+          patch.vector = embedding.vector;
+          patch.vectorSource = embedding.source;
+        }
+        const saved = await store.update(where, duplicate.id, patch, { onlyActive: true });
+        if (saved) return { ok: true, memory: publicMemory(await open(saved)), supersededId: null, reinforced: true };
+        /* Changed meanwhile: write ours as a new memory instead. */
+      }
       const record = {
         id: String(generateId()),
         ownerId: where.ownerId,
@@ -308,7 +338,7 @@ function createMemory(options = {}) {
       if (duplicate) {
         await store.update(where, duplicate.id, { supersededBy: record.id, updatedAt: at }, { onlyActive: true });
       }
-      await enforceCap(where);
+      await enforceCap(where, active.length + 1 - (duplicate ? 1 : 0));
       return { ok: true, memory: publicMemory(inserted), supersededId: duplicate ? duplicate.id : null };
     });
   }
@@ -467,6 +497,21 @@ function createMemory(options = {}) {
     return count;
   }
 
+  /**
+   * Mark memories as used (they weigh in the portrait and are kept longest by
+   * the cap) without going through a search. Unknown, superseded or foreign ids
+   * are skipped. Returns how many were marked.
+   */
+  async function markUsed(whereInput, ids = []) {
+    const where = placeOf(whereInput);
+    const at = now();
+    let count = 0;
+    for (const id of [...new Set((ids || []).map(String))]) {
+      if (await store.update(where, id, { lastUsedAt: at }, { onlyActive: true })) count += 1;
+    }
+    return count;
+  }
+
   async function isPaused(whereInput) {
     const where = placeOf(whereInput);
     const settings = await store.getSettings(where);
@@ -478,6 +523,12 @@ function createMemory(options = {}) {
     const settings = await store.setSettings(where, { paused: Boolean(paused) });
     return Boolean(settings && settings.paused);
   }
+
+  /** Pause the person's memory: nothing new is kept or learnt until resume(). What is kept stays readable. */
+  const pause = (whereInput) => setPaused(whereInput, true);
+
+  /** Resume a paused memory. Returns the new state of the pause (false). */
+  const resume = (whereInput) => setPaused(whereInput, false);
 
   /**
    * Search by meaning and by words, fused by rank. Without embeddings (or
@@ -711,8 +762,11 @@ function createMemory(options = {}) {
     list,
     listUnseen,
     markSeen,
+    markUsed,
     isPaused,
     setPaused,
+    pause,
+    resume,
     portrait,
     consolidate,
     reindex,
@@ -726,5 +780,7 @@ module.exports = {
   createLocalLock,
   MemoryError,
   DEFAULT_KINDS,
+  DEFAULT_MAX_ACTIVE,
+  DUPLICATE_MODES,
   CHANNELS
 };

@@ -1,3 +1,4 @@
+const { normalizeScope, sameScope, rowId } = require('./context');
 /**
  * Persistence adapters.
  *
@@ -18,14 +19,17 @@ function clone(value) {
 
 /** In-process adapter for tests and local development. Not persistent. */
 function createMemoryCredentialStore(initialRows = []) {
-  const rows = new Map(initialRows.map((row) => [row.key, { ...row }]));
+  const rows = new Map(initialRows.map((row) => [rowId(row.key, normalizeScope(row.tenant == null && row.environment == null ? undefined : row)), { ...row }]));
 
   return {
-    async findAll() {
-      return [...rows.values()].map((row) => ({ ...row }));
+    supportsScopes: true,
+    async findAll(scope) {
+      scope = normalizeScope(scope);
+      return [...rows.values()].filter(row => sameScope(row, scope)).map((row) => ({ ...row }));
     },
     async upsert(row) {
-      rows.set(row.key, { ...rows.get(row.key), ...row, updatedAt: row.updatedAt || new Date() });
+      const id = rowId(row.key, normalizeScope(row.tenant == null && row.environment == null ? undefined : row));
+      rows.set(id, { ...rows.get(id), ...row, updatedAt: row.updatedAt || new Date() });
     }
   };
 }
@@ -67,18 +71,23 @@ function createMongoCredentialStore(options = {}) {
   const maxTimeMS = options.maxTimeMS || 3000;
 
   return {
-    async findAll() {
-      if (!isReady()) return [];
+    supportsScopes: true,
+    async findAll(scope, { strict = false } = {}) {
+      scope = normalizeScope(scope);
+      if (!isReady()) {
+        if (strict) throw new Error('Credential store unavailable.');
+        return [];
+      }
       const cursor = collection.find(
-        {},
-        { projection: { key: 1, value: 1, secret: 1, updatedAt: 1, updatedBy: 1 } }
+        scope || { tenant: null, environment: null },
+        { projection: { key: 1, value: 1, secret: 1, updatedAt: 1, updatedBy: 1, tenant: 1, environment: 1, version: 1 } }
       );
       const capped = typeof cursor.maxTimeMS === 'function' ? cursor.maxTimeMS(maxTimeMS) : cursor;
       return capped.toArray();
     },
     async upsert(row) {
       await collection.updateOne(
-        { key: row.key },
+        { key: row.key, ...(normalizeScope(row.tenant == null && row.environment == null ? undefined : row) || { tenant: null, environment: null }) },
         { $set: { ...row, updatedAt: row.updatedAt || new Date() } },
         { upsert: true }
       );

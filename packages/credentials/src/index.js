@@ -9,5 +9,9 @@ module.exports = {
   ...require('./routes'),
   ...require('./utils'),
   ...require('./screenState'),
-  ...require('./balance')
+  ...require('./balance'),
+  ...require('./contextCipher'),
+  ...require('./versionedStores'),
+  ...require('./readChallenge'),
+  ...require('./keyProbe')
 };

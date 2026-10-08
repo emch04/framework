@@ -19,13 +19,14 @@
  * the fallback environment variable bring it straight back — and you would
  * never know whether a service is really unplugged.
  *
- * Nothing here throws on a read. No store, no cipher, a corrupted value: it
+ * By default nothing here throws on a read. No store, no cipher, a corrupted value: it
  * falls back to the environment. A payment must not fail because the database
  * hiccuped.
  */
 const AppError = require('@astratra/core').AppError;
 const { assertAdapter, maskSecret } = require('./utils');
 const { createPermissiveGuard } = require('./valueGuard');
+const { normalizeScope, sameScope, rowContext, versionMetadata } = require('./context');
 
 /** Written in place of a value to mean "deliberately unplugged". */
 const DISCONNECTED = '__disconnected__';
@@ -47,7 +48,15 @@ const NOOP_LOGGER = { warn() {}, error() {} };
  * @param {Function} [options.onChange] called after a successful set/disconnect.
  */
 function createCredentialVault(options = {}) {
+  const scope = normalizeScope(options.scope);
+  const strict = options.strict === true;
+  const fallback = options.fallback === undefined ? 'env' : options.fallback;
+  if (!['env', 'none'].includes(fallback)) throw new Error('Invalid credential fallback.');
   const store = options.store;
+  if (scope && !store?.supportsScopes) throw new Error('The store must support credential scopes.');
+  if (options.history && !['appendVersion', 'findVersion', 'listVersions', 'purgeVersions'].every(method => typeof store?.[method] === 'function')) throw new Error('History requires a versioned store.');
+  const retentionMs = options.retentionMs === undefined ? 30 * 86400_000 : options.retentionMs;
+  if (!Number.isFinite(retentionMs) || retentionMs < 0) throw new Error('Invalid retentionMs.');
   assertAdapter(store, ['findAll', 'upsert'], 'options.store');
 
   const catalog = options.catalog;
@@ -78,12 +87,12 @@ function createCredentialVault(options = {}) {
   }
 
   /** Decrypt with the current generation, falling back to the retiring one. */
-  function decryptStored(value) {
+  function decryptStored(value, row) {
     try {
-      return cipher.decrypt(value);
-    } catch (error) {
-      if (!previousCipher) throw error;
-      return previousCipher.decrypt(value);
+      return cipher.decrypt(value, rowContext(row, scope));
+    } catch {
+      if (!previousCipher) throw new Error('Credential decryption refused.');
+      return previousCipher.decrypt(value, rowContext(row, scope));
     }
   }
 
@@ -94,6 +103,18 @@ function createCredentialVault(options = {}) {
   const logger = options.logger || NOOP_LOGGER;
   const onChange = typeof options.onChange === 'function' ? options.onChange : null;
 
+  const onWrite = options.onWrite;
+  if (onWrite !== undefined && typeof onWrite !== 'function') throw new Error('Invalid onWrite.');
+  if (!Number.isFinite(cacheMs) || cacheMs < 0) throw new Error('Invalid cacheMs.');
+  function readFailure(kind) {
+    logger[kind === 'store' ? 'warn' : 'error']?.(`[credentials] ${kind} unreadable`);
+    if (strict) {
+      const error = new Error(`Credential ${kind} read failed.`);
+      error.code = kind === 'store' ? 'CREDENTIAL_STORE_UNREADABLE' : 'CREDENTIAL_VALUE_UNREADABLE';
+      throw error;
+    }
+  }
+  let generation = 0;
   let cache = null;
   let cachedAt = 0;
 
@@ -101,11 +122,13 @@ function createCredentialVault(options = {}) {
   async function load() {
     if (cache && now() - cachedAt < cacheMs) return cache;
 
+    const started = generation;
     let rows;
     try {
-      rows = await store.findAll();
-    } catch (error) {
-      logger.warn(`[credentials] store unreadable: ${error.message}`);
+      rows = await store.findAll(scope || undefined, { strict });
+      if (!Array.isArray(rows) || rows.some(row => !row || typeof row.key !== 'string' || typeof row.value !== 'string' || (scope && !sameScope(row, scope)))) throw new Error();
+    } catch {
+      readFailure('store');
       return cache || new Map();
     }
 
@@ -116,14 +139,15 @@ function createCredentialVault(options = {}) {
         continue;
       }
       try {
-        next.set(row.key, catalog.isSecret(row.key) ? decryptStored(row.value) : row.value);
-      } catch (error) {
+        next.set(row.key, catalog.isSecret(row.key) ? decryptStored(row.value, row) : row.value);
+      } catch {
         /* One unreadable key — rotated cipher, corrupted value — must not take
            the other nineteen down with it. It simply falls back to the env. */
-        logger.error(`[credentials] ${row.key} unreadable: ${error.message}`);
+        readFailure('value');
       }
     }
 
+    if (started !== generation) return load();
     cache = next;
     cachedAt = now();
     return cache;
@@ -137,11 +161,24 @@ function createCredentialVault(options = {}) {
   }
 
   function fromEnv(name) {
-    return env[name] || null;
+    return fallback === 'none' ? null : env[name] || null;
   }
 
   /** The value of one key — store first, environment next, null if unplugged. */
-  async function get(name) {
+  async function get(name, readOptions = {}) {
+    if (readOptions.version !== undefined) {
+      if (!options.history) throw new Error('History is not enabled.');
+      if (!Number.isSafeInteger(readOptions.version) || readOptions.version < 1) throw new Error('Invalid version.');
+      let row;
+      try { row = await store.findVersion(name, readOptions.version, scope || undefined); }
+      catch { readFailure('store'); return null; }
+      if (!row || row.purged || (row.expiresAt && new Date(row.expiresAt).getTime() <= now())) return null;
+      const stored = await load();
+      let value;
+      try { value = row.value === DISCONNECTED ? null : catalog.isSecret(name) ? decryptStored(row.value, row) : row.value; }
+      catch { readFailure('value'); return null; }
+      return guard.mayRead(name, { value, decidingValue: stored.get(guard.decidingKey) }) ? value : null;
+    }
     const stored = await load();
     if (stored.has(name) && readable(name, stored)) return stored.get(name);
     return fromEnv(name);
@@ -170,6 +207,7 @@ function createCredentialVault(options = {}) {
 
   /** Forget the cache: after a write, the new value must serve immediately. */
   function forget() {
+    generation += 1;
     cache = null;
     cachedAt = 0;
   }
@@ -197,33 +235,60 @@ function createCredentialVault(options = {}) {
     assertWritable(name, clean);
     if (!clean) throw new AppError('Provide a value.', 400);
 
+    await write(name, clean, meta, 'set');
+  }
+
+  async function write(name, value, meta, action) {
     const secret = catalog.isSecret(name);
-    await store.upsert({
-      key: name,
-      value: secret ? cipher.encrypt(clean) : clean,
-      secret,
-      updatedBy: meta.updatedBy || null,
-      updatedAt: new Date()
+    const build = (version) => ({
+      key: name, ...(scope || {}), ...(version === undefined ? {} : { version }),
+      value: action === 'disconnect' ? DISCONNECTED : secret
+        ? cipher.encrypt(value, rowContext({ key: name, version }, scope)) : value,
+      secret, updatedBy: meta.updatedBy || null, updatedAt: new Date(now())
     });
+    let row;
+    try {
+      if (options.history) row = await store.appendVersion(name, scope || undefined, build, retentionMs);
+      else { row = build(); await store.upsert(row); }
+    } catch {
+      throw new Error('Credential write failed.');
+    }
     forget();
-    if (onChange) await onChange({ key: name, action: 'set' });
+    const event = { ...versionMetadata(row), action };
+    if (onWrite) {
+      try { await onWrite(event); }
+      catch {
+        const error = new Error('Credential written, but onWrite failed.');
+        error.code = 'CREDENTIAL_AFTER_WRITE_FAILED';
+        error.committed = true;
+        throw error;
+      }
+    }
+    if (onChange) await onChange({ key: name, action });
   }
 
   /** Unplug a key — the environment does NOT take over. */
   async function disconnect(name, meta = {}) {
-    /* Unplugging carries no value to judge, but it is as consequential as
-       plugging in: unplugging a live payment key from a laptop would take
-       production down just as effectively. */
     assertWritable(name, await get(name));
-    await store.upsert({
-      key: name,
-      value: DISCONNECTED,
-      secret: catalog.isSecret(name),
-      updatedBy: meta.updatedBy || null,
-      updatedAt: new Date()
-    });
+    await write(name, null, meta, 'disconnect');
+  }
+
+  async function listVersions(name) {
+    if (!options.history) throw new Error('History is not enabled.');
+    try {
+      const rows = await store.listVersions(name, scope || undefined);
+      return rows.map(versionMetadata);
+    } catch {
+      readFailure('store');
+      return [];
+    }
+  }
+
+  async function purgeVersions() {
+    if (!options.history) throw new Error('History is not enabled.');
+    const count = await store.purgeVersions(new Date(now()), scope || undefined);
     forget();
-    if (onChange) await onChange({ key: name, action: 'disconnect' });
+    return count;
   }
 
   /**
@@ -237,9 +302,11 @@ function createCredentialVault(options = {}) {
   async function status() {
     let rows = [];
     try {
-      rows = (await store.findAll()) || [];
-    } catch (error) {
-      logger.warn(`[credentials] status read failed: ${error.message}`);
+      rows = await store.findAll(scope || undefined, { strict });
+      if (!Array.isArray(rows) || rows.some(row => !row || typeof row.key !== 'string' || typeof row.value !== 'string' || (scope && !sameScope(row, scope)))) throw new Error();
+    } catch {
+      readFailure('store');
+      rows = [];
     }
     const byKey = new Map(rows.map((row) => [row.key, row]));
 
@@ -251,15 +318,15 @@ function createCredentialVault(options = {}) {
         const row = byKey.get(entry.key);
         const disconnected = row?.value === DISCONNECTED;
         const inStore = Boolean(row) && !disconnected;
-        const inEnv = Boolean(env[entry.key]);
+        const inEnv = fallback === 'env' && Boolean(env[entry.key]);
 
         let preview = null;
         if (inStore) {
           try {
-            const value = entry.secret ? decryptStored(row.value) : row.value;
+            const value = entry.secret ? decryptStored(row.value, row) : row.value;
             preview = entry.secret ? maskSecret(value) : value;
-          } catch (error) {
-            logger.error(`[credentials] ${entry.key} unreadable: ${error.message}`);
+          } catch {
+            readFailure('value');
           }
         } else if (inEnv) {
           preview = entry.secret ? maskSecret(env[entry.key]) : env[entry.key];
@@ -295,7 +362,8 @@ function createCredentialVault(options = {}) {
   const isRotating = () => Boolean(previousCipher);
 
   return {
-    get, getMany, stored, set, disconnect, forget, status,
+    scope, get, getMany, stored, set, disconnect, forget, status,
+    listVersions, purgeVersions,
     isRotating, mask: maskSecret, DISCONNECTED,
   };
 }

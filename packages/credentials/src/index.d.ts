@@ -103,7 +103,21 @@ export function createValueGuard(options?: {
 
 export function createPermissiveGuard(): ValueGuard;
 
+export interface CredentialScope { tenant: string; environment: string }
+export interface CredentialContext { tenant: string | null; environment: string | null; name: string; version: number }
+export interface VersionMetadata {
+  key: string; tenant?: string; environment?: string; version?: number;
+  updatedAt: Date | string | null; updatedBy: string | null;
+  retiredAt: Date | string | null; expiresAt: Date | string | null; purged: boolean;
+}
+export interface WriteEvent extends VersionMetadata { action: 'set' | 'disconnect' }
 export interface CredentialRow {
+  tenant?: string;
+  environment?: string;
+  version?: number;
+  retiredAt?: Date | string | null;
+  expiresAt?: Date | string | null;
+  purged?: boolean;
   key: string;
   value: string;
   secret?: boolean;
@@ -112,7 +126,8 @@ export interface CredentialRow {
 }
 
 export interface CredentialStore {
-  findAll(): Promise<CredentialRow[]>;
+  supportsScopes?: boolean;
+  findAll(scope?: CredentialScope, options?: { strict?: boolean }): Promise<CredentialRow[]>;
   upsert(row: CredentialRow): Promise<void>;
 }
 
@@ -141,8 +156,8 @@ export function createMongoCredentialStore(options: {
 export function createMongoChallengeStore(options: { collection: unknown }): ChallengeStore;
 
 export interface FieldCipher {
-  encrypt(plaintext: string): string;
-  decrypt(payload: string): string;
+  encrypt(plaintext: string, context?: CredentialContext): string;
+  decrypt(payload: string, context?: CredentialContext): string;
 }
 
 export interface CredentialStatusEntry {
@@ -170,7 +185,10 @@ export interface CredentialStatus {
 }
 
 export interface CredentialVault {
-  get(key: string): Promise<string | null>;
+  readonly scope: Readonly<CredentialScope> | null;
+  listVersions(key: string): Promise<VersionMetadata[]>;
+  purgeVersions(): Promise<number>;
+  get(key: string, options?: { version?: number }): Promise<string | null>;
   getMany(keys: string[]): Promise<Record<string, string | null>>;
   stored(): Promise<Map<string, string | null>>;
   set(key: string, value: unknown, meta?: { updatedBy?: string | null }): Promise<void>;
@@ -191,6 +209,12 @@ export function createCredentialVault(options: {
   guard?: ValueGuard;
   env?: NodeJS.ProcessEnv;
   cacheMs?: number;
+  strict?: boolean;
+  fallback?: 'env' | 'none';
+  scope?: CredentialScope;
+  history?: boolean;
+  retentionMs?: number;
+  onWrite?: (event: WriteEvent) => void | Promise<void>;
   now?: () => number;
   logger?: { warn?(message: string): void; error?(message: string): void };
   onChange?: (event: { key: string; action: 'set' | 'disconnect' }) => void | Promise<void>;
@@ -396,6 +420,7 @@ export interface CredentialRotation {
 }
 
 export function createCredentialRotation(options: {
+  scope?: CredentialScope;
   store: CredentialStore;
   catalog: CredentialCatalog;
   to: FieldCipher;
@@ -458,3 +483,43 @@ export function cleanUnlockCode(input: unknown, length?: number): string;
 export function readBalance(raw: unknown): BalanceView | undefined;
 /** Most urgent first: empty, critical, low, unreadable. */
 export function balanceAlerts(spaces: CredentialSpaceView[]): Array<{ space: string; key: string; label: string; balance: BalanceView }>;
+
+/** Context is mandatory at runtime; this factory supplies a vault-compatible cipher. */
+export function createContextCipher(options: { key: Buffer }): FieldCipher;
+export interface VersionedCredentialStore extends CredentialStore {
+  appendVersion(key: string, scope: CredentialScope | undefined,
+    build: (version: number) => CredentialRow, retentionMs: number): Promise<CredentialRow>;
+  findVersion(key: string, version: number, scope?: CredentialScope): Promise<CredentialRow | null>;
+  listVersions(key: string, scope?: CredentialScope): Promise<VersionMetadata[]>;
+  purgeVersions(at: Date, scope?: CredentialScope): Promise<number>;
+}
+export function createMemoryVersionedCredentialStore(): VersionedCredentialStore;
+export function createMongoVersionedCredentialStore(options: {
+  collection: unknown; isReady?: () => boolean; maxTimeMS?: number;
+}): VersionedCredentialStore;
+export interface ReadChallengeRecord {
+  id: string; nonce: string; subjectId: string; key: string; version?: number;
+  scope: CredentialScope | null; expiresAt: Date | string;
+}
+export interface ReadChallengeStore {
+  save(record: ReadChallengeRecord): Promise<void>;
+  consume(id: string, subjectId: string | number): Promise<ReadChallengeRecord | null>;
+}
+export function createMemoryReadChallengeStore(): ReadChallengeStore;
+export function createMongoReadChallengeStore(options: { collection: unknown }): ReadChallengeStore;
+export interface ReadChallenge {
+  request(subjectId: string | number, target: { key: string; version?: number; scope?: CredentialScope }): Promise<ReadChallengeRecord>;
+  read(subjectId: string | number, id: string, proof: unknown, vault: CredentialVault): Promise<string | null>;
+}
+export function createReadChallenge(options: {
+  store: ReadChallengeStore;
+  verify: (input: { challenge: ReadChallengeRecord; proof: unknown }) => boolean | Promise<boolean>;
+  ttlMs?: number; now?: () => number;
+}): ReadChallenge;
+export type KeyProbeStatus = 'ok' | 'rejected' | 'quota' | 'unavailable';
+export interface KeyProbe { check(key: string): Promise<{ status: KeyProbeStatus }> }
+export function createKeyProbe<TTransport extends (...args: any[]) => any>(options: {
+  vault: Pick<CredentialVault, 'get'>;
+  probes: Record<string, (value: string, context: { transport: TTransport; signal: AbortSignal }) => KeyProbeStatus | Promise<KeyProbeStatus>>;
+  transport: TTransport; timeoutMs?: number;
+}): KeyProbe;

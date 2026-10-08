@@ -198,3 +198,32 @@ describe('the vault during a rotation', () => {
     })).toThrow(/previousCipher/);
   });
 });
+
+describe('authenticated scope rotation', () => {
+  test('rotation carries tenant/environment/name/version AAD and preserves isolation', async () => {
+    const { createContextCipher } = require('../src');
+    const crypto = require('crypto');
+    const scope = { tenant: 'org', environment: 'production' };
+    const from = createContextCipher({ key: crypto.randomBytes(32) });
+    const to = createContextCipher({ key: crypto.randomBytes(32) });
+    const context = { ...scope, name: 'KEY', version: 0 };
+    const store = createMemoryCredentialStore();
+    const catalog = createCredentialCatalog({ spaces: [{ id: 'keys', keys: [{ key: 'KEY' }] }] });
+    await store.upsert({ key: 'KEY', ...scope, value: from.encrypt('fixture', context) });
+    await store.upsert({ key: 'KEY', value: 'flat-untouched' });
+    const rotation = createCredentialRotation({ store, catalog, scope, from, to });
+    expect(await rotation.apply()).toMatchObject({ scanned: 1, rotated: 1, written: 1 });
+    expect(await rotation.isComplete()).toMatchObject({ complete: true });
+    expect(to.decrypt((await store.findAll(scope))[0].value, context)).toBe('fixture');
+    expect((await store.findAll())[0].value).toBe('flat-untouched');
+  });
+  test('versioned rotation cannot overwrite history and store failures stay safe', async () => {
+    const { createMemoryVersionedCredentialStore } = require('../src');
+    expect(() => createCredentialRotation({ store: createMemoryVersionedCredentialStore() })).toThrow('new version');
+    const rotation = createCredentialRotation({
+      store: { findAll: async () => { throw new Error('internal-detail'); }, upsert: jest.fn() },
+      catalog: { isSecret: () => true }, from: { decrypt() {} }, to: { decrypt() {}, encrypt() {} }
+    });
+    await expect(rotation.plan()).rejects.toThrow('Credential rotation store read failed.');
+  });
+});

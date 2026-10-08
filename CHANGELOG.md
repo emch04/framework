@@ -3,6 +3,26 @@
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Chaque package Astratra est versionné indépendamment.
 
+## 2026-10-08 — `@astratra/credentials` 1.1.0 : coffre strict et isolé
+
+### Ajoute
+- Lecture stricte optionnelle et repli désactivable, erreurs et événements sans valeurs.
+- Espaces par locataire/environnement ; chiffreur AES-256-GCM à contexte AAD
+  (locataire, environnement, nom, version), rotation classique avec contexte.
+- Historique optionnel : écritures atomiques versionnées, lecture courante ou historique,
+  métadonnées, conservation depuis le retrait et purge des anciens chiffrés.
+  Stores mémoire et Mongo dédiés ; contrat injectable pour les autres bases.
+- Crochet `onWrite` après écriture et invalidation locale, erreur déclarant l'écriture
+  validée si le crochet échoue ; documentation du rechargement entre processus.
+- Défi court à consommation atomique pour une lecture, vérificateur injectable,
+  stores mémoire/Mongo ; sondes génériques avec transport injecté et statuts sûrs.
+- Types, exemples et tests de régression ; comportement historique conservé par défaut.
+
+### Corrige
+- Les journaux du coffre et de sa rotation ne reprennent plus les messages bruts
+  du store ou du chiffreur, susceptibles de contenir une valeur.
+- Une lecture en cours ne remet plus une ancienne image en cache après une écriture.
+
 ## 2026-10-08 — `@astratra/ai`: configured routing, local models and voice 1.7.0
 
 ### Added

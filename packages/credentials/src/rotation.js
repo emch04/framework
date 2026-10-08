@@ -23,6 +23,7 @@
  * recognised and left alone, so an interrupted run is simply re-run.
  */
 const { assertAdapter } = require('./utils');
+const { normalizeScope, rowContext } = require('./context');
 
 const DISCONNECTED = '__disconnected__';
 const MAX_SAMPLES = 10;
@@ -36,7 +37,10 @@ const MAX_SAMPLES = 10;
  * @param {object} [options.logger] { warn, error }.
  */
 function createCredentialRotation(options = {}) {
+  const scope = normalizeScope(options.scope);
   const store = options.store;
+  if (scope && !store?.supportsScopes) throw new Error('The store must support credential scopes.');
+  if (typeof store?.appendVersion === 'function') throw new Error('Rotate versioned stores by writing a new version through the vault.');
   assertAdapter(store, ['findAll', 'upsert'], 'options.store');
 
   const catalog = options.catalog;
@@ -75,14 +79,14 @@ function createCredentialRotation(options = {}) {
     if (!catalog.isSecret(row.key)) return { status: 'plain' };
 
     try {
-      to.decrypt(row.value);
+      to.decrypt(row.value, rowContext(row, scope));
       return { status: 'already' };
     } catch {
       /* Not migrated yet — the normal case. */
     }
 
     try {
-      return { status: 'rotated', value: to.encrypt(from.decrypt(row.value)) };
+      return { status: 'rotated', value: to.encrypt(from.decrypt(row.value, rowContext(row, scope)), rowContext(row, scope)) };
     } catch {
       /* Neither generation reads it. We do not guess, and we do not overwrite. */
     }
@@ -105,10 +109,10 @@ function createCredentialRotation(options = {}) {
 
     let rows;
     try {
-      rows = (await store.findAll()) || [];
-    } catch (error) {
-      logger.warn(`[credentials] rotation could not read the store: ${error.message}`);
-      throw error;
+      rows = (await store.findAll(scope || undefined, { strict: true })) || [];
+    } catch {
+      logger.warn?.('[credentials] rotation could not read the store');
+      throw new Error('Credential rotation store read failed.');
     }
 
     for (const row of rows) {
@@ -122,6 +126,7 @@ function createCredentialRotation(options = {}) {
 
       if (decision.status === 'rotated' && apply) {
         await store.upsert({
+          ...row,
           key: row.key,
           value: decision.value,
           secret: true,

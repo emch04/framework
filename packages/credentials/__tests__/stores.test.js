@@ -94,7 +94,7 @@ describe('mongo credential store', () => {
     await store.upsert({ key: 'K', value: 'ciphertext', secret: true });
 
     const [call] = collection.calls.updateOne;
-    expect(call.filter).toEqual({ key: 'K' });
+    expect(call.filter).toEqual({ key: 'K', tenant: null, environment: null });
     expect(call.options).toEqual({ upsert: true });
     expect(call.update.$set.updatedAt).toBeInstanceOf(Date);
   });
@@ -133,4 +133,17 @@ describe('mongo challenge store', () => {
 
     expect(await store.find('42')).toMatchObject({ codeHash: 'abc' });
   });
+});
+
+test('Mongo scopes queries and writes, and excludes scoped rows in the flat namespace', async () => {
+  const collection = fakeCollection();
+  const store = createMongoCredentialStore({ collection });
+  const scope = { tenant: 'org', environment: 'production' };
+  await store.findAll(scope, { strict: true });
+  expect(collection.calls.find[0].filter).toEqual(scope);
+  await store.findAll();
+  expect(collection.calls.find[1].filter).toEqual({ tenant: null, environment: null });
+  await store.upsert({ key: 'K', value: 'ciphertext', ...scope });
+  expect(collection.calls.updateOne[0].filter).toEqual({ key: 'K', ...scope });
+  await expect(store.findAll({ tenant: 'org' })).rejects.toThrow('scope');
 });

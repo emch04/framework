@@ -174,8 +174,12 @@ export interface MemoryOptions {
   withLock?: <T>(where: MemoryPlace, fn: () => Promise<T>) => Promise<T>;
   /** Default 500. */
   maxTextLength?: number;
-  /** Active memories per place. Default 300; 0 or null for no cap. */
+  /** Active memories kept per place; beyond it the least important go first. Default 1000; 0 or null for no cap. */
   maxActive?: number | null;
+  /** The clean-up only starts above this many active memories, then brings the place back to `maxActive`. Default: `maxActive` (clean as soon as it is exceeded). */
+  trimAbove?: number | null;
+  /** What happens when a memory is said again: 'replace' (default) writes a new memory and keeps the old one behind it; 'reinforce' keeps the same id and the higher importance. */
+  onDuplicate?: DuplicateMode;
   /** Cosine at or above which a new memory replaces an old one. Default 0.92. */
   duplicateThreshold?: number;
   /** Cosine below which a meaning match is dropped from recall. Default null (none). */
@@ -195,6 +199,14 @@ export interface MemoryOptions {
 
 export type Refusal = { ok: false; reason: string };
 
+export type DuplicateMode = 'replace' | 'reinforce';
+
+export type RememberResult =
+  | { ok: true; memory: Memory; supersededId: string | null; reinforced?: undefined }
+  /** `onDuplicate: 'reinforce'` met a duplicate: same memory (same id), importance raised. Nothing to undo. */
+  | { ok: true; memory: Memory; supersededId: null; reinforced: true }
+  | Refusal;
+
 export interface RememberInput {
   text: string;
   kind: string;
@@ -205,6 +217,8 @@ export interface RememberInput {
   channel?: MemoryChannel;
   source?: Record<string, unknown>;
   ctx?: unknown;
+  /** Overrides `options.onDuplicate` for this call. */
+  onDuplicate?: DuplicateMode;
 }
 
 export interface RecallInput {
@@ -243,7 +257,7 @@ export interface ConsolidateResult {
 }
 
 export interface MemoryService {
-  remember(where: MemoryWhere, input: RememberInput): Promise<{ ok: true; memory: Memory; supersededId: string | null } | Refusal>;
+  remember(where: MemoryWhere, input: RememberInput): Promise<RememberResult>;
   recall(where: MemoryWhere, input: RecallInput | string): Promise<Memory[]>;
   update(
     where: MemoryWhere,
@@ -259,8 +273,14 @@ export interface MemoryService {
   list(where: MemoryWhere, filter?: { kinds?: string[]; limit?: number }): Promise<Memory[]>;
   listUnseen(where: MemoryWhere): Promise<Memory[]>;
   markSeen(where: MemoryWhere, ids: string[]): Promise<number>;
+  /** Mark memories as used without a search; returns how many (unknown, superseded or foreign ids are skipped). */
+  markUsed(where: MemoryWhere, ids: string[]): Promise<number>;
   isPaused(where: MemoryWhere): Promise<boolean>;
   setPaused(where: MemoryWhere, paused: boolean): Promise<boolean>;
+  /** setPaused(where, true): returns true. */
+  pause(where: MemoryWhere): Promise<boolean>;
+  /** setPaused(where, false): returns false. */
+  resume(where: MemoryWhere): Promise<boolean>;
   portrait(where: MemoryWhere, options?: PortraitOptions & { masked?: boolean }): Promise<string>;
   consolidate(where: MemoryWhere, input: ConsolidateInput): Promise<ConsolidateResult>;
   reindex(options?: { limit?: number; source?: string }): Promise<{ updated: number; failed: number }>;
@@ -279,6 +299,9 @@ export class MemoryError extends Error {
 }
 
 export const DEFAULT_KINDS: readonly string[];
+/** 1000: active memories kept per place unless `maxActive` says otherwise. */
+export const DEFAULT_MAX_ACTIVE: number;
+export const DUPLICATE_MODES: readonly DuplicateMode[];
 export const CHANNELS: Readonly<{ EXPLICIT: 'explicit'; AUTO: 'auto'; BACKGROUND: 'background' }>;
 export const REASONS: Readonly<{
   EMPTY: 'empty';
@@ -398,6 +421,8 @@ export interface MemoryHandlers {
   listUnseen(where: MemoryWhere): Promise<{ ok: true; memories: Memory[] }>;
   markSeen(where: MemoryWhere, input: { ids?: unknown[] }): Promise<{ ok: true; seen: number }>;
   setPaused(where: MemoryWhere, input: { paused?: unknown }): Promise<{ ok: true; paused: boolean }>;
+  pause(where: MemoryWhere): Promise<{ ok: true; paused: true }>;
+  resume(where: MemoryWhere): Promise<{ ok: true; paused: false }>;
   undo(where: MemoryWhere, input: { id?: string }): Promise<{ ok: true; undone: true } | Refusal>;
   erase(where: MemoryWhere, input: { id?: string }): Promise<{ ok: true; erased: true } | Refusal>;
   eraseAll(where: MemoryWhere): Promise<{ ok: true; erased: number }>;
@@ -422,7 +447,67 @@ export interface ContractRunner {
   expect?: (value: unknown) => any;
   /** Makes every id the suite uses (missing ones included), for a store whose ids have a shape, a UUID for instance. */
   newId?: () => string;
+  /**
+   * The value to use for a scope the suite names ('scope-1', 'scope-2'), for a store whose scope is a foreign key or has a shape:
+   * create the organisation row, return its id. Called with the store being tested; the same name must give the same value for that store.
+   */
+  makeScope?: (name: string, store: MemoryStore) => Awaitable<string>;
+  /** Same for the owners the suite names ('owner-a', 'owner-b', 'owner-z'). */
+  makeOwner?: (name: string, store: MemoryStore) => Awaitable<string>;
+  /** Size of the vectors the store holds (a pgvector column has a fixed one): the suite pads its test vectors with zeros to it. */
+  vectorDimensions?: number;
 }
 
 export function runStoreContract(makeStore: () => Awaitable<MemoryStore>, runner?: ContractRunner): void;
 export function contractRecord(overrides?: Partial<MemoryRecord>): MemoryRecord;
+
+/* ---- PostgreSQL store ---- */
+
+/** The query function of a pg Pool, a pg client (inside a transaction too) or any compatible adapter. */
+export interface PostgresExecutor {
+  query(sql: string, params?: unknown[]): Promise<{ rows: any[]; rowCount?: number | null }>;
+}
+
+export interface PostgresSchemaOptions {
+  /** Memories table. Default 'memories'; settings are `${table}_settings`, consolidation marks `${table}_refs`. A schema prefix ('ia.memories') is accepted. */
+  table?: string;
+  settingsTable?: string;
+  refsTable?: string;
+  /** Column type of the memory id. Default 'text'. */
+  idType?: 'text' | 'uuid';
+  /** Column type of the owner (the person). Default 'text'. */
+  ownerType?: 'text' | 'uuid';
+  /** Column type of the scope (organisation, workspace). Default 'text' (no scope = ''). */
+  scopeType?: 'text' | 'uuid';
+  /** Makes the scope a foreign key, e.g. 'organisations(id)' (ON DELETE CASCADE). Needs a scopeType matching the referenced column. */
+  scopeReferences?: string;
+  /** Where vectors live: 'json' (default, jsonb; cosine computed in process over one source) or 'pgvector' (vector column, HNSW cosine index). */
+  vectors?: 'json' | 'pgvector';
+  /** Size of the embeddings. Required with vectors: 'pgvector'. */
+  vectorDimensions?: number;
+  /** Text search configuration of the full text index. Default 'simple'; use 'french', 'english'… for stemming. */
+  textSearchConfig?: string;
+  /** false: no full text column, index or search(): the package ranks in process. Default true. */
+  search?: boolean;
+}
+
+/** Options of the store: the same as the schema's (`vectorDimensions` and `scopeReferences` only matter to the schema). */
+export type PostgresMemoryStoreOptions = PostgresSchemaOptions;
+
+/** The SQL that creates the tables and indexes (idempotent). Run it in a migration of your own. */
+export function postgresMemorySchema(options?: PostgresSchemaOptions): string;
+
+/**
+ * The reference PostgreSQL store: parameterised queries, full text search, pgvector optional.
+ * A place or an id not shaped like its column finds nothing (it never throws).
+ */
+export function createPostgresMemoryStore(
+  db: PostgresExecutor,
+  options?: PostgresMemoryStoreOptions
+): MemoryStore & {
+  claimRef(where: MemoryPlace, ref: string): Promise<boolean>;
+  releaseRef(where: MemoryPlace, ref: string): Promise<void>;
+  listNeedingVector(options: { limit?: number; source?: string }): Promise<MemoryRecord[]>;
+  /** Absent with `search: false`. */
+  search?(where: MemoryPlace, input: MemorySearchInput): Promise<{ semantic: MemoryRecord[]; lexical: MemoryRecord[] }>;
+};

@@ -13,7 +13,33 @@ Le paquet de collecte d'un tableau de bord de surveillance auto-hébergé : erre
 npm install @astratra/centrale
 ```
 
+## Exemple minimal
+
+```ts
+import { creerCentrale } from '@astratra/centrale';
+
+const centrale = creerCentrale({
+  cle: 'clj_pub_…',                          // clé publique du projet
+  adresse: 'https://centrale.exemple.fr',    // backend du tableau de bord
+  environnement: 'production',
+  version: '2.14.0'
+});
+
+centrale.vue('/eleve/123');                  // enregistré comme « /eleve/:id »
+centrale.usage('export_pdf', { pages: 3 });
+try {
+  // …
+} catch (e) {
+  centrale.erreur(e);
+}
+await centrale.vider();                      // envoie ce qui reste en file ; ne rejette jamais
+```
+
+Pour Node, le navigateur, Expo ou la mesure des appels d'IA, utilisez le point d'entrée dédié (tableau plus bas).
+
 ## Configuration
+
+Seuls `cle`, `adresse` et `environnement` sont obligatoires.
 
 ```ts
 const config = {
@@ -29,6 +55,19 @@ const config = {
   debug: false                            // true : console.warn des erreurs internes
 };
 ```
+
+| Option | Rôle |
+| --- | --- |
+| `cle` | Clé publique du projet (`clj_pub_…`) : elle sert seulement à envoyer. |
+| `adresse` | Adresse du backend. |
+| `environnement` | `'production'`, `'preproduction'` ou `'developpement'`. |
+| `version` | Version de l'app ou du serveur. |
+| `sel` | Sel servant à hacher l'identifiant d'utilisateur. |
+| `noms` | Noms propres à masquer partout. |
+| `echantillonnage` | Taux de 0 à 1 pour `vues`, `usages` et `ia` ; jamais appliqué aux erreurs ni aux sessions. |
+| `strict` | Ni utilisateur, ni appareil précis. |
+| `desactive` | Coupe tout : l'instance ne fait rien. |
+| `debug` | Affiche les erreurs internes avec `console.warn`. |
 
 ## Les 5 entrées
 
@@ -69,6 +108,16 @@ Si le build est passé par `centrale injecter` (paquet `@astratra/centrale-cli`)
 - Utilisateur : seulement une empreinte SHA-256 salée, jamais l'identifiant brut.
 - Mode `strict` : ni utilisateur, ni appareil précis.
 - Usages : propriétés simples seulement (texte court, nombre, booléen).
+
+## Ce que le paquet ne fait pas
+
+- Il n'héberge ni backend ni tableau de bord : il envoie les événements à l'adresse que vous indiquez.
+- Il ne capte pas le contenu des appels d'IA, ni de cookie, ni de stockage local.
+- Les rapports de plantage natifs (iOS, Android) ne sont pas encore captés : `signalerPlantageNatif` attend un module natif.
+
+## Licence
+
+MIT.
 
 ## Tests
 

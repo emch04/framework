@@ -1,10 +1,18 @@
 # @astratra/fhir
 
-Bases pour la future app santé : les **types FHIR R4** officiels de
+Bases pour une application de santé : les **types FHIR R4** officiels de
 [`@medplum/fhirtypes`](https://github.com/medplum/medplum) (Apache-2.0, types
 seulement, aucun code à l'exécution), plus quelques utilitaires : validation
 minimale de `Patient`, `Encounter` et `Observation`, références, et
 constructeurs avec de vrais codes LOINC et unités UCUM.
+
+## Installation
+
+```sh
+npm install @astratra/fhir
+```
+
+Node 20 ou plus récent.
 
 ## Exemple
 
@@ -23,6 +31,15 @@ validateResource({ resourceType: 'Patient', birthDate: '2026-02-30', gender: 'ho
 
 En TypeScript : `import type { Patient, Observation } from '@astratra/fhir'` (réexport
 des types Medplum).
+
+## Options des constructeurs
+
+| Fonction | Champs acceptés |
+| --- | --- |
+| `buildPatient` | `id`, `family`, `given` (texte ou liste), `gender`, `birthDate`, `phone`, `email`, `identifier` (`{ system?, value }`), `active` (vrai par défaut). |
+| `buildEncounter` | `id`, `status` (`planned` par défaut), `classCode` (`AMB`, `IMP`, `EMER` ou `VR` ; `AMB` par défaut), `subject`, `start`, `end`. |
+| `buildObservation` | `id`, `status` (`final` par défaut), `vital` (clé de `VITAL_SIGNS`) ou `code` (`CodeableConcept`), `value`, `subject`, `encounter`, `effective`. Sans `vital` ni `code`, une erreur est levée. |
+| `quantity(valeur, unité, code?)` | Quantité UCUM. |
 
 ## Ce que la validation contrôle
 
@@ -55,7 +72,17 @@ les URN ne désignent pas de ressource adressable : `null`.
 et diastolique — codes LOINC et unités UCUM. `buildObservation({ vital, value })`
 renseigne la catégorie `vital-signs` et la quantité.
 
+## Ce que le paquet ne fait pas
+
+- Il ne valide pas les autres ressources FHIR (`validateResource` répond `not-supported`).
+- Il ne communique avec aucun serveur FHIR : pas de client HTTP, pas de recherche.
+- Il ne garantit pas la conformité à un profil national ou à une terminologie complète.
+
 ## Version
 
 `@medplum/fhirtypes` déclare Node 22+ dans ses `engines` (simple avertissement
-à l installation) ; rien de Medplum ne s exécute dans ce paquet.
+à l'installation) ; rien de Medplum ne s'exécute dans ce paquet.
+
+## Licence
+
+MIT. Les types réexportés viennent de `@medplum/fhirtypes` (Apache-2.0).

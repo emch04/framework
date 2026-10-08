@@ -6,6 +6,14 @@ statistiques. Le calcul des échéances est celui de **FSRS** (algorithme modern
 de mémoire, meilleur que SM-2) fourni par [`ts-fsrs`](https://github.com/open-spaced-repetition/ts-fsrs)
 (licence MIT) — seule dépendance à l'exécution.
 
+## Installation
+
+```sh
+npm install @astratra/srs
+```
+
+Node 20 ou plus récent.
+
 ## Exemple
 
 ```js
@@ -35,6 +43,20 @@ const stats = await srs.stats({ deckId: 'espagnol' });
 //   reviewsToday, totalReviews, trueRetention, targetRetention }
 ```
 
+## Options de `createSrs`
+
+| Option | Rôle |
+| --- | --- |
+| `store` | Stockage des cartes et du journal des révisions (voir plus bas). |
+| `params` | Paramètres FSRS (voir plus bas). |
+| `newCardsPerDay` | Quota de cartes nouvelles par jour. |
+| `maxReviewsPerDay` | Quota de révisions par jour. |
+| `dayOffsetMinutes` | Décalage horaire de l'apprenant en minutes (60 pour UTC+1). |
+| `clock` | `{ now() }` injectable, pour les tests. |
+| `idGenerator` | Générateur d'identifiants de cartes. |
+
+Méthodes de l'objet rendu : `addCard`, `getCard`, `removeCard`, `preview`, `review`, `dueQueue`, `stats`, `suspend`, `resume`.
+
 ## File du jour
 
 1. cartes en apprentissage ou réapprentissage **déjà échues** ;
@@ -58,7 +80,17 @@ Un stockage est un objet avec `get(id)`, `put(carte)`, `remove(id)`, `list({ dec
 Tout ce qui est stocké est sérialisable en JSON : les dates sont des chaînes ISO.
 `createMemorySrsStore()` est fourni pour les tests.
 
+## Ce que le paquet ne fait pas
+
+- Il ne fournit aucun stockage durable ni interface : le stockage en mémoire sert aux tests, le reste est à brancher.
+- Il ne gère ni synchronisation entre appareils, ni import de paquets de cartes.
+- Il n'optimise pas les poids FSRS à partir de l'historique ; vous pouvez passer les vôtres dans `params.w`.
+
 ## Rétention réelle
 
 `stats().trueRetention` = part des réponses autres que *Again* parmi les cartes
 déjà en révision ; `null` tant qu'il n'y en a pas. À comparer à `targetRetention`.
+
+## Licence
+
+MIT.

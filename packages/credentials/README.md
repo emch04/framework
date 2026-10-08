@@ -406,8 +406,8 @@ moins urgent : épuisé, critique, bas, illisible.
 
 - Il ne fournit **aucun catalogue** de fournisseurs. Quelles clés existent et ce
   qui cesse de marcher sans chacune, c'est ton produit qui le sait.
-- Il ne **chiffre** rien lui-même : passe-lui un cipher, par exemple
-  `createFieldCipher` de `@astratra/security`.
+- Il accepte ton cipher existant ; `createContextCipher` fournit aussi AES-256-GCM
+  avec contexte authentifié (depuis 1.1.0).
 - Il ne décide pas **qui** a le droit d'y toucher.
 - Il n'envoie **aucun e-mail**.
 
@@ -416,3 +416,206 @@ moins urgent : épuisé, critique, bas, illisible.
 ```bash
 npm test --workspace @astratra/credentials
 ```
+
+## Ajouts de la version 1.1.0
+
+Les options existantes gardent leurs valeurs par défaut : espace plat, repli
+sur l'environnement, cache de 60 secondes, aucune version conservée. Les
+ciphers à un argument continuent de fonctionner.
+
+### Lecture stricte et espaces isolés
+
+```js
+const {
+  createCredentialVault, createContextCipher,
+  createMemoryVersionedCredentialStore
+} = require('@astratra/credentials');
+
+const scope = { tenant: 'organisation-123', environment: 'production' };
+const cipher = createContextCipher({ key: cleDe32Octets }); // Buffer, conservé par le serveur
+const store = createMemoryVersionedCredentialStore(); // tests/développement
+const vault = createCredentialVault({
+  catalog, store, cipher, scope,
+  strict: true,
+  fallback: 'none',
+  history: true,
+  retentionMs: 30 * 86400_000,
+  cacheMs: 0,
+  onWrite: async (event) => invaliderOuProgrammerLivraison(event)
+});
+```
+
+`strict: true` lève une erreur constante en cas de lecture du store ou de
+chiffrement illisible, y compris via `getMany`, `stored` et `status`. Son
+`code` est `CREDENTIAL_STORE_UNREADABLE` ou `CREDENTIAL_VALUE_UNREADABLE`.
+L'événement de journal est constant : aucune valeur ni message brut de
+l'adapter. Une clé absente reste une absence : `strict` ne supprime pas à lui
+seul le repli ; `fallback: 'none'` le désactive, même pour une clé absente.
+Un cache encore valide peut servir sa valeur sans lire la base ; avec
+`cacheMs: 0`, chaque lecture contrôle le store. Une erreur de lecture après
+expiration ne sert jamais le cache périmé en mode strict.
+
+`scope: { tenant, environment }` lie toutes les opérations d'un coffre au même
+locataire et au même environnement. Les deux champs sont obligatoires et non
+vides ; leurs valeurs restent celles fournies par l'app (`production`,
+`preproduction`, `development`, ou ses propres noms). Crée un coffre par
+couple, sans partager `process.env` pour hydrater les secrets des locataires.
+L'app choisit le locataire depuis son autorisation serveur.
+
+Les stores mémoire et Mongo fournis isolent aussi l'espace plat (champs
+`tenant`/`environment` absents ou nuls). Pour un store personnalisé, annonce
+`supportsScopes: true` et implémente `findAll(scope?, { strict }?)` et
+`upsert(row)` avec les champs `tenant` et `environment`. Un store sans support
+explicite est refusé pour un coffre scoped. `isReady: false` du store Mongo
+lève en mode strict et garde le retour vide historique autrement.
+Sur une collection Mongo classique existante, remplace un éventuel index
+unique `{ key: 1 }` par `{ tenant: 1, environment: 1, key: 1 }` avant d'utiliser
+plusieurs espaces ; cette migration reste à la charge de l'app.
+
+### Chiffrement authentifié
+
+```js
+const contexte = {
+  tenant: 'organisation-123', environment: 'production', name: 'SERVICE_KEY', version: 1
+};
+const chiffre = cipher.encrypt('valeur', contexte);
+const clair = cipher.decrypt(chiffre, contexte);
+```
+
+Le contexte est fourni séparément, jamais récupéré d'un contexte embarqué
+auquel on ferait confiance. AES-256-GCM authentifie chaque champ en AAD dans
+un ordre canonique. Un autre locataire, environnement, nom ou numéro de version
+refuse le déchiffrement. Les nonces sont aléatoires ; le format JSON transporte
+seulement `v`, `iv`, `tag`, `data`. La clé doit être un Buffer de 32 octets.
+Le coffre transmet automatiquement le contexte : `tenant`/`environment` sont
+`null` dans l'espace plat, `version` vaut `0` sans historique. Le contexte est
+obligatoire pour ce cipher, même si les anciens ciphers l'ignorent.
+
+Changer le format d'anciens chiffrés exige une migration explicite.
+`previousCipher` reste disponible pour lire une ancienne génération ; une
+fois retiré, les anciens chiffrés ne doivent plus dépendre de lui. La rotation
+classique accepte `scope` et transmet l'AAD, mais refuse les stores versionnés :
+avec l'historique, écris une nouvelle version via un coffre utilisant le cipher
+courant et garde l'ancien cipher tant que des versions conservées en ont besoin.
+
+### Versions et conservation
+
+```js
+await vault.set('SERVICE_KEY', 'nouvelle-valeur', { updatedBy: 'acteur-123' });
+await vault.get('SERVICE_KEY');                 // courante
+await vault.get('SERVICE_KEY', { version: 1 }); // ancienne, ou null si absente/expirée/purgée
+await vault.listVersions('SERVICE_KEY');       // métadonnées seulement, récente d'abord
+await vault.purgeVersions();                   // nombre de chiffrés effacés dans CET espace
+```
+
+`history: true` exige un store versionné. Chaque `set` et `disconnect` crée
+une version ; les écritures concurrentes ne réutilisent pas les numéros.
+La conservation démarre au retrait de la version courante : une version
+courante n'expire jamais. `retentionMs: 0` retire immédiatement l'accès aux
+anciennes valeurs. La purge efface leur chiffré, conserve leurs métadonnées
+et marque `purged: true`. Programme `purgeVersions()` périodiquement pour
+l'effacement physique ; une lecture refuse déjà une ancienne valeur expirée.
+Une version absente ne reprend jamais la valeur de l'environnement.
+
+Les métadonnées sont `{ key, tenant?, environment?, version?, updatedAt,
+updatedBy, retiredAt, expiresAt, purged }` ; jamais `value`.
+Les gardes de lecture restent appliqués aux valeurs historiques.
+
+Stores fournis : `createMemoryVersionedCredentialStore()` et
+`createMongoVersionedCredentialStore({ collection, isReady?, maxTimeMS? })`.
+Le second exige une collection dédiée et stocke un document par clé isolée ;
+son `_id` unique et sa révision compare-and-swap rendent l'ajout atomique sans
+transaction multi-document. L'historique de métadonnées grossit : archive-le
+avant la limite de taille des documents Mongo si une clé reçoit beaucoup
+d'écritures. Il ne réutilise pas automatiquement la collection du store plat.
+Pour PostgreSQL ou le schéma existant de la Centrale, fournis cet adapter :
+
+```text
+supportsScopes: true
+findAll(scope?, { strict }?) -> lignes courantes chiffrées
+upsert(row) -> refusé (utiliser appendVersion)
+appendVersion(key, scope, build(version), retentionMs) -> ligne écrite
+findVersion(key, version, scope?) -> ligne ou null
+listVersions(key, scope?) -> métadonnées
+purgeVersions(date, scope?) -> nombre effacé
+```
+
+`appendVersion` doit attribuer une version et appeler `build(version)` dans
+une opération atomique par clé ; `build` chiffre avec ce numéro en AAD.
+Le store retire la version précédente avec `retiredAt`/`expiresAt` et ne
+retourne la nouvelle ligne qu'après validation de l'écriture.
+
+### Crochet et rechargement à chaud
+
+`onWrite(event)` reçoit les métadonnées ci-dessus et `action: 'set' |
+'disconnect'`, après validation de l'écriture et invalidation du cache local.
+`onChange({ key, action })` reste disponible et est appelé ensuite.
+Si `onWrite` échoue, l'erreur constante porte
+`code: 'CREDENTIAL_AFTER_WRITE_FAILED', committed: true` : la clé a été écrite,
+la livraison ou l'invalidation doit être reprise sans réécrire une version.
+Le crochet n'est pas une file durable ni une transaction avec ta livraison.
+
+Dans un processus, les écritures oublient automatiquement le cache ; une
+lecture déjà en cours ne peut pas remettre une ancienne image après cela.
+Entre processus, utilise le crochet pour publier une invalidation vers
+`vault.forget()` dans chaque lecteur, ou `cacheMs: 0` pour relire à chaque
+appel. Un `cacheMs` positif borne le délai d'une modification externe.
+
+### Défi injectable pour UNE lecture
+
+Le déverrouillage par courrier existant (`createUnlockChallenge`) reste
+inchangé. La nouvelle primitive ne crée pas de fenêtre générale :
+
+```js
+const { createReadChallenge, createMemoryReadChallengeStore } = require('@astratra/credentials');
+const lecture = createReadChallenge({
+  store: createMemoryReadChallengeStore(),
+  ttlMs: 60_000, // maximum 5 minutes
+  verify: async ({ challenge, proof }) => verifierPasskeyDeLApp(challenge, proof)
+});
+const defi = await lecture.request('acteur-123', {
+  key: 'SERVICE_KEY', scope, version: 1 // version facultative : courante à la lecture
+});
+const valeur = await lecture.read('acteur-123', defi.id, assertion, vault);
+```
+
+Le vérificateur doit renvoyer exactement `true` et vérifier le nonce,
+l'identité et le contexte signé (ainsi que l'origine/RP pour une passkey).
+Le défi est lié au sujet, à la clé, à la version demandée et à l'espace ; il
+est consommé atomiquement **avant** la vérification, même en cas de refus.
+Il ne peut être rejoué, y compris simultanément ; son expiration est contrôlée
+avant et après la vérification. La lecture ne sert qu'au code serveur autorisé.
+`vault.get()` reste l'API serveur pour les services ; elle n'exige pas ce défi.
+
+`createMongoReadChallengeStore({ collection })` fournit le store durable
+avec `findOneAndDelete` (driver Mongo supportant `includeResultMetadata: false`).
+Les adapters personnalisés implémentent `save(record)` et
+`consume(id, subjectId)` atomiquement. Un index TTL sur `expiresAt` peut nettoyer
+les défis expirés non consommés ; la primitive vérifie toujours la date.
+
+### Sonde d'essai générique
+
+```js
+const { createKeyProbe } = require('@astratra/credentials');
+const essais = createKeyProbe({
+  vault, transport: monTransportInjecte, timeoutMs: 10_000,
+  probes: {
+    SERVICE_KEY: async (valeur, { transport, signal }) => {
+      const reponse = await transport(urlFixeDuService, {
+        headers: { Authorization: `Bearer ${valeur}` }, signal
+      });
+      return reponse.ok ? 'ok' : reponse.status === 429 ? 'quota'
+        : [401, 403].includes(reponse.status) ? 'rejected' : 'unavailable';
+    }
+  }
+});
+await essais.check('SERVICE_KEY'); // { status: 'ok' | 'rejected' | 'quota' | 'unavailable' }
+```
+
+La sonde utilise la valeur servie par le coffre, un transport obligatoirement
+injecté et un signal d'annulation. Clé absente/débranchée, service inconnu,
+échec du coffre, erreur de transport, délai dépassé ou réponse mal formée :
+`unavailable`. Seul le statut sort ; aucune réponse brute, valeur ou erreur
+fournisseur n'est journalisée. Les callbacks injectés reçoivent le secret pour
+l'utiliser et doivent eux aussi éviter de le journaliser. La sonde de solde
+Serper et `createBalanceProbe` gardent leur API actuelle.

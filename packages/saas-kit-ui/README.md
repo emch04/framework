@@ -1,9 +1,6 @@
 # @astratra/saas-kit-ui
 
-Interface React reutilisable pour demarrer rapidement un dashboard SaaS
-Astratra. Le package expose une application dashboard complete et quelques
-primitives (`AuthProvider`, `useAuth`, `apiFetch`) pour composer une interface
-plus specifique.
+Interface React réutilisable pour démarrer rapidement un tableau de bord SaaS. Le paquet expose une application complète (connexion, vue d'ensemble, utilisateurs, réglages) et quelques primitives (`AuthProvider`, `useAuth`, `apiFetch`) pour composer une interface plus spécifique. Il est prévu pour un backend `@astratra/saas-kit`.
 
 ## Installation
 
@@ -11,10 +8,9 @@ plus specifique.
 npm install @astratra/saas-kit-ui react react-dom
 ```
 
-Dans le repo Astratra, `examples/dashboard-ui` montre son integration avec un
-backend `@astratra/saas-kit`.
+React 18 ou plus récent. Le dépôt contient `examples/dashboard-ui`, qui montre l'intégration avec un backend `@astratra/saas-kit`.
 
-## Utilisation
+## Exemple
 
 ```jsx
 import React from 'react';
@@ -28,42 +24,46 @@ createRoot(document.getElementById('root')).render(
 );
 ```
 
-Par defaut, l'interface appelle `http://localhost:4000`. Avec Vite, definis
-`VITE_API_URL` pour pointer vers ton backend :
+Le paquet importe sa feuille de styles avec l'application ; elle est aussi disponible séparément via `@astratra/saas-kit-ui/styles.css`. Par défaut, l'interface appelle `http://localhost:4000`. Avec Vite, définissez `VITE_API_URL` pour pointer vers votre backend :
 
 ```bash
-VITE_API_URL=http://localhost:4000 npm run dev
+VITE_API_URL=https://api.exemple.fr npm run dev
 ```
 
-## Surface exportee
+## Ce que le tableau de bord attend du backend
 
-- `AstratraDashboardApp` : dashboard complet login/users/settings/overview.
-- `AuthProvider` et `useAuth` : session bearer token en memoire.
-- `apiFetch` et `ApiError` : client minimal compatible avec les reponses
-  `apiResponse` d'`@astratra/core`.
+| Écran | Appels |
+| --- | --- |
+| Connexion | `POST /auth/login` avec `{ email, password }` ; réponse `{ token, user }`. |
+| Vue d'ensemble | `GET /dashboard/summary` |
+| Utilisateurs | `GET /users?limit=50&offset=0`, `POST /users` |
+| Réglages | `GET /settings`, `PATCH /settings/<clé>` avec `{ value }` |
 
-Le package ne contient pas de serveur Express et ne fixe aucun domaine metier.
-Le backend reste fourni par `@astratra/saas-kit` ou par ton application.
+Les réponses suivent le format `apiResponse` d'`@astratra/core` : `{ success, data, message }`.
 
-## `AuthProvider`/`useAuth` vs `@astratra/react`
+## Exports
 
-Deux packages Astratra exposent des primitives de session React, avec des
-choix différents et volontaires — ce n'est pas un doublon accidentel :
+| Export | Rôle |
+| --- | --- |
+| `AstratraDashboardApp` (aussi export par défaut) | Tableau de bord complet. |
+| `AuthProvider`, `useAuth` | Session par jeton Bearer gardé en mémoire ; `useAuth()` rend `isAuthenticated`, `token`, `user`, `login`, `logout` et `request`. |
+| `apiFetch(chemin, options)`, `ApiError` | Client minimal. Options : `apiUrl`, `token`, `method`, `body`, `fetcher`, `onUnauthorized`. |
+| `Layout`, `Notice` | Composants de mise en page et de message. |
+| `DashboardScreen`, `LoginScreen`, `SettingsScreen`, `UsersScreen` | Les écrans, réutilisables séparément. |
 
-- **`AuthProvider`/`useAuth` (ce package)** : garde le JWT en mémoire JS et
-  l'attache en `Authorization: Bearer` via `apiFetch`. Couplé au dashboard
-  complet `AstratraDashboardApp` (login/users/settings/overview) — conçu
-  pour démarrer vite avec un backend `@astratra/saas-kit` standard, pas pour
-  être réutilisé isolément dans une UI déjà existante.
-- **`SessionProvider`/`useSession` (`@astratra/react`)** : ne stocke aucun
-  token côté client — la session vit dans un cookie `HttpOnly` géré par le
-  backend, l'app injecte juste `getSession`/`signIn`/`signOut`. Pas de
-  dashboard imposé, pas de routes fixes ; à choisir quand tu construis ta
-  propre UI par-dessus `@astratra/saas-kit` (avec les cookies de session
-  activés côté `@astratra/security`) plutôt que d'utiliser
-  `AstratraDashboardApp` tel quel.
+## Ce que le paquet ne fait pas
 
-En résumé : utilise ce package si `AstratraDashboardApp` te convient tel
-quel ; utilise `@astratra/react` si tu construis ta propre interface et que
-ton backend utilise les sessions cookie `HttpOnly` plutôt qu'un token Bearer
-géré côté client.
+- Il ne contient pas de serveur et ne fixe aucun domaine métier ; le backend est fourni par `@astratra/saas-kit` ou par votre application.
+- Le jeton n'est gardé qu'en mémoire : un rechargement de la page déconnecte l'utilisateur.
+- Il n'est pas conçu pour être branché sur une interface existante qui utilise des sessions par cookie `HttpOnly` : voir `@astratra/react`.
+
+## `AuthProvider`/`useAuth` et `@astratra/react`
+
+- **`AuthProvider`/`useAuth` (ce paquet)** : garde le JWT en mémoire et l'envoie en `Authorization: Bearer` via `apiFetch`. Couplé à `AstratraDashboardApp`.
+- **`SessionProvider`/`useSession` (`@astratra/react`)** : ne stocke aucun jeton côté client ; la session vit dans un cookie `HttpOnly` géré par le backend. Pas de tableau de bord imposé.
+
+Utilisez ce paquet si `AstratraDashboardApp` vous convient tel quel ; utilisez `@astratra/react` si vous construisez votre propre interface sur des sessions par cookie.
+
+## Licence
+
+MIT.

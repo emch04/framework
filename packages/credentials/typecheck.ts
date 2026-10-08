@@ -249,3 +249,42 @@ async function exerciseBalances(): Promise<void> {
   void createCredentialsRoutes({ vault, balances, authorize: (_q, _s, next) => next() });
 }
 void exerciseBalances;
+
+/* New opt-in vault primitives, compiled by the repository typecheck. */
+import { createContextCipher, createMemoryVersionedCredentialStore,
+  createMongoVersionedCredentialStore, createReadChallenge,
+  createMemoryReadChallengeStore, createMongoReadChallengeStore, createKeyProbe } from './src';
+import type { CredentialScope, CredentialContext, VersionMetadata, KeyProbeStatus } from './src';
+const scope: CredentialScope = { tenant: 'org', environment: 'production' };
+const context: CredentialContext = { ...scope, name: 'GROQ_API_KEY', version: 1 };
+const contextCipher: FieldCipher = createContextCipher({ key: Buffer.alloc(32) });
+const versionStore = createMemoryVersionedCredentialStore();
+const historyVault = createCredentialVault({
+  catalog, cipher: contextCipher, store: versionStore, scope,
+  strict: true, fallback: 'none', history: true, retentionMs: 3000, cacheMs: 0,
+  onWrite: async event => { const version: number | undefined = event.version; void version; }
+});
+const readChallenge = createReadChallenge({ store: createMemoryReadChallengeStore(),
+  verify: async ({ challenge, proof }) => { void [challenge.nonce, proof]; return true; }, ttlMs: 1000 });
+const keyProbe = createKeyProbe({ vault: historyVault, transport: fakeFetch,
+  probes: { GROQ_API_KEY: async (_value, { transport, signal }) => {
+    void signal;
+    const response = await transport('fixed-url');
+    return response.status === 200 ? 'ok' : 'unavailable';
+  } }
+});
+async function exerciseNewPrimitives(): Promise<void> {
+  const ciphertext = contextCipher.encrypt('value', context);
+  contextCipher.decrypt(ciphertext, context);
+  await historyVault.set('GROQ_API_KEY', 'value');
+  const historical: string | null = await historyVault.get('GROQ_API_KEY', { version: 1 });
+  const versions: VersionMetadata[] = await historyVault.listVersions('GROQ_API_KEY');
+  const purged: number = await historyVault.purgeVersions();
+  const record = await readChallenge.request('owner', { key: 'GROQ_API_KEY', scope, version: 1 });
+  const read = await readChallenge.read('owner', record.id, {}, historyVault);
+  const probed: KeyProbeStatus = (await keyProbe.check('GROQ_API_KEY')).status;
+  const mongoVersions = createMongoVersionedCredentialStore({ collection: {}, maxTimeMS: 1000 });
+  const mongoReads = createMongoReadChallengeStore({ collection: {} });
+  void [historical, versions, purged, read, probed, mongoVersions, mongoReads];
+}
+void exerciseNewPrimitives;

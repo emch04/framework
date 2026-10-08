@@ -3,6 +3,67 @@
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Chaque package Astratra est versionné indépendamment.
 
+## 2026-10-08 — `@astratra/memory` 1.1.0 et `@astratra/voice` 1.1.0 : ce que les apps écrivaient autour
+
+Deux apps (Centrale LJ et Muzika) ont basculé sur ces paquets mais ont dû écrire du code autour. Ces
+manques sont comblés dans les paquets. Tout est rétrocompatible, sauf un défaut relevé (voir « Modifié »).
+
+### `@astratra/memory` 1.1.0
+
+#### Modifié
+- **Plafond de souvenirs : 1000 par personne au lieu de 300** (décision de Kongo). Une personne qui avait
+  entre 301 et 1000 souvenirs actifs en garde désormais tous. Pour l'ancien comportement :
+  `maxActive: 300`.
+
+#### Ajoute
+- `maxActive` reste réglable (`0` ou `null` : pas de plafond) ; nouvelle option `trimAbove` : le ménage ne
+  démarre qu'au-dessus de ce nombre et ramène la personne à `maxActive` (par défaut `maxActive` : comme
+  avant). Sous le seuil, le plafond ne coûte plus aucune lecture supplémentaire. `DEFAULT_MAX_ACTIVE`
+  exporté.
+- **Renforcer un doublon** : option `onDuplicate: 'replace' | 'reinforce'` (défaut `'replace'`, comportement
+  inchangé), surchargeable par appel (`remember(where, { onDuplicate })`). En `'reinforce'`, le souvenir
+  redit garde **le même identifiant**, son texte, son genre et sa date de création, prend l'importance
+  maximale et rafraîchit `updatedAt` ; un vecteur qui lui manquait est complété. Résultat :
+  `{ ok: true, memory, supersededId: null, reinforced: true }`. L'outil `remember` répond alors
+  `reinforced: true` et `undo: null`. La consolidation suit la même option. `DUPLICATE_MODES` exporté.
+- `memory.markUsed(where, ids)` : marque des souvenirs comme utilisés sans passer par la recherche
+  (renvoie le nombre marqué ; identifiants inconnus, remplacés ou d'une autre personne ignorés).
+- Pause : `memory.pause(where)` / `memory.resume(where)` (à côté de `isPaused` / `setPaused`), et
+  `handlers.pause(where)` / `handlers.resume(where)`, ajoutés aux `PRIVACY_OPERATIONS` (ils marchent IA
+  coupée).
+- **Magasin PostgreSQL de référence** : `createPostgresMemoryStore(db, options)` et
+  `postgresMemorySchema(options)` (SQL des trois tables, idempotent). Requêtes paramétrées, lieu
+  `{ ownerId, scope }` dans chaque requête, recherche plein texte (`tsvector` généré + GIN, configuration
+  réglable), pgvector en option (`vectors: 'pgvector'`, colonne `vector(N)`, index HNSW cosinus) ou vecteurs
+  jsonb comparés dans le processus. Identifiant, personne et lieu en `text` ou `uuid` ; `scopeReferences`
+  fait du lieu une clé étrangère (`ON DELETE CASCADE`). Un lieu ou un identifiant d'une mauvaise forme ne
+  trouve rien, il ne lève jamais. Sans dépendance à `pg`.
+- `runStoreContract` : `makeScope(name, store)` et `makeOwner(name, store)` pour les magasins dont le lieu est
+  une clé étrangère ou a une forme, et `vectorDimensions` pour les colonnes de taille fixe. Un `newId`
+  donné à une suite n'affecte plus les suivantes.
+- Tests : le contrat et des scénarios de bout en bout contre un vrai PostgreSQL quand
+  `MEMORY_TEST_DATABASE_URL` (base finissant par `_test`) est donné, pgvector avec `MEMORY_TEST_PGVECTOR=1` ;
+  sans base, requêtes, schéma et refus sont testés quand même.
+
+### `@astratra/voice` 1.1.0
+
+#### Ajoute
+- **Piper par HTTP** : `createPiperHttpProvider({ url, token | tokenFile, ... })`, un fournisseur pour la
+  chaîne `createProviderVoiceService` (`POST {url}/tts` avec `{ text, lang }`, jeton lu à chaque requête
+  dans un fichier ou donné en option, format selon le `Content-Type`, délai en panne transitoire, erreurs
+  HTTP classées par `classifyProviderError`). À côté du Piper en ligne de commande, qui reste inchangé.
+- **Annulation par `AbortSignal`** : `synthesize({ ..., signal })` sur `createVoiceService`,
+  `createProviderVoiceService` et `createPieceVoiceService`, transmis jusqu'au travail (processus `piper` et
+  `ffmpeg` tués, `runProcess` accepte `signal`, requêtes de `createGeminiTtsAdapter`,
+  `createPiperHttpProvider`, `createWhisperHttpEngine` et `asVoiceProvider` annulées, fichiers temporaires
+  retirés). L'erreur est toujours `AbortError` / `code: 'ABORTED'` ; une annulation n'est pas une panne du
+  fournisseur : aucun autre fournisseur essayé, aucune clé mise au repos, rien en cache.
+  `classifyProviderError` reconnaît `ABORTED`. Sans signal, rien ne change.
+- **Cache à taille bornée** : `createBoundedVoiceCache({ maxEntries, maxBytes, now })`, même interface que
+  `createMemoryVoiceCache`, le moins récemment utilisé part d'abord, durée de vie du service respectée,
+  `size` et `bytes`. Sans limite, 256 lectures.
+- Tests et déclarations de types pour tout cela.
+
 ## 2026-10-08 — `@astratra/ai`: configured routing, local models and voice 1.7.0
 
 ### Added

@@ -3,6 +3,13 @@
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Chaque package Astratra est versionné indépendamment.
 
+## 2026-10-09 — `@astratra/conscience` 1.1.0 : réglages distants
+
+### Ajouté
+- `@astratra/conscience/governor` : `createRemoteSettings`, adaptateur générique « réglages distants ». Un tableau de bord allume ou éteint l'agent, tire ou lève son arrêt d'urgence, nomme ses approbateurs, règle sa réflexion (heure, fuseau, cycles par jour) ; l'adaptateur en fait des options du gouverneur (`policy()`, `governor()` refait quand la politique change) et soumet les décisions humaines par `approveProposal` / `declineProposal` (`applyDecisions`, rejouable : `already_applied`). Aucune dépendance : la lecture des réglages est une fonction passée par l'application.
+- Règles déterministes : source muette ou invalide, le dernier réglage valide reste (mémoire ou `storage`) ; aucun réglage connu, tout est éteint (gouverneur arrêté, aucun approbateur) ; version plus ancienne ignorée ; `halted: true` appliqué aussitôt, même dans une réponse invalide, et `sync` tire l'arrêt d'urgence du gouverneur ; un arrêt n'est relâché que s'il a été tiré par l'adaptateur, au nom de l'humain de `resumedBy`. Un réglage distant ne touche jamais la constitution, les portées protégées, les permissions, la matrice d'approbations ni les budgets au-delà des plafonds locaux (champs listés dans `ignored`).
+- `parseRemoteSettings`, `remotePolicy`, `reflectionDue`, `reflectionCycleId` (un cycle idempotent par jour local) ; types, README anglais et français ; tests (rejeu d'une approbation, source en panne, réglage hostile, arrêt et reprise). Le gouverneur n'importe toujours que les modules de Node (test du graphe d'imports inchangé).
+
 ## 2026-10-09 — contrats et intégrations
 
 ### Ajouté

@@ -257,6 +257,59 @@ Le bilan ne recopie aucun texte libre de l'auteur, seulement des identifiants,
 des codes, des nombres et les objets `tests` et plan de retour arrière fournis.
 Tout est lu dans une seule organisation.
 
+### Réglages distants (tableau de bord)
+
+`createRemoteSettings` permet à un tableau de bord d'allumer ou d'éteindre
+l'agent, de tirer ou de lever son arrêt d'urgence, de nommer ses approbateurs et
+de régler sa réflexion, et aux humains d'y approuver ou refuser les
+propositions. Le gouverneur reste seul juge : l'adaptateur transforme les
+réglages en options du gouverneur et soumet chaque décision humaine par
+`approveProposal` / `declineProposal`. Il n'importe que ce dossier : vous lui
+passez la fonction qui lit les réglages.
+
+```js
+const { createRemoteSettings, createPostgresGovernorStore } = require('@astratra/conscience/governor');
+
+const remote = createRemoteSettings({
+  read: () => tableau.lireReglages(),          // votre client, avec son propre cache
+  policy: politiqueLocale,                     // constitution, permissions, PLAFONDS de budget
+  organisationId: 'org-1',
+  storage: { load: () => cache.lire(), save: (s) => cache.ecrire(s) } // facultatif : survit aux redémarrages
+});
+const store = createPostgresGovernorStore(pool);
+
+setInterval(async () => {
+  await remote.refresh();                      // ne lève jamais
+  const governor = remote.governor({ store }); // à redemander à chaque fois : refait quand la politique change
+  await remote.sync(governor);                 // arrêt d'urgence distant, appliqué tout de suite
+  const resultats = await remote.applyDecisions(governor, await tableau.lireDecisions());
+  // renvoyer les résultats (applied, already_applied, refused + code ; failed = réessayer plus tard)
+}, 60_000);
+
+if (remote.reflectionDue()) await lancerCycle({ cycleId: remote.reflectionCycleId() });
+```
+
+Réglages (`conscience-settings/1`) : `version`, `enabled`, `halted`,
+`resumedBy`, `approvers`, `reflection { automatic, hour, timeZone }`,
+`cyclesPerDay`. Règles :
+
+| Situation | Effet |
+|---|---|
+| Source muette, lente ou invalide | Le dernier réglage valide reste (`source: 'last_known'`), en mémoire ou dans `storage` |
+| Aucun réglage valide jamais reçu | Tout éteint : désactivé, gouverneur arrêté, aucun approbateur |
+| `version` plus ancienne que celle en vigueur | Ignorée (`stale_settings`) |
+| `halted: true` | Appliqué aussitôt, même dans une réponse invalide ou périmée ; `sync` tire l'arrêt d'urgence du gouverneur (les candidates reviennent à la version stable) |
+| Arrêt levé | `sync` ne relâche qu'un arrêt qu'il a tiré, et seulement au nom de l'humain de `resumedBy` ; un arrêt tiré par quelqu'un d'autre reste |
+| `enabled: false` | Gouverneur arrêté ; `reflectionDue()` vaut faux |
+| `cyclesPerDay` | `perAgent` et `perOrganisation` deviennent `min(local, cyclesPerDay × costPerCycle)`, jamais au-dessus des valeurs locales |
+| `approvers` | Les approbateurs du gouverneur ; dans la liste locale `approvers` quand elle existe |
+| Tout le reste (`constitution`, `budgets`, `permissions`, `approvals`…) | Jamais appliqué, listé dans `current().ignored` |
+
+`applyDecisions` se rejoue sans risque : une décision que le gouverneur a déjà
+revient en `already_applied`, une approbation n'est donc jamais comptée deux
+fois. Approbateurs, arrêt, portées protégées, rôles et expiration restent
+vérifiés par le gouverneur.
+
 ### Contrôle au démarrage
 
 `assertGovernorReady(governor, { organisationId })` lève `governor_missing`,

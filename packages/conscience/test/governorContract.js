@@ -17,8 +17,10 @@ const proposal = (overrides = {}) => ({
  * `{ store, cleanup? }`, a fresh empty store each time.
  */
 function governorContract(label, makeStore, options = {}) {
-  const suite = (name, fn) => test(`${label}: ${name}`, { skip: options.skip }, async () => {
-    const { store, cleanup } = await makeStore();
+  const suite = (name, fn) => test(`${label}: ${name}`, { skip: options.skip }, async (t) => {
+    const stores = await makeStore();
+    if (stores.unavailable) { t.skip(stores.unavailable); return; }
+    const { store, cleanup } = stores;
     try { await fn(store); } finally { await cleanup?.(); }
   });
 

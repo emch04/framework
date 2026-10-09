@@ -1,0 +1,137 @@
+# @astratra/centrale
+
+English | [Français](README.md)
+
+The collection package of a self-hosted monitoring dashboard: errors, crashes, views, usage, sessions and AI calls, masked at the source and sent in batches to the backend. It also holds the light client of the dashboard's "conscience" routes for an AI agent.
+
+- **No dependency** at run time, no other Astratra package.
+- **Never throws** at the caller and never blocks the host project (the conscience client, which you call explicitly, rejects with `ErreurConscience`).
+- Written in TypeScript, published as JavaScript with its types (`dist/`, built by `npm run build` before each release).
+- Holds the sending contract (`@astratra/centrale/envoi`) and the masking (`@astratra/centrale/masquage`): the dashboard backend takes them from here, there is a single source.
+
+The API is in French, like the dashboard it talks to.
+
+## Installation
+
+```sh
+npm install @astratra/centrale
+```
+
+## Minimal example
+
+```ts
+import { creerCentrale } from '@astratra/centrale';
+
+const centrale = creerCentrale({
+  cle: 'clj_pub_…',                          // public key of the project
+  adresse: 'https://dashboard.example.com',  // dashboard backend
+  environnement: 'production',
+  version: '2.14.0'
+});
+
+centrale.vue('/student/123');                // recorded as "/student/:id"
+centrale.usage('export_pdf', { pages: 3 });
+try {
+  // …
+} catch (e) {
+  centrale.erreur(e);
+}
+await centrale.vider();                      // sends what is left in the queue; never rejects
+```
+
+For Node, the browser, Expo or AI call measurement, use the dedicated entry point (table below).
+
+## Configuration
+
+Only `cle`, `adresse` and `environnement` are required.
+
+| Option | Role |
+| --- | --- |
+| `cle` | Public key of the project (`clj_pub_…`): it can only send. |
+| `adresse` | Backend address. |
+| `environnement` | `'production'`, `'preproduction'` or `'developpement'`. |
+| `version` | Version of the app or server. |
+| `sel` | Salt used to hash the user id. |
+| `noms` | Proper names masked everywhere. |
+| `echantillonnage` | Rates from 0 to 1 for `vues`, `usages` and `ia`; never applied to errors or sessions. |
+| `strict` | No user, no precise device. |
+| `desactive` | Turns everything off: the instance does nothing. |
+| `debug` | Prints internal errors with `console.warn`. |
+
+## The 6 entry points
+
+| Entry | Use |
+| --- | --- |
+| `@astratra/centrale` | `creerCentrale(config, transport?)`: `erreur(e, extra?)`, `vue(nom)`, `usage(nom, props?)`, `ia({…})`, `session(etat)`, `miette(categorie, message, donnees?)`, `definirUtilisateur(id)`, `vider()`. The transport (fetch by default) can be injected. |
+| `@astratra/centrale/node` | `demarrer(config)`; `app.use(centrale.intergiciel())` first, `app.use(centrale.gestionnaireErreurs())` last. |
+| `@astratra/centrale/navigateur` | `demarrer(config)` when the web app loads. |
+| `@astratra/centrale/expo` | `demarrer({ ...config, plateforme: Platform.OS, version, build, miseAJour, os, appareil, appState: AppState })`, then `centrale.ecran(nom)` from navigation. |
+| `@astratra/centrale/ia` | `mesurerAppelIA({ fournisseur, modele, outil?, jetons?, estRepli? }, () => call())`. |
+| `@astratra/centrale/conscience` | `creerConscienceCentrale({ adresse, jeton })`: settings of an AI's conscience, morning report, human decisions (section below). |
+
+## Conscience of an AI (`/conscience`)
+
+The dashboard sets an AI's conscience (on, emergency stop, approvers, automatic reflection, cycles per day), receives its morning report and pending proposals, and records human decisions. It never applies anything: the AI reads its settings and the decisions, then submits them to its own governor. Authentication uses the project token (`Authorization: Bearer …`).
+
+```ts
+import { creerConscienceCentrale } from '@astratra/centrale/conscience';
+
+const dashboard = creerConscienceCentrale({ adresse: 'https://dashboard.example.com', jeton: process.env.PROJECT_TOKEN! });
+
+const settings = await dashboard.lireReglages();             // kept with their ETag: a 304 returns the copy
+await dashboard.envoyerBilan(await governor.morningReport({ organisationId, since }),
+  await governor.listProposals({ organisationId, status: 'pending_approval' }));
+const decisions = await dashboard.lireDecisions();           // those not acknowledged yet
+await dashboard.accuserDecisions(results);                   // applied, already_applied, refused (+ code)
+```
+
+| Method | Route | Role |
+| --- | --- | --- |
+| `lireReglages()` | `GET /v1/conscience/settings` | Settings (`conscience-settings/1`) with `If-None-Match`; rejects with `ErreurConscience` when the dashboard does not answer |
+| `envoyerBilan(report, proposals?)` | `POST /v1/conscience/report` | Report and the **complete** list of pending proposals, reduced by `resumerBilan` |
+| `lireDecisions({ toutes? })` | `GET /v1/conscience/decisions` | Decisions not acknowledged yet (with `toutes`: all of them, cursor in memory) |
+| `accuserDecision(id, { result, code })` | `POST /v1/conscience/decisions/:id/ack` | What the governor did with the decision |
+| `accuserDecisions(results)` | same | Acknowledges a list; a `failed` result is not acknowledged and comes back next time |
+
+`resumerBilan(report, proposals?)` keeps only ids, codes (`answer_style`, `tool_reliability`…) and numbers: no question, answer, note, decision id, `tests` object, rollback plan, owner, nor the identity of a person who proposed. A string the masking would change is dropped. The dashboard checks again and refuses anything else.
+
+Errors are `ErreurConscience`: HTTP `statut` (or `null` when offline) and `code` (`invalid_api_key`, `sensitive_data`, `reseau`…).
+
+## What is captured
+
+- **Node**: uncaught exceptions (recorded as `fatal`, then Node's normal behaviour), unhandled rejections, Express requests (`X-Request-Id`, templated route, duration, status, breadcrumb), Express errors (status ≥ 500: `erreur`, otherwise `avertissement`), flush on exit (`beforeExit`, `SIGTERM`, `SIGINT`, 2 s at most).
+- **Browser**: `error` and `unhandledrejection` (without replacing `window.onerror`), templated SPA views, first page load time, sessions, final send with `navigator.sendBeacon` and `?cle=`.
+- **Expo**: `ErrorUtils.setGlobalHandler`, sessions tied to `AppState` (end after 30 s in the background), screens. `signalerPlantageNatif(report)` waits for the future native module.
+- **AI**: provider, model, tool, duration, tokens, outcome (`ok`, `erreur`, `quota`, `repli`). **Never the content.**
+
+Sending: batches of at most 100 events (1 MiB at most), every 10 s or as soon as 50 events wait; queue of 500 events; progressive backoff (2 s, 4 s… capped at 5 min); `Retry-After` honoured on 429; silent drop on 400, 401, 413; offline, the queue waits.
+
+## Source maps
+
+If the build went through `centrale injecter` (package `@astratra/centrale-cli`), each stack frame gets the `debugId` of its file, and the error too when the whole stack comes from one file. The backend uses it to find the real line. Nothing to configure.
+
+## Privacy
+
+- No cookie, no local storage.
+- Masking **before any send**: e-mails, phone numbers, cards, IBAN, keys, tokens, passwords, and the given `noms`.
+- Addresses reduced to their template (`/student/123?token=x` becomes `/student/:id`).
+- User: only a salted SHA-256 fingerprint, never the raw id.
+- `strict` mode: no user, no precise device.
+- Usage: simple properties only (short text, number, boolean).
+
+## What the package does not do
+
+- It hosts neither backend nor dashboard: it sends events to the address you give.
+- It captures neither the content of AI calls, nor cookies, nor local storage.
+- Native crash reports (iOS, Android) are not captured yet.
+
+## License
+
+MIT.
+
+## Tests
+
+```sh
+npm test -w @astratra/centrale
+npx tsc -p packages/centrale/tsconfig.json --noEmit
+```

@@ -1,5 +1,7 @@
 # @astratra/centrale
 
+[English](README.en.md) | Français
+
 Le paquet de collecte d'un tableau de bord de surveillance auto-hébergé : erreurs, plantages, vues, usages, sessions et appels d'IA, masqués à la source puis envoyés par lots au backend.
 
 - **Aucune dépendance** à l'exécution, aucun autre paquet Astratra.
@@ -69,7 +71,7 @@ const config = {
 | `desactive` | Coupe tout : l'instance ne fait rien. |
 | `debug` | Affiche les erreurs internes avec `console.warn`. |
 
-## Les 5 entrées
+## Les 6 entrées
 
 | Entrée | Usage |
 | --- | --- |
@@ -78,6 +80,7 @@ const config = {
 | `@astratra/centrale/navigateur` | `demarrer(config)` au chargement de l'app web. |
 | `@astratra/centrale/expo` | `demarrer({ ...config, plateforme: Platform.OS, version, build, miseAJour, os, appareil, appState: AppState })`, puis `centrale.ecran(nom)` depuis la navigation. |
 | `@astratra/centrale/ia` | `mesurerAppelIA({ fournisseur, modele, outil?, jetons?, estRepli? }, () => appel())`. |
+| `@astratra/centrale/conscience` | `creerConscienceCentrale({ adresse, jeton })` : réglages de la conscience d'une IA, bilan du matin, décisions humaines (section plus bas). |
 
 ```ts
 import { demarrer } from '@astratra/centrale/node';
@@ -86,6 +89,41 @@ app.use(centrale.intergiciel());
 // … routes …
 app.use(centrale.gestionnaireErreurs());
 ```
+
+## Conscience d'une IA (`/conscience`)
+
+Le tableau de bord règle la conscience d'une IA (allumée, arrêt d'urgence, approbateurs, réflexion automatique,
+cycles par jour), reçoit son bilan du matin et ses propositions en attente, et enregistre les décisions humaines.
+Il n'applique jamais rien : l'IA lit ses réglages et les décisions, puis les soumet à son propre gouverneur.
+L'authentification se fait par le jeton de projet (`Authorization: Bearer …`).
+
+```ts
+import { creerConscienceCentrale } from '@astratra/centrale/conscience';
+
+const tableau = creerConscienceCentrale({ adresse: 'https://centrale.exemple.fr', jeton: process.env.JETON_PROJET! });
+
+const reglages = await tableau.lireReglages();              // gardés avec leur ETag : un 304 rend la copie
+await tableau.envoyerBilan(await governor.morningReport({ organisationId, since }),
+  await governor.listProposals({ organisationId, status: 'pending_approval' }));
+const decisions = await tableau.lireDecisions();             // celles qui ne sont pas encore accusées
+await tableau.accuserDecisions(resultats);                   // applied, already_applied, refused (+ code)
+```
+
+| Méthode | Route | Rôle |
+| --- | --- | --- |
+| `lireReglages()` | `GET /v1/conscience/settings` | Réglages (`conscience-settings/1`), avec `If-None-Match` ; lève `ErreurConscience` si le tableau de bord ne répond pas |
+| `envoyerBilan(rapport, propositions?)` | `POST /v1/conscience/report` | Bilan et liste **complète** des propositions en attente, réduits par `resumerBilan` |
+| `lireDecisions({ toutes? })` | `GET /v1/conscience/decisions` | Décisions non accusées (avec `toutes` : toutes, curseur en mémoire) |
+| `accuserDecision(id, { result, code })` | `POST /v1/conscience/decisions/:id/ack` | Ce que le gouverneur a fait de la décision |
+| `accuserDecisions(resultats)` | idem | Accuse une liste ; un résultat `failed` n'est pas accusé et revient au passage suivant |
+
+`resumerBilan(rapport, propositions?)` ne garde que des identifiants, des codes (`answer_style`, `tool_reliability`…)
+et des nombres : ni question, ni réponse, ni note, ni identifiant de décision, ni objet `tests`, ni plan de retour
+arrière, ni propriétaire, ni identité d'une personne qui propose. Une chaîne que le masquage changerait est retirée.
+Le tableau de bord vérifie à nouveau et refuse tout envoi qui contient autre chose.
+
+Les erreurs sont des `ErreurConscience` : `statut` HTTP (ou `null` hors ligne) et `code` (`invalid_api_key`,
+`sensitive_data`, `reseau`…).
 
 ## Ce qui est capté
 
@@ -123,5 +161,5 @@ MIT.
 
 ```sh
 npm test -w @astratra/centrale
-npx tsc -p paquets/centrale/tsconfig.json --noEmit
+npx tsc -p packages/centrale/tsconfig.json --noEmit
 ```

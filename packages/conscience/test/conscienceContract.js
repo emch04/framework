@@ -12,8 +12,10 @@ const human = (id) => ({ kind: 'human', id });
  * `{ store, governorStore, cleanup? }`, fresh and empty each time.
  */
 function conscienceContract(label, makeStores, options = {}) {
-  const suite = (name, fn) => test(`${label}: ${name}`, { skip: options.skip }, async () => {
-    const { store, governorStore, cleanup } = await makeStores();
+  const suite = (name, fn) => test(`${label}: ${name}`, { skip: options.skip }, async (t) => {
+    const stores = await makeStores();
+    if (stores.unavailable) { t.skip(stores.unavailable); return; }
+    const { store, governorStore, cleanup } = stores;
     try { await fn({ store, governorStore }); } finally { await cleanup?.(); }
   });
 
@@ -104,13 +106,13 @@ function conscienceContract(label, makeStores, options = {}) {
     await assert.rejects(conscience.recordLesson({ organisationId: 'org-a', summary: 'x', evidence: [{ kind: 'decision', ref: 'dec-of-another-org' }] }), { code: 'evidence_not_found' });
     clock.advance(1000);
     const proven = await conscience.recordLesson({ organisationId: 'org-a', lessonId: bare.lesson.id, summary: 'Reminders on Mondays work better', status: 'verified', evidence: [{ kind: 'decision', ref: decision.id, note: 'Alice paid' }], validFrom: '2026-10-01T00:00:00.000Z', validUntil: '2027-01-01T00:00:00.000Z' });
-    assert.equal(proven.lesson.status, 'verified');
+    assert.equal(proven.lesson.status, 'hypothesis');
     assert.equal(proven.lesson.evidence[0].note, '[PERSON] paid');
     assert.equal((await conscience.recordLesson({ organisationId: 'org-a', lessonId: bare.lesson.id, summary: 'Reminders on Mondays work better', status: 'verified', evidence: [{ kind: 'decision', ref: decision.id, note: 'Alice paid' }], validFrom: '2026-10-01T00:00:00.000Z', validUntil: '2027-01-01T00:00:00.000Z' })).created, false);
     const lesson = await conscience.getLesson({ organisationId: 'org-a' }, bare.lesson.id);
-    assert.deepEqual(lesson.history.map((l) => [l.status, l.revision, l.current]), [['hypothesis', 1, false], ['verified', 2, true]]);
+    assert.deepEqual(lesson.history.map((l) => [l.status, l.revision, l.current]), [['hypothesis', 1, false], ['hypothesis', 2, true]]);
     assert.equal((await conscience.listLessons({ organisationId: 'org-a' }, { validAt: '2027-02-01T00:00:00.000Z' })).length, 0);
-    assert.equal((await conscience.listLessons({ organisationId: 'org-a' }, { status: 'verified' })).length, 1);
+    assert.equal((await conscience.listLessons({ organisationId: 'org-a' }, { status: 'verified' })).length, 0);
     const back = await conscience.recordLesson({ organisationId: 'org-a', lessonId: bare.lesson.id, summary: 'Reminders on Mondays work better', status: 'verified', evidenceDegree: 'experimental' });
     assert.equal(back.lesson.status, 'hypothesis', 'going back to no evidence is a new revision, again a hypothesis');
     assert.equal((await conscience.getLesson({ organisationId: 'org-a' }, bare.lesson.id)).history.length, 3);
@@ -237,7 +239,7 @@ function conscienceContract(label, makeStores, options = {}) {
     const sharedNow = await conscience.getLesson({ organisationId: 'org-a' }, shared.lesson.id);
     assert.equal(sharedNow.current.status, 'hypothesis', 'a lesson left without evidence is a hypothesis again');
     const mixedNow = await conscience.getLesson({ organisationId: 'org-a' }, mixed.lesson.id);
-    assert.deepEqual([mixedNow.current.status, mixedNow.current.evidence.map((e) => e.ref)], ['verified', [kept.id]]);
+    assert.deepEqual([mixedNow.current.status, mixedNow.current.evidence.map((e) => e.ref)], ['hypothesis', [kept.id]]);
     assert.equal((await conscience.recallDecisions({ organisationId: 'org-a' })).length, 1);
     assert.equal((await conscience.recallDecisions({ organisationId: 'org-b' })).length, 1, 'the same person id in another organisation is untouched');
   });

@@ -22,7 +22,7 @@ Le paquet a trois entrées :
 |---|---|---|
 | `@astratra/conscience/governor` | P0, P5 | Gouverneur déterministe : constitution, permissions, budgets, isolation, arrêt d'urgence, approbation humaine, journal d'audit ; et (P5) matrice d'approbations, changements versionnés réversibles avec déploiement progressif, retour arrière, bilan du matin. N'importe que des modules de Node : aucun modèle de langage, aucun paquet d'IA (un test parcourt son graphe d'imports). |
 | `@astratra/conscience` | P1 | Décisions, prédictions, résultats avec révisions, corrections masquées, leçons avec preuves, modèle de soi, mémoire temporelle, traçabilité, effacement, rétention, garde mémoire. |
-| `@astratra/conscience/autoconscience` | P2+ | Types du moteur de réflexion. `runReflection()` vérifie le gouverneur puis refuse : il n'est pas disponible avant P2. |
+| `@astratra/conscience/autoconscience` | P2+ | Évaluation déterministe : calibration, statistiques, conflits, fidélité, fiabilité, calendriers, coûts, contre-mesures et utilité des cycles. |
 
 ## Démarrage
 
@@ -293,8 +293,8 @@ avant d'être stocké. Utilisez un masqueur déterministe.
 Une leçon sans preuve est toujours une `hypothesis` (`statusForced: true` si
 un autre statut était demandé). Une preuve qui désigne une décision, une
 prédiction, un résultat ou une correction doit exister dans la même
-organisation. Cette version stocke les leçons et leur historique ; décider
-qu'une leçon est vérifiée revient à l'évaluateur de P2.
+organisation. Cette version stocke les leçons et leur historique ; P2 contrôle
+l'effectif et les contradictions avant de vérifier une leçon.
 
 ### Lecture
 
@@ -375,18 +375,110 @@ comparer-puis-écrire sur `revision`, et des `createObject`, `putVersion` et
 
 ## Autoconscience (`/autoconscience`)
 
-Cette version exporte les types qu'utilisera le moteur de réflexion
-(`ReflectionRun`, `ReflectionFinding`, `CalibrationPoint`, `Hypothesis`,
-`Experiment`, `ErrorCostPolicy`, `CounterMetric`, `ToolReliability`,
-`DomainCalendar`, `ShadowRun`, `Evaluator`) et `runReflection()`, qui appelle
-`assertGovernorReady()` puis lève `not_available`.
+Le cœur P2 est déterministe, sans import ni appel à un modèle de langage.
+`evaluateOutcomes()` et son alias `runReflection()` lisent P1 et rendent des
+`ReflectionFinding[]`. `createEvaluator({ governor, conscience, ...options })`
+lie un évaluateur dont `evaluate({ organisationId, userId?, agentId?, window?, ... })`
+évalue une portée. Chaque entrée réflexive vérifie `assertGovernorReady`.
+L'évaluation calcule sans écrire de cache ni effectuer de changement automatique.
 
-À venir, toujours derrière le gouverneur :
+```js
+const { evaluateOutcomes } = require('@astratra/conscience/autoconscience');
+const constats = await evaluateOutcomes({
+  governor, conscience, organisationId: 'org-1', minimumSample: 30,
+  errorCostPolicies: [{ organisationId: 'org-1', domain: 'facturation', falsePositive: 1, falseNegative: 20 }],
+  calendars: [{ organisationId: 'org-1', domain: 'facturation', name: 'activité',
+    periods: [{ label: 'fermeture', kind: 'closure', from: '2026-12-24', to: '2027-01-02' }] }]
+});
+```
 
-- P2, évaluation : calibration, statistiques honnêtes (taille minimale,
-  intervalles, droit de ne pas conclure), causalité prudente, contradictions,
-  coûts d'erreur, fidélité du raisonnement, fiabilité des outils, calendriers
-  métier, contre-mesures, qualité des cycles, classement des retours.
+### Données structurées
+
+Les décisions acceptent `domain` (`general` par défaut), `justification: { claims }`
+et `toolTrace: [{ callId, tool, provider?, status, empty?, durationMs, labels? }]`.
+La liste des outils déclarés ne remplace pas la trace d'exécution. Les étiquettes
+comme `source_verified` proviennent de l'instrumentation de l'application.
+Les prédictions acceptent `domain` (hérité de la décision) et `sensor` ; les
+résultats acceptent `predictionId`, vérifié dans la même décision et organisation.
+
+Les corrections acceptent la `class` de l'application, prioritaire, ou les
+`tags` structurés `fact_changed`, `wording_changed`, `goal_changed`, `opinion_changed`.
+Des étiquettes absentes, inconnues ou ambiguës donnent `disagreement`.
+Aucun texte libre n'est interprété pour décider de la classe.
+Les leçons acceptent `domain`, `subject`, `stance: 'supports' | 'opposes'`.
+Deux positions opposées dans la même organisation, personne, agent et domaine
+ouvrent un conflit symétrique `to_reassess`. Le résumé seul ne permet pas de
+reconnaître une contradiction.
+
+### API de calcul
+
+| Fonction | Résultat |
+|---|---|
+| `honestStatistics` | Effectifs connus et inconnus, taux, intervalle de Wilson, refus de conclure sous `minimumSample` (30 par défaut) |
+| `wilsonInterval` | Intervalle bilatéral ; niveaux 0,90, 0,95 (défaut), 0,99 ; null si aucun résultat connu |
+| `calibratePredictions` | Courbe par tranches et agent/domaine, Brier, écart signé de confiance, surconfiance et sous-confiance |
+| `scoreErrorCosts` | Faux positifs/négatifs, coût total ; score pondéré = coût total / nombre connu, dans l'unité métier ; seuil de décision 0,5 |
+| `checkReasoningFidelity` | `faithful`, `unfaithful`, `unknown` ; chaque étiquette exigée doit correspondre à un appel réussi et non vide ; règle par défaut `source_verified` |
+| `toolReliability` | Taux d'erreur, de vide et de lenteur par outil/fournisseur, Wilson et seuils d'effectif, p95 par rang ; durée strictement supérieure à `slowMs` (5000 ms) |
+| `calendarConfounders` | `calendar_confounded` dans une période métier `[from, to)` du même domaine |
+| `checkCounterMetrics` | Gain de la cible rejeté si une contre-mesure régresse strictement au-delà de `maxRegression`, exprimé en unité absolue |
+| `classifyCorrection` | Classe déterministe ; seul `factual` peut étayer une leçon factuelle |
+| `evaluateLessonConflicts` | Conflits ouverts, preuves, domaine et dates ; préférence possible selon la force des preuves, jamais clôture par la date seule |
+| `reflectionUtility` | Constats utiles + propositions acceptées, pondérés, moins coût pondéré ; bénéfice et utilité nette doivent être positifs |
+| `recommendReflectionFrequency` | Réduire après `uselessCycles` cycles terminés inutiles consécutifs (3) ; multiplicateur d'intervalle `reductionFactor` (2) |
+
+Les cycles sans effectifs mesurés de constats utiles ou de propositions acceptées
+restent `unmeasured` et ne comptent pas comme inutiles. Le statut inconnu d'un
+appel reste hors du dénominateur du taux d'erreur ; les taux de vide et de lenteur
+décrivent les valeurs de vide et de durée réellement rapportées.
+
+Les inconnus restent conservés, hors des dénominateurs succès/échec et des
+scores de Brier/coût. L'évaluateur prend la dernière prédiction par décision/domaine
+(date, puis identifiant), et le résultat courant du capteur ou du lien explicite.
+Un résultat absent, ambigu ou observé avant la prédiction reste inconnu.
+Une décision ne compte qu'une fois par domaine ; le calcul de calibration direct
+refuse les doublons. Chaque tranche a son propre seuil d'effectif. Les intervalles
+restent affichés pour les petits échantillons non nuls, mais `insufficient_data`
+refuse toute inférence. Les mesures sont descriptives.
+
+Chaque constat conserve preuves, effectif, intervalle, statut, confiance,
+hypothèses concurrentes et facteurs de confusion. `causality` vaut toujours
+`not_established` : résultat et fidélité de la méthode restent distincts.
+Un succès isolé ne crée aucune règle générale. `confidence` représente la
+confiance d'observation fournie ou le niveau de l'intervalle, jamais la
+probabilité qu'une hypothèse causale soit vraie.
+
+### Vérification et arbitrage des leçons
+
+`createConscience({ minimumSample: 30, ... })` fixe le plancher de vérification.
+Une leçon peut exiger un seuil supérieur, jamais abaisser ce plancher.
+L'effectif est calculé sur les **décisions distinctes** représentées par des
+résultats courants connus ou des corrections factuelles du domaine et de l'agent.
+Les références externes, décisions et prédictions seules n'augmentent pas cet
+effectif ; les inconnus, anciennes révisions et doublons sont exclus.
+Une leçon factuelle citant une correction de style, d'objectif ou de désaccord
+reste une hypothèse. Preuve, effectif suffisant et absence de conflit sont tous
+nécessaires pour `verified` ; conflit ouvert : `to_reassess` ; sinon : `hypothesis`.
+Ce statut qualifie la suffisance des preuves, pas une causalité.
+
+`conscience.resolveLessonConflict({ organisationId, userId?, winnerId, loserId, evidence })`
+arbitre explicitement avec un effectif factuel suffisant du même domaine :
+la leçon adverse est retirée, une révision de la gagnante est ajoutée.
+Chaque écriture passe par `assertGovernorReady`. Toutes les anciennes révisions
+restent. `getLesson().current` et `listLessons()` réévaluent preuves et conflits,
+y compris après un résultat tardif inconnu ou des écritures concurrentes.
+`storedStatus` expose le statut enregistré ; `history` garde les révisions
+enregistrées. `asOf` utilise les preuves et résultats connus à cette date.
+
+Les constats sont recalculés : effacer leurs sources les retire des évaluations
+suivantes. Pour un magasin de constats propre à l'application, enregistrer un
+effaceur. `window` filtre les dates des décisions ; ce n'est pas le rejeu temporel
+P3. Une sélection atteignant 1000 décisions lève `evaluation_limit` : fournir
+`decisionIds` explicitement pour une sélection plus grande sans troncature.
+
+P3 (expériences), P4 (mode ombre) et P6 (transfert) restent hors
+P2. L'évaluation ne crée ni planificateur ni transport de modèle ni déploiement.
+
 - P3, expériences : rejeu figé à la date qui refuse toute donnée future, bac à
   sable, jeu de tests protégé, surveillance de dérive, abstention, leçons
   devenues tests.
@@ -398,19 +490,20 @@ La P5 (gouvernance avancée) est dans l'entrée du gouverneur : voir plus haut.
 
 ```sh
 npm test -w @astratra/conscience
-CONSCIENCE_TEST_DATABASE_URL=postgresql://localhost/conscience_test npm test -w @astratra/conscience
+CONSCIENCE_TEST_DATABASE_URL=postgresql:///conscience_p2_test npm test -w @astratra/conscience
 ```
 
 Les tests PostgreSQL ne tournent que si l'URL désigne une base dont le nom
-finit par `_test` ; chaque test crée ses propres tables puis les supprime.
+finit par `_test` ; chaque test crée ses propres tables puis les supprime. Une base de test
+absente est créée avec `createdb` si permis ; sinon les tests d'intégration
+sont ignorés avec une raison explicite, sans afficher l'URL.
 
 ## Limites
 
-- Aucun modèle de langage, aucune évaluation et aucun changement automatique
-  dans cette version : tout changement passe par un humain, et le gouverneur
-  n'applique jamais un changement à votre application. Il versionne les objets
-  et dit quelle version servir (`resolveVersion`) ; c'est à vous de lire cette
-  version là où vous utilisez l'objet.
+- Aucun modèle de langage ni changement automatique : P2 évalue uniquement des preuves structurées,
+  tout changement passe par un humain, et le gouverneur n'applique jamais un changement à votre
+  application. Il versionne les objets et dit quelle version servir (`resolveVersion`) ; c'est à vous
+  de lire cette version là où vous utilisez l'objet.
 - Le gouverneur reconnaît les portées protégées par leurs noms et leurs clés,
   pas en lisant du texte : une proposition doit décrire honnêtement sa cible,
   et tout cas ambigu est rejeté plutôt qu'accepté.

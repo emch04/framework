@@ -49,3 +49,11 @@ test('the test itself sees a forbidden import', () => {
   const graph = importGraph('../src/guard');
   assert.ok(graph.external.includes('@astratra/ai/guards'));
 });
+
+
+test('P2 evaluation core imports only local deterministic code and Node built-ins', () => {
+  const graph = importGraph('../src/autoconscience');
+  assert.deepEqual(graph.external.filter((name) => !builtins.has(name)), []);
+  assert.deepEqual(graph.dynamic, []);
+  assert.ok(graph.files.every((file) => !file.endsWith('/guard.js')));
+});

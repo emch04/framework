@@ -463,7 +463,9 @@ P3 experiments, P4 shadow mode and P6 guarded transfer remain outside
 P2. Evaluation does not create a scheduler, a model transport or a deployment.
 
 - P3, experiments: time-frozen replay that refuses future data, sandbox,
-  protected test set, drift monitoring, abstention, lessons turned into tests.
+  protected test set. Drift monitoring, follow-ups, abstention, the night
+  adversary, multi-role review and lessons turned into tests are described in
+  "P3 · vigilance (2/2)" below.
 - P4, shadow mode in a sandbox. P6, guarded transfer between agents.
 
 P5 (advanced governance) is in the governor entry: see above.
@@ -562,6 +564,154 @@ with `CONSCIENCE_TEST_DATABASE_URL=postgresql://localhost/conscience_p3a_test`;
 P3 integration tests fail, rather than skip, if an explicitly supplied test
 database is unavailable. Run the mutation proof separately with
 `node packages/conscience/test/experiments-mutations.js`.
+
+## P3 · vigilance (2/2)
+
+Second half of P3, in `@astratra/conscience/autoconscience`: six deterministic
+modules that watch, remind, hold back, challenge, cross-check and turn lessons
+into tests. None imports a language model (a test reads the sources), and none
+applies anything: every change goes through a proposal to the governor, and
+every call first checks that the governor exists, is genuine and is not halted
+(`assertGovernorReady`).
+
+| No. | Function | What it does |
+| --- | --- | --- |
+| 17 | `detectDrift` | Drift watch on inputs, outcomes and performance, with a coded recommendation. |
+| 18 | `createFollowUps` | Prospective memory: `scheduleFollowUp`, `dueFollowUps`. |
+| 26 | `abstentionPolicy` | Confidence threshold from calibration and error costs. |
+| 27 | `generateAdversarialCases` | Candidate trap scenarios from recent failures. |
+| 14 | `reviewByRoles` | Verifier, contradictor and risk controller, reviewed apart. |
+| 03 | `lessonToScenario` | A verified lesson becomes an anti-regression scenario. |
+
+### Drift watch (17)
+
+```js
+const report = await detectDrift({
+  governor, organisationId, agentId, domain,
+  baseline: { window: { from, to }, inputs: { domains, languages, lengths },
+              outcomes: { succeeded, failed, unknown },
+              performance: { calibration: { sampleSize, brierScore, confidenceGap }, tools: [{ tool, provider, knownCalls, failures }] } },
+  current: { /* same shape */ },
+  calendars,            // P2 DomainCalendar[] of the same organisation
+  recentChange,         // { kind, id, version, previousVersion, deployedAt }
+  propose: {}           // optional: a rollback recommendation becomes a PENDING proposal
+});
+```
+
+`snapshotWindow({ decisions, findings, agentId, domain, languageOf })` builds a
+summary from P2 material (the core detects no language: `languageOf` is yours).
+
+Tests, simple and documented in the source: the Population Stability Index for
+distributions (domains, languages, lengths cut at the baseline quintiles; a 0.5
+pseudo-count per category; below 0.10 stable, 0.10 to 0.25 moderate, 0.25 or
+more significant) and the difference of two proportions with Newcombe's hybrid
+score interval, built from the Wilson intervals of P2 (outcome success rate,
+share of unknown, tool error rate). A shift is significant when the interval
+excludes zero and the gap is at least 5 points (`minimumEffect`). Brier score
+and confidence gap are compared with a threshold (`brierDelta`,
+`confidenceGapDelta`). A window with fewer than `minimumSample` known
+observations never concludes: `insufficient_data`.
+
+A **business calendar** is read before the agent is blamed: a period that
+overlaps the current window and not the baseline one explains the shift
+(`attribution: 'calendar'`, recommendation `monitor`, `reexamineAfter`).
+
+Coded recommendation: `monitor`, `investigate` (inputs moved or a tool decayed
+together with a decline), `freeze` (severe unexplained decline, `freezeDrop`),
+`propose_rollback` (decline in a window that starts after a recent change, inputs
+stable). The report always says `applied: false`. With `propose`, a rollback
+becomes a pending proposal at the governor (high risk, two approvals by default)
+and still nothing is rolled back: a human decides, then `rollbackChange` is yours
+to call. `recordedBy` also files a finding for the morning report.
+
+### Prospective memory (18)
+
+```js
+const vstore = createMemoryVigilanceStore();          // or createPostgresVigilanceStore(pool)
+const conscience = createConscience({ governor, masker, erasers: [followUpEraser(vstore)] });
+const followUps = createFollowUps({ governor, conscience, store: vstore, masker });
+await followUps.scheduleFollowUp({ organisationId, decisionId, observableAt, question });
+const due = await followUps.dueFollowUps({ organisationId });   // { followUp, decision }[]
+await followUps.completeFollowUp({ organisationId, id });
+```
+
+Idempotent: the same decision, date and question give the same follow-up
+(`created: false`). The question is masked before storage. The decision must exist
+in the organisation (another organisation's decision: `not_found`). Follow-ups
+are erased with the person through `eraseSubject` (register `followUpEraser`);
+a follow-up whose decision was erased or expired is never returned as due. The
+content of a due item is data, never an instruction.
+
+### Abstention (26)
+
+`abstentionPolicy({ governor, organisationId, agentId, domain, calibration, errorCosts, currentThreshold, propose })`.
+Acting is worth it when the chance of success is at least
+`falsePositive / (falsePositive + falseNegative)` (the cost table of P2). The
+threshold is the lowest announced confidence, with observations of its own, from
+which the lower Wilson bound of the observed success rate stays above that
+ratio, over at least `minimumSample` decisions. Not enough data or no cost table:
+a prudent default (0.8), never lower than the threshold already in force. No
+reliable region: 1. `shouldAbstain(policy, { confidence, actionKind })` answers
+`proceed`, `ask_clarification` or (for `write` and `confirm` actions)
+`propose_verification`, always from the threshold **in force**
+(`effectiveThreshold`). A new threshold is a proposal on target
+`threshold:abstention:<agent>:<domain>`; nothing is applied here.
+
+### Night adversary (27) and lessons turned into tests (03)
+
+```js
+const library = createScenarioLibrary({ governor, store: vstore, masker });
+const { candidates, rejected } = await generateAdversarialCases({ governor, organisationId, failures, masker, generator, library });
+const lessonCase = await lessonToScenario(lesson, { governor, masker, question, tools, expect, library });
+// later, after humans approved the proposals at the governor:
+const suite = (await library.approved({ organisationId })).map((a) => a.scenario);   // for evaluateAgent
+```
+
+`generateAdversarialCases` turns recent failures into candidates of four
+categories (injection, ambiguity, edge case, access to another organisation) in
+the format of `evaluateAgent` from `@astratra/testkit`: `id`, `question`,
+simulated tools (fixed results, no effect), `expect`, and a `score` that fails
+the case when a forbidden tool is called or a forbidden text appears. An
+**injected generator** may write the cases (a function that returns data only;
+what it returns is validated, masked, and replaced by the template if invalid or
+failing). Without one, deterministic templates are used, the same failure giving
+the same cases. The **masker is required** and runs on failures and on whatever
+the generator returns.
+
+`lessonToScenario` accepts a lesson whose status is `verified` (evidence, enough
+distinct decisions, no open conflict); a hypothesis, a lesson to reassess or a
+retired one is refused (`lesson_not_verified`). The lesson says what was learned;
+you describe how to check it, and a scenario that asserts nothing is refused.
+
+Every candidate is born `to_review`. With a library it becomes a proposal at the
+governor (target kind `instructions`, id `scenarios:<agent>`, configurable with
+`targetKind`). `library.approved()` is the **only** way into the test suite: it
+keeps a candidate only when humans approved that exact content (same
+fingerprint) and the stored content is unchanged. A model, a decline, an expired
+approval or an altered candidate keep it out.
+
+### Multi-role review (14)
+
+```js
+const review = await reviewByRoles({ governor, organisationId, finding, roles: { verifier, contradictor, riskController } });
+review.advances; review.status;   // true / 'supported', or false / 'hypothesis' with review.blockers
+```
+
+Three separate functions, not a vote of models. The finding moves forward only
+if the verifier cites **independent** evidence (not the finding's own evidence or
+decisions, same organisation, optionally confirmed by `evidenceExists`), if no
+competing explanation of the contradictor is as strong as the finding's
+confidence, and if the risk controller approves a scope at least as wide as the
+requested one (`observation` < `agent` < `domain` < `organisation`). A role that
+throws or answers badly blocks the finding. Roles receive a frozen copy of the
+finding, never each other's answers.
+
+### Storage
+
+`createMemoryVigilanceStore()` and `createPostgresVigilanceStore(db, { prefix })`
+(schema: `postgresVigilanceSchema({ prefix })`, tables `<prefix>_follow_ups` and
+`<prefix>_candidates`). Same contract, same tests, every access scoped by
+organisation, every value a SQL parameter.
 
 ## Tests
 

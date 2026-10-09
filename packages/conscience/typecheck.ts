@@ -62,3 +62,26 @@ void evaluateTypes;
 
 // P3 experiment API, including forbidden content reads and frozen registrations.
 import './experiments.typecheck';
+import { detectDrift, createFollowUps, followUpEraser, createMemoryVigilanceStore, abstentionPolicy, shouldAbstain, createScenarioLibrary, generateAdversarialCases, lessonToScenario, reviewByRoles } from './src/autoconscience';
+async function vigilanceTypes() {
+  const scope = { organisationId: 'org' };
+  const masker = (text: string) => text.replace(/\d/g, '#');
+  const vstore = createMemoryVigilanceStore();
+  const report = await detectDrift({ governor, ...scope, agentId: 'a', domain: 'general', baseline: { outcomes: { succeeded: 90, failed: 10 } }, current: { outcomes: { succeeded: 60, failed: 40 } }, propose: {} });
+  const action: 'monitor' | 'freeze' | 'investigate' | 'propose_rollback' = report.recommendation;
+  const never: false = report.applied;
+  const followUps = createFollowUps({ governor, conscience, store: vstore, masker });
+  const scheduled = await followUps.scheduleFollowUp({ ...scope, decisionId: 'd', observableAt: new Date(), question: 'Look again.' });
+  const due = await followUps.dueFollowUps({ ...scope, now: new Date() });
+  void [action, never, scheduled.created, due[0]?.decision.objective, followUpEraser(vstore)];
+  const policy = await abstentionPolicy({ governor, ...scope, agentId: 'a', domain: 'general', errorCosts: { falsePositive: 5, falseNegative: 1 } });
+  void [policy.threshold, shouldAbstain(policy, { confidence: 0.4 }).recommendation];
+  const library = createScenarioLibrary({ governor, store: vstore, masker });
+  const generated = await generateAdversarialCases({ governor, ...scope, failures: [{ id: 'f', agentId: 'a', question: 'q' }], masker, library, generator: ({ category }) => ({ question: category }) });
+  const candidate = await lessonToScenario({ id: 'l', organisationId: 'org', status: 'verified', evidence: [{ kind: 'outcome', ref: 'o' }] }, { governor, masker, question: 'q', expect: { content: [/ok/] } });
+  const suite = (await library.approved(scope)).map((entry) => entry.scenario.id);
+  const review = await reviewByRoles({ governor, ...scope, finding: { id: 'f', confidence: 0.6 }, roles: {
+    verifier: () => ({ evidence: [{ kind: 'external', ref: 'x' }] }), contradictor: () => ({ competing: [] }), riskController: () => ({ approved: true, maxScope: 'agent' as const }) } });
+  void [generated.candidates[0]?.status, candidate.addedToTests, suite, review.advances, review.reviews.verifier.passed];
+}
+void vigilanceTypes;

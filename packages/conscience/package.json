@@ -1,0 +1,52 @@
+{
+  "name": "@astratra/conscience",
+  "version": "1.0.0",
+  "description": "Documented memory of an AI agent's decisions (outcomes, corrections, lessons with evidence, self-model, lineage, erasure) under a deterministic governor with no language model: constitution, permissions, budgets, isolation, kill switch, human approval.",
+  "engines": {
+    "node": ">=20"
+  },
+  "main": "src/index.js",
+  "types": "src/index.d.ts",
+  "type": "commonjs",
+  "files": [
+    "src"
+  ],
+  "scripts": {
+    "test": "node --test test/*.test.js"
+  },
+  "keywords": [
+    "astratra",
+    "ai",
+    "agent",
+    "governance",
+    "decisions",
+    "memory",
+    "audit",
+    "postgres"
+  ],
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
+  "dependencies": {
+    "@astratra/ai": "^1.8.0"
+  },
+  "devDependencies": {
+    "pg": "^8.13.1"
+  },
+  "exports": {
+    ".": {
+      "types": "./src/index.d.ts",
+      "default": "./src/index.js"
+    },
+    "./governor": {
+      "types": "./src/governor/index.d.ts",
+      "default": "./src/governor/index.js"
+    },
+    "./autoconscience": {
+      "types": "./src/autoconscience/index.d.ts",
+      "default": "./src/autoconscience/index.js"
+    },
+    "./package.json": "./package.json"
+  }
+}

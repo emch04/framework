@@ -468,6 +468,101 @@ P2. Evaluation does not create a scheduler, a model transport or a deployment.
 
 P5 (advanced governance) is in the governor entry: see above.
 
+## P3 · experiments (1/2)
+
+The first half of P3 implements proposals 02/35 (temporal replay), 32
+(simulated tools), 36 (protected final set) and 16 (preregistered experiments).
+The package stays at the unreleased version 1.0.0. All five API entries and
+their later operations check `assertGovernorReady`; scope is one organisation.
+The scoring core imports no language model and never uses generated text as a
+judge. Remaining P3 capabilities belong to the second half.
+
+| API | Contract |
+|---|---|
+| `replayDecisions({ governor, conscience, organisationId, proposal, decisionIds \| window, asOf, snapshots?, tools? })` | Reconstructs inputs and current outcome/lesson revisions known **at each decision**, with `asOf` as the outer cutoff. Refuses detected future information with `future_data`. Returns `purpose: 'compatibility_only'`, `provesProgress: false`, and `causality: 'not_established'`. |
+| `createSandbox({ governor, organisationId, tools })` | Replaces every implementation, including real read functions. Reads return static `response`, matching `recordings: [{ input, output }]`, or a simulated unknown. Writes/confirmations only append intentions; bare real functions are conservatively treated as writes. `tools[name](input)` and `getJournal()` never call real tools. |
+| `createHoldout({ governor, organisationId, cases })` | Provisioning creates an opaque handle: only `evaluate`, `getAccessLog`, and a denied `read` operation. Properties, enumeration and serialization cannot reveal contents (`holdout_protected`). One final evaluation only, including concurrent attempts. |
+| `proposeExperiment({ governor, organisationId, hypothesis, metrics, protocol, thresholds, agent, holdout, tools? })` | Deep-copies and freezes registration before any candidate execution: hypothesis, metrics, protocol, thresholds, timestamp, SHA-256 fingerprint, candidate/tool fingerprints. Reserves an unused final set. |
+| `runExperiment({ governor, organisationId, experiment })` | Executes the registered candidate once on development, then validation, then the protected final set. Changes to the protocol, metrics, thresholds, hypothesis, candidate or tools are refused with `protocol_changed`, including changes after execution. |
+
+```js
+const { createHoldout, proposeExperiment, runExperiment } = require('@astratra/conscience/autoconscience');
+const binding = { governor, organisationId: 'org-1' };
+// Supply these three disjoint sets from trusted provisioning code.
+// Each case is { id, input, expected }; reflection never receives finalCases.
+const holdout = await createHoldout({ ...binding, cases: finalCases });
+const experiment = await proposeExperiment({
+  ...binding, hypothesis: 'The candidate meets the registered accuracy floor',
+  agent: (input) => input, // self-contained evaluated function
+  metrics: [{ name: 'accuracy', kind: 'exact_match' }],
+  thresholds: { accuracy: 0.9 },
+  protocol: { development: developmentCases, validation: validationCases,
+    minimumSample: 30, level: 0.95, timeoutMs: 1000 },
+  holdout
+});
+const result = await runExperiment({ ...binding, experiment });
+// result.decision: supported | refuted | inconclusive
+// result.stages.holdout: aggregate metrics only, no cases, answers or journal.
+```
+
+Metrics use deterministic JSON equality (`kind: 'exact_match'`). Optional
+`outputKey` / `expectedKey` select structured fields. No evaluator callback can
+read final answers. P2 `honestStatistics` supplies known/unknown counts and
+two-sided Wilson intervals (minimum 30; levels 0.90, 0.95, 0.99). A missing
+output, execution failure or timeout is unknown. A decision is `supported`
+only when **every metric in every stage** has sufficient observations and an
+interval entirely at or above its threshold; `refuted` requires a sufficient
+interval entirely below a threshold; insufficient data, unknowns or an interval
+crossing a threshold are `inconclusive`. These are threshold tests, not a
+claim of causal improvement over a baseline. `interval` is the first final
+metric's interval; all intervals are in `stages.*.metrics`. Case ids and input
+fingerprints must be distinct across splits; repeated inputs cannot inflate a
+sample. Development/validation intentions are journaled; final intentions and
+individual outputs are not exposed.
+
+A replay `proposal` is `{ agent, information?: [{ organisationId, userId?, at,
+recordedAt, data }] }`. `snapshots` maps `inputSnapshotRef` to the same dated
+shape; a referenced snapshot is mandatory (`snapshot_missing`). Without a
+reference, the stored dated context is the snapshot. The candidate receives
+`{ inputs, outcomes, lessons, information, decision, asOf }`; `decision` contains
+only id, objective, context, versions and permissions, never the original
+action or expected answer. Compatibility compares its output to
+`{ name: originalAction.name, input: originalAction.input }`. Outcome and lesson
+revisions recorded later are excluded; an early-recorded but future-dated fact
+is refused. Historical lesson evidence is checked too; undated external
+evidence is refused (`temporal_evidence_required`). Factual timestamps,
+including nested ones and simulated responses, are validated. Replay read responses
+require `{ organisationId, userId?, at, recordedAt, data }`
+(`temporal_metadata_required` without dates); planned horizons
+and expiry dates are not treated as future observations. Snapshot dates must
+be truthful: the library cannot infer undeclared provenance or whether literal
+knowledge embedded in candidate source came from the future. Selections are
+bounded rather than silently truncated (`replay_limit`).
+
+Candidates are serialized from function source and executed in fresh worker
+realms with only JSON data and simulated tools. They cannot access host
+closures, `process`, `require`, `fetch`, filesystem, dynamic imports or host
+callbacks. Async computations using simulated tools are supported. An injected
+model may compute the evaluated agent's output as a self-contained function;
+remote model transports and captured model clients cannot run in this sandbox.
+The core never chooses or calls a model to decide the score. Worker timeouts
+(10–30000 ms per case), memory and output limits bound execution. This is an
+application execution boundary for supplied candidate code, not an OS security
+boundary for arbitrary hostile native code.
+
+Provisioning code must keep original final cases outside reflection; a handle
+cannot protect copies already shared by the application. A final set is
+single-use to prevent adaptive probing, and is consumed even on failed
+execution. Registration handles, final contents and access logs are local to
+the process and are not restartable; audit metadata and aggregate results are
+recorded as governor findings (`experiment_registered`, `experiment_started`,
+`experiment_completed` / `experiment_failed`) in its memory or PostgreSQL
+store. No new SQL schema or dependency is needed. Real PostgreSQL tests run
+with `CONSCIENCE_TEST_DATABASE_URL=postgresql://localhost/conscience_p3a_test`;
+P3 integration tests fail, rather than skip, if an explicitly supplied test
+database is unavailable. Run the mutation proof separately with
+`node packages/conscience/test/experiments-mutations.js`.
+
 ## Tests
 
 ```sh

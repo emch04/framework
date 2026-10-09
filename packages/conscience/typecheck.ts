@@ -59,3 +59,6 @@ async function evaluateTypes() {
   void conscience.resolveLessonConflict({ ...scope, winnerId: 'a', loserId: 'b', evidence: [] });
 }
 void evaluateTypes;
+
+// P3 experiment API, including forbidden content reads and frozen registrations.
+import './experiments.typecheck';

@@ -1,6 +1,6 @@
 {
   "name": "@astratra/saas-kit-ui",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Reusable React dashboard shell for Astratra SaaS applications, plus a thumbs up/down feedback bar for AI answers.",
   "engines": {
     "node": ">=20"
@@ -9,8 +9,14 @@
   "main": "src/index.jsx",
   "module": "src/index.jsx",
   "exports": {
-    ".": "./src/index.jsx",
-    "./api": "./src/lib/api.js",
+    ".": {
+      "types": "./src/index.d.ts",
+      "default": "./src/index.jsx"
+    },
+    "./api": {
+      "types": "./src/lib/api.d.ts",
+      "default": "./src/lib/api.js"
+    },
     "./styles.css": "./src/styles/global.css"
   },
   "files": [
@@ -35,5 +41,16 @@
   },
   "sideEffects": [
     "**/*.css"
-  ]
+  ],
+  "devDependencies": {
+    "@types/react": "^19.2.18"
+  },
+  "types": "src/index.d.ts",
+  "typesVersions": {
+    "*": {
+      "api": [
+        "src/lib/api.d.ts"
+      ]
+    }
+  }
 }

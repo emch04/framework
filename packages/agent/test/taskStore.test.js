@@ -1,0 +1,22 @@
+'use strict';
+const { test } = require('node:test');
+const assert = require('node:assert/strict');
+const { createMemoryTaskStore, createAgent, validateTask } = require('../src');
+test('memory store copies records, rejects duplicates and fences stale owners', async () => {
+  let clock = 1; const store = createMemoryTaskStore({ now: () => clock });
+  const agent = createAgent({ store, turn: () => ({ text: 'done' }) });
+  const task = await agent.create({ id: 'one', question: 'Work' });
+  task.plan.push({ id: 'a' }); assert.equal((await store.get('one')).plan.length, 0);
+  assert.equal(await store.get('missing'), null);
+  await assert.rejects(store.create(task), /exists/); assert.throws(() => validateTask({ id: '', state: 'pending' }));
+  assert.equal(await store.acquire('missing', 'a', 20), false);
+  assert.equal(await store.acquire('one', 'a', 20), true); assert.equal(await store.acquire('one', 'b', 20), false);
+  assert.equal(await store.renew('one', 'b', 20), false);
+  await store.release('one', 'b'); assert.equal(await store.acquire('one', 'b', 20), false);
+  clock = 21; assert.equal(await store.renew('one', 'a', 20), false);
+  assert.equal(await store.acquire('one', 'b', 20), true);
+  await assert.rejects(store.save(task, 'a'), /lock/);
+  assert.equal(await store.renew('one', 'b', 20), true);
+  await store.save(task, 'b'); await store.release('one', 'b');
+  assert.equal(await store.acquire('one', 'c', 20), true);
+});

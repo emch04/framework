@@ -80,7 +80,7 @@ liens.
 
 ## Paquets
 
-Les 42 paquets de [`packages/`](packages/) sont publiés sous le périmètre
+Les 43 paquets de [`packages/`](packages/) sont publiés sous le périmètre
 `@astratra`, sauf `create-astratra-app`, publié sous son propre nom. Les
 versions sont celles de chaque `package.json` ; l'historique de chaque paquet
 est dans [CHANGELOG.md](CHANGELOG.md).
@@ -103,6 +103,7 @@ est dans [CHANGELOG.md](CHANGELOG.md).
 | Paquet | Version | Rôle |
 |---|---|---|
 | [`@astratra/ai`](packages/ai/README.md) | 1.7.0 | Routage multi-fournisseur avec quotas et repli, registre d'outils, boucle d'agent, niveaux de risque avec confirmation, fournisseur llama.cpp local |
+| [`@astratra/agent`](packages/agent/README.md) | 1.0.0 | Durable tasks, budgets, plans, completion checks, context summaries and consumption tracking |
 | [`@astratra/models`](packages/models/README.md) | 1.0.0 | Service local de modèles sur CPU (vecteurs, reclassement, NLI, entités, transcription) et son client Node ; catalogue des prix et calcul du coût |
 | [`@astratra/memory`](packages/memory/README.md) | 2.0.0 | Souvenirs par personne pour un assistant : rappel hybride, fusion des doublons, corrections annulables, magasin PostgreSQL |
 | [`@astratra/rag`](packages/rag/README.md) | 1.0.0 | Recherche dans des documents : découpage, vecteurs injectés, recherche mixte, vérification des sources, lecture de documents par un service optionnel |
@@ -150,7 +151,7 @@ est dans [CHANGELOG.md](CHANGELOG.md).
 | [`@astratra/centrale`](packages/centrale/README.md) | 1.0.1 | Paquet de collecte pour un tableau de bord de surveillance auto-hébergé : erreurs, plantages, vues, usages, appels d'IA ; masqué à la source, envoyé par lots ; sans dépendance |
 | [`@astratra/centrale-cli`](packages/centrale-cli/README.md) | 1.0.1 | Outil en ligne de commande du même tableau de bord : identifiants de débogage, cartes de code, déclaration des déploiements |
 | [`@astratra/tooling`](packages/tooling/README.md) | 1.5.0 | Audit de l'espace de travail (secrets, routes, traductions), lanceur de tests, déploiement avec retour arrière, publication d'applications, évaluation d'IA |
-| [`@astratra/testkit`](packages/testkit/README.md) | 1.0.1 | Bases de test MongoDB ou PostgreSQL jetables, fausses données reproductibles par pays, garde contre les bases de production |
+| [`@astratra/testkit`](packages/testkit/README.md) | 1.1.0 | Bases de test MongoDB ou PostgreSQL jetables, fausses données reproductibles par pays, garde contre les bases de production |
 
 L'exemple [`examples/dashboard-ui`](examples/dashboard-ui/README.md) montre
 `@astratra/saas-kit-ui` branché sur l'API `saas-kit`. Il n'est pas publié.
@@ -212,7 +213,7 @@ Les règles de publication (versions, ordre, vérifications) sont dans
 
 ```
 .github/workflows/   intégration continue (lint, typage, tests, installation des paquets)
-packages/            les 42 paquets publiés, un dossier chacun
+packages/            les 43 paquets publiés, un dossier chacun
 examples/            l'exemple de tableau de bord, non publié
 scripts/             script de publication et vérification d'installation
 docs/                règles de publication, notes de conception, guides

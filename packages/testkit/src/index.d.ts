@@ -53,3 +53,18 @@ export interface FakeData {
 export function createFakeData(options?: { country?: string; seed?: number }): FakeData;
 export function supportedCountries(): string[];
 export const EMAIL_DOMAIN: string;
+
+export interface AgentEvaluationCall { name: string; args: Record<string, unknown> }
+export interface AgentEvaluationCheck { name: string; passed: boolean }
+export interface AgentScenario {
+  id: string; question: string;
+  tools?: Array<{ name: string; run(args: Record<string, unknown>, context?: any): unknown | Promise<unknown>; [key: string]: unknown }>;
+  expect?: { tools?: string[]; content?: Array<string | RegExp> };
+  score?(input: { text: string; calls: AgentEvaluationCall[]; output: unknown; checks: AgentEvaluationCheck[] }): number | Promise<number>;
+}
+export interface AgentScenarioResult { id: string; score: number; passed: boolean; text: string; calls: AgentEvaluationCall[]; checks: AgentEvaluationCheck[]; error?: string }
+export function evaluateAgent(options: {
+  scenarios: AgentScenario[];
+  run(input: { question: string; tools: NonNullable<AgentScenario['tools']>; signal?: AbortSignal }): unknown | Promise<unknown>;
+  signal?: AbortSignal;
+}): Promise<{ results: AgentScenarioResult[]; score: number; passed: number; total: number }>;

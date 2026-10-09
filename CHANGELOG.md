@@ -3,6 +3,16 @@
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Chaque package Astratra est versionné indépendamment.
 
+## 2026-10-09 — `@astratra/agent` 1.0.0, `@astratra/testkit` 1.1.0
+
+### Added
+- `@astratra/agent`: long task execution built on the existing native tool loop, time/turn/token/cost budgets, cancellation, plans, completion verification and context compaction.
+- Durable task checkpoints, per-turn consumption events, confirmation suspension, memory and injected PostgreSQL task stores with renewable fenced leases and an exported schema.
+- `@astratra/testkit`: injected agent scenario evaluation, simulated tool traces, assertions, custom scoring and aggregate reports compatible with `node --test`.
+- Root validation: declare ESM fixtures and Node fetch in ESLint; align a mobile refresh regression with the existing refusal-versus-network contract. No published mobile source changes.
+- `create-astratra-app` 1.8.1: generated projects now ask for the current floors of `@astratra/ai` (^1.7.0), `@astratra/credentials` and `@astratra/client` (^1.1.0).
+- Public declarations, installation examples, module tests and conditional real PostgreSQL coverage. No change to `@astratra/ai` or existing database migrations.
+
 ## 2026-10-09 — documentation neutre : `@astratra/centrale`, `@astratra/centrale-cli`, `@astratra/loyalty`, `@astratra/testkit` 1.0.1
 
 ### Documentation et commentaires neutres

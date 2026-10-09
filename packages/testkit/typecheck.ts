@@ -23,3 +23,6 @@ async function exercise(): Promise<void> {
   void [people, phone, countries, safe];
 }
 void exercise;
+
+import { evaluateAgent } from './src';
+void evaluateAgent({ scenarios: [{ id: 'lookup', question: 'Find', expect: { content: [/found/] }, score: ({ text }) => text ? 1 : 0 }], run: async () => ({ text: 'found' }) });

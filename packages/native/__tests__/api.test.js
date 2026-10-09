@@ -138,7 +138,7 @@ describe('refresh', () => {
     const { api, session } = harness({
       responses: [fail(401, {})],
       options: {
-        refresh: async () => { throw new Error('refresh token rotated'); },
+        refresh: async () => { throw new ApiError('REFRESH_REFUSED', 401); },
         onSessionExpired: () => expired.push('gone')
       }
     });
@@ -147,6 +147,21 @@ describe('refresh', () => {
     await expect(api.request('/orders')).rejects.toBeTruthy();
     expect(await session.getAccessToken()).toBeNull();
     expect(expired).toEqual(['gone']);
+  });
+
+  test('a transient refresh failure preserves the session', async () => {
+    const expired = [];
+    const { api, session } = harness({
+      responses: [fail(401, {})],
+      options: {
+        refresh: async () => { throw new Error('NETWORK_UNAVAILABLE'); },
+        onSessionExpired: () => expired.push('gone')
+      }
+    });
+    await session.save({ accessToken: 'a1', refreshToken: 'r1' });
+    await expect(api.request('/orders')).rejects.toThrow('NETWORK_UNAVAILABLE');
+    expect(await session.getAccessToken()).toBe('a1');
+    expect(expired).toEqual([]);
   });
 
   test('with no refresh wired in, a 401 is simply an error', async () => {

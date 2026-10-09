@@ -22,7 +22,7 @@ const FULLSTACK_ONLY = new Set(['client', 'prerender']);
 const BRICKS = {
   credentials: {
     package: '@astratra/credentials',
-    version: '^1.0.0',
+    version: '^1.1.0',
     summary: 'clés de service chiffrées en base, modifiables sans redémarrage',
     file: 'api/bricks/credentials.js',
     contents: () => `import { createFieldCipher } from '@astratra/security';
@@ -336,7 +336,7 @@ export const archive = createArchiveBuilder({
 
   client: {
     package: '@astratra/client',
-    version: '^1.0.0',
+    version: '^1.1.0',
     summary: 'session sur 401, garde de route, mots de passe, file hors ligne',
     file: 'web/src/lib/client.js',
     contents: () => `import { createPasswordRules, createRouteGuard, createSessionClient } from '@astratra/client';

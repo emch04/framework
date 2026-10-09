@@ -486,6 +486,106 @@ P2. L'évaluation ne crée ni planificateur ni transport de modèle ni déploiem
 
 La P5 (gouvernance avancée) est dans l'entrée du gouverneur : voir plus haut.
 
+## P3 · expériences (1/2)
+
+Cette première moitié couvre 02/35 (rejeu temporel), 32 (outils simulés), 36
+(jeu final protégé) et 16 (laboratoire pré-enregistré). Le paquet reste en
+1.0.0, non publié. Les cinq API et leurs opérations ultérieures passent par
+`assertGovernorReady`, dans une seule organisation. Le cœur de calcul n'importe
+aucun modèle de langage et n'utilise jamais de texte généré pour juger un
+résultat. Les autres fonctions P3 appartiennent à la seconde moitié.
+
+| API | Contrat |
+|---|---|
+| `replayDecisions({ governor, conscience, organisationId, proposal, decisionIds \| window, asOf, snapshots?, tools? })` | Reconstruit les entrées, résultats et révisions de leçons connus **à chaque décision** ; `asOf` fixe la borne extérieure. Donnée future détectée : `future_data`. Rend `purpose: 'compatibility_only'`, `provesProgress: false`, `causality: 'not_established'`. |
+| `createSandbox({ governor, organisationId, tools })` | Remplace chaque implémentation, même une lecture réelle à effets secondaires. Lecture : `response`, `recordings: [{ input, output }]`, ou inconnu simulé. Écriture/confirmation : intention journalisée seulement. Une fonction réelle seule est traitée prudemment comme écriture. `tools[name](input)` et `getJournal()` n'appellent jamais l'outil réel. |
+| `createHoldout({ governor, organisationId, cases })` | Le code de préparation reçoit un objet opaque : `evaluate`, `getAccessLog`, et `read` toujours refusé. Propriétés, énumération et sérialisation ne révèlent aucun contenu (`holdout_protected`). Une seule évaluation finale, y compris en concurrence. |
+| `proposeExperiment({ governor, organisationId, hypothesis, metrics, protocol, thresholds, agent, holdout, tools? })` | Copie et gèle avant toute exécution l'hypothèse, les métriques, le protocole, les seuils, l'horodatage et l'empreinte SHA-256, avec empreintes du candidat et des outils. Réserve un jeu final inutilisé. |
+| `runExperiment({ governor, organisationId, experiment })` | Exécute une seule fois le candidat enregistré : développement, validation, puis jeu final protégé. Modifier protocole, métriques, seuils, hypothèse, candidat ou outils est refusé (`protocol_changed`), même après l'exécution. |
+
+```js
+const { createHoldout, proposeExperiment, runExperiment } = require('@astratra/conscience/autoconscience');
+const portée = { governor, organisationId: 'org-1' };
+// Trois jeux séparés, préparés hors du moteur de réflexion.
+// Chaque cas : { id, input, expected }. Ne jamais lui donner casFinaux.
+const holdout = await createHoldout({ ...portée, cases: casFinaux });
+const expérience = await proposeExperiment({
+  ...portée, hypothesis: 'Le candidat atteint le seuil d’exactitude enregistré',
+  agent: (entrée) => entrée,
+  metrics: [{ name: 'accuracy', kind: 'exact_match' }],
+  thresholds: { accuracy: 0.9 },
+  protocol: { development: casDéveloppement, validation: casValidation,
+    minimumSample: 30, level: 0.95, timeoutMs: 1000 },
+  holdout
+});
+const résultat = await runExperiment({ ...portée, experiment: expérience });
+// décision : supported | refuted | inconclusive (« non concluant »)
+// stages.holdout : métriques agrégées, sans cas, réponses ni journal d'outils.
+```
+
+Les métriques comparent les valeurs JSON par le code (`exact_match`), avec
+`outputKey` / `expectedKey` facultatifs pour sélectionner des champs. Aucun
+juge injecté ne peut lire les réponses finales. `honestStatistics` de P2 rend
+les effectifs connus/inconnus et Wilson bilatéral (minimum 30 ; niveaux 0,90,
+0,95 ou 0,99). Sortie absente, panne ou dépassement de temps : inconnu.
+`supported` exige pour **chaque métrique de chaque étape** un effectif suffisant
+et un intervalle entièrement au-dessus du seuil ou à égalité ; `refuted` exige
+un intervalle suffisant entièrement inférieur à un seuil. Données insuffisantes,
+inconnus ou intervalle traversant le seuil : `inconclusive`. Il s'agit de tests
+de seuils, sans preuve causale de progrès face à une référence. `interval` est
+celui de la première métrique finale ; tous les intervalles sont dans
+`stages.*.metrics`. Identifiants et empreintes d'entrées doivent être distincts
+entre les jeux ; répéter une entrée ne gonfle pas l'effectif. Les intentions de
+développement/validation sont journalisées ; celles du jeu final et les sorties
+individuelles restent cachées.
+
+Une proposition de rejeu est `{ agent, information?: [{ organisationId,
+userId?, at, recordedAt, data }] }`. `snapshots` associe chaque
+`inputSnapshotRef` à cette même forme datée ; toute référence exige son
+instantané (`snapshot_missing`). Sans référence, le contexte daté enregistré
+sert d'instantané. Le candidat reçoit `{ inputs, outcomes, lessons,
+information, decision, asOf }`. `decision` ne contient que identifiant,
+objectif, contexte, versions et permissions, jamais l'action originale ou la
+réponse attendue. La compatibilité compare sa sortie à
+`{ name: actionOriginale.name, input: actionOriginale.input }`.
+Révisions de résultats et leçons enregistrées après la décision : exclues.
+Un fait enregistré tôt mais daté du futur : refusé. Les preuves historiques des
+leçons sont contrôlées ; preuves externes non datées :
+`temporal_evidence_required`. Les dates factuelles imbriquées et les réponses
+simulées sont contrôlées. Les réponses de lecture du rejeu exigent
+`{ organisationId, userId?, at, recordedAt, data }`
+(`temporal_metadata_required` sans dates) ; horizons prévus et expirations ne sont pas des
+observations futures. Les dates fournies doivent être fidèles : le code ne
+peut déduire une provenance non déclarée ni dater une connaissance littérale
+inscrite dans la fonction candidate. Une sélection trop grande est refusée
+(`replay_limit`), jamais tronquée silencieusement.
+
+Les fonctions candidates sont sérialisées puis exécutées dans des workers et
+des contextes ne recevant que du JSON et des outils simulés : pas de closure
+hôte, `process`, `require`, `fetch`, fichiers, import dynamique ni rappel hôte.
+Les calculs asynchrones avec outils simulés fonctionnent. Un modèle peut être
+injecté comme calcul autonome de l'agent évalué ; un transport distant ou un
+client capturé dans une closure ne peut pas fonctionner dans ce bac à sable.
+Le cœur ne choisit et n'appelle aucun modèle pour décider du score.
+Temps par cas (10–30000 ms), mémoire et taille de sortie sont bornés. Cette
+frontière d'exécution applicative ne remplace pas une isolation du système
+d'exploitation pour du code natif arbitraire hostile.
+
+Le code de préparation doit conserver les cas finaux hors de la réflexion :
+l'objet protégé ne peut retirer des copies déjà partagées par l'application.
+Le jeu final est à usage unique pour empêcher les interrogations adaptatives,
+et reste consommé après une panne d'exécution. Objets d'enregistrement,
+contenus finaux et journal d'accès restent locaux au processus, sans reprise
+après redémarrage. Métadonnées d'enregistrement et résultats agrégés sont
+audités dans les constats du gouverneur (`experiment_registered`,
+`experiment_started`, `experiment_completed` / `experiment_failed`), en
+mémoire ou PostgreSQL. Aucun nouveau schéma SQL ni dépendance.
+Les tests réels utilisent
+`CONSCIENCE_TEST_DATABASE_URL=postgresql://localhost/conscience_p3a_test` ;
+une base explicitement fournie mais indisponible fait échouer les tests P3,
+sans les ignorer. Preuves de mutation séparées :
+`node packages/conscience/test/experiments-mutations.js`.
+
 ## Tests
 
 ```sh

@@ -103,3 +103,10 @@ function createEvaluator(options) {
 module.exports = { runReflection, evaluateOutcomes, createEvaluator, AVAILABLE_FROM,
   wilsonInterval: statistics.wilsonInterval, honestStatistics: statistics.honestStatistics,
   calibratePredictions: statistics.calibratePredictions, scoreErrorCosts: statistics.scoreErrorCosts, ...signals, ...lessons };
+
+// P3 experiments (first half); append-only integration with the evaluation core.
+const { createSandbox } = require('./experiments/sandbox');
+const { replayDecisions } = require('./experiments/replay');
+const { createHoldout } = require('./experiments/holdout');
+const { proposeExperiment, runExperiment } = require('./experiments/laboratory');
+Object.assign(module.exports, { createSandbox, replayDecisions, createHoldout, proposeExperiment, runExperiment });

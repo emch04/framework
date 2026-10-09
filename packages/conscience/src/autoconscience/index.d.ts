@@ -118,3 +118,82 @@ export function oppositeLessons(a: Partial<LessonVersion>, b: Partial<LessonVers
 export function assessedLessonStatus(input: { evidence: Evidence[]; sampleSize: number; contradictions?: string[]; factualEligible?: boolean }, options?: StatisticsOptions): 'hypothesis' | 'verified' | 'to_reassess';
 export const DEFAULT_CLAIM_RULES: Readonly<Record<string, readonly string[]>>;
 export const AVAILABLE_FROM: 'P2';
+
+/** P3 experiments (first half). Candidate functions are serialized into isolated workers;
+ * closures, host callbacks, network and filesystem APIs are unavailable. */
+export type ExperimentData = null | boolean | number | string | ExperimentData[] | { [key: string]: ExperimentData };
+export type DeepReadonlyExperiment<T> = T extends (...args: any[]) => any ? T : T extends object ? { readonly [K in keyof T]: DeepReadonlyExperiment<T[K]> } : T;
+export interface ExperimentBinding { governor: Governor; organisationId: string }
+export interface SimulatedToolDescriptor {
+  kind: 'read' | 'write' | 'confirm';
+  /** Real implementations are ignored, including read tools with side effects. */
+  execute?: (...args: any[]) => unknown;
+  response?: ExperimentData;
+  recordings?: Array<{ input: ExperimentData; output: ExperimentData }>;
+}
+export type SandboxTools = Record<string, SimulatedToolDescriptor | ((...args: any[]) => unknown)>;
+export interface SandboxJournalEntry { sequence: number; tool: string; kind: 'read' | 'write'; input: ExperimentData; simulated: true; caseId?: string }
+export interface Sandbox {
+  readonly tools: Readonly<Record<string, (input?: ExperimentData) => Promise<ExperimentData>>>;
+  getJournal(): Promise<SandboxJournalEntry[]>;
+}
+export function createSandbox(options: ExperimentBinding & { tools?: SandboxTools }): Promise<Sandbox>;
+/** Self-contained function. A model's computation may be embedded here; it never judges scores. */
+export type ExperimentAgent = (input: any, tools: Readonly<Record<string, (input?: ExperimentData) => Promise<ExperimentData>>>) => unknown | Promise<unknown>;
+export interface ExperimentCase { id: string; input: ExperimentData; expected: ExperimentData }
+export interface ExperimentMetric { name: string; kind: 'exact_match'; outputKey?: string; expectedKey?: string }
+export interface AggregateExperimentScore { sandbox: true; metrics: Record<string, HonestStatistics> }
+export interface ExperimentStageScore extends AggregateExperimentScore { journal?: SandboxJournalEntry[] }
+export interface HoldoutAccess { sequence: number; action: 'read_denied' | 'reserved' | 'evaluation_started' | 'evaluation_completed' | 'evaluation_failed' | 'evaluation_denied' | 'registration_failed'; at: string }
+export interface HoldoutEvaluationOptions extends StatisticsOptions {
+  agent: ExperimentAgent; metrics?: ExperimentMetric[]; tools?: SandboxTools; sandbox?: Sandbox; timeoutMs?: number; organisationId?: string;
+}
+/** Only provisioning code supplies cases. Never hand their originals to reflection.
+ * The handle permits one opaque evaluation; all content reads throw holdout_protected. */
+export interface ProtectedHoldout {
+  evaluate(options: HoldoutEvaluationOptions): Promise<AggregateExperimentScore>;
+  getAccessLog(): Promise<HoldoutAccess[]>;
+  read(): never;
+}
+export function createHoldout(options: ExperimentBinding & { cases: ExperimentCase[] }): Promise<ProtectedHoldout>;
+export interface TemporalExperimentData extends Scope { at: string | number; recordedAt: string | number; data: ExperimentData }
+export interface ReplayProposal { agent: ExperimentAgent; information?: TemporalExperimentData[] }
+export type ReplaySelection = { decisionIds: string[]; window?: never } | { decisionIds?: never; window: { from: import('../index').DateInput; to: import('../index').DateInput } };
+export type ReplayDecisionsOptions = ExperimentBinding & Scope & ReplaySelection & {
+  conscience: Conscience; proposal: ReplayProposal; asOf: import('../index').DateInput;
+  agentId?: string; snapshots?: Record<string, TemporalExperimentData>; tools?: SandboxTools; sandbox?: Sandbox; timeoutMs?: number;
+};
+export interface ReplayResult {
+  purpose: 'compatibility_only'; provesProgress: false; causality: 'not_established'; sandbox: true;
+  cases: Array<{ decisionId: string; asOf: string; status: 'completed' | 'unknown'; compatible: boolean | null; output?: ExperimentData; intentions: number; journal: SandboxJournalEntry[] }>;
+}
+export function replayDecisions(options: ReplayDecisionsOptions): Promise<ReplayResult>;
+export interface ExperimentProtocol extends StatisticsOptions {
+  development: ExperimentCase[]; validation: ExperimentCase[]; timeoutMs?: number;
+  /** Additional plain JSON protocol fields are retained in the frozen fingerprint. */
+  [key: string]: unknown;
+}
+export interface ProposeExperimentOptions extends ExperimentBinding {
+  id?: string; hypothesis: string; metrics: ExperimentMetric[]; protocol: ExperimentProtocol;
+  thresholds: Record<string, number>; holdout: ProtectedHoldout; agent: ExperimentAgent; tools?: SandboxTools; now?(): number;
+}
+declare const preregisteredExperiment: unique symbol;
+export type RegisteredExperiment = DeepReadonlyExperiment<{
+  readonly [preregisteredExperiment]: true;
+  id: string; organisationId: string; hypothesis: string; metrics: ExperimentMetric[];
+  protocol: ExperimentProtocol & { minimumSample: number; level: 0.9 | 0.95 | 0.99; timeoutMs: number };
+  thresholds: Record<string, number>; candidateFingerprint: string; toolsFingerprint: string;
+  registrationId: string; registeredAt: string; fingerprint: string; sandbox: true;
+}>;
+export function proposeExperiment(options: ProposeExperimentOptions): Promise<RegisteredExperiment>;
+export interface RunExperimentOptions extends ExperimentBinding {
+  experiment: RegisteredExperiment;
+  /** Optional repeats are compared with the registration; changes are refused even after execution. */
+  protocol?: ExperimentProtocol; metrics?: ExperimentMetric[]; thresholds?: Record<string, number>; hypothesis?: string; agent?: ExperimentAgent; tools?: SandboxTools;
+}
+export interface ExperimentResult {
+  experimentId: string; fingerprint: string; registeredAt: string; sandbox: true;
+  decision: 'supported' | 'refuted' | 'inconclusive'; causality: 'not_established'; interval: Interval | null;
+  stages: { development: ExperimentStageScore; validation: ExperimentStageScore; holdout: AggregateExperimentScore };
+}
+export function runExperiment(options: RunExperimentOptions): Promise<ExperimentResult>;

@@ -10,7 +10,7 @@
 # dessus. Un consommateur qui installe pendant la publication ne doit jamais
 # tomber sur un package dont le voisin n'existe pas encore.
 #
-#   bash scripts/publish-all.sh            # npm demande de valider chaque paquet
+#   bash scripts/publish-all.sh            # lance npm login si besoin, puis npm demande de valider chaque paquet
 #   bash scripts/publish-all.sh --dry-run  # montre ce qui partirait
 #
 # Avec un jeton d'AUTOMATISATION dans ~/.npmrc, aucun code n'est demandé — un
@@ -99,6 +99,20 @@ if ! node -e '
 ' "${ORDER[@]}"; then
   echo "remets ORDER dans l'ordre des dépendances, puis relance."
   exit 1
+fi
+
+# Connexion vérifiée avant le premier paquet : sans elle, tout échouait en
+# E401 au milieu de la liste. `npm whoami` répond sans rien demander quand la
+# session est ouverte ; sinon `npm login` s'ouvre ici, une seule fois.
+if [ "$DRY" = "0" ]; then
+  if utilisateur=$(npm whoami 2>/dev/null); then
+    echo "  connecté à npm : $utilisateur"
+  else
+    echo "  pas connecté à npm : ouverture de npm login"
+    npm login || { echo "connexion refusée ou annulée : rien n'est publié."; exit 1; }
+    utilisateur=$(npm whoami 2>/dev/null) || { echo "toujours pas connecté après npm login : rien n'est publié."; exit 1; }
+    echo "  connecté à npm : $utilisateur"
+  fi
 fi
 
 published=(); skipped=(); staged=()

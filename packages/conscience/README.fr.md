@@ -480,11 +480,166 @@ P3 (expériences), P4 (mode ombre) et P6 (transfert) restent hors
 P2. L'évaluation ne crée ni planificateur ni transport de modèle ni déploiement.
 
 - P3, expériences : rejeu figé à la date qui refuse toute donnée future, bac à
-  sable, jeu de tests protégé, surveillance de dérive, abstention, leçons
-  devenues tests.
+  sable, jeu de tests protégé. Surveillance de dérive, suivis, abstention,
+  adversaire nocturne, revue multi-rôles et leçons devenues tests sont décrits
+  dans « P3 · vigilance (2/2) » plus bas.
 - P4, mode ombre en bac à sable. P6, transfert encadré entre agents.
 
 La P5 (gouvernance avancée) est dans l'entrée du gouverneur : voir plus haut.
+
+## P3 · vigilance (2/2)
+
+Seconde moitié de P3, dans `@astratra/conscience/autoconscience` : six modules
+déterministes qui surveillent, rappellent, retiennent, mettent à l'épreuve,
+recoupent et transforment les leçons en tests. Aucun n'importe de modèle de
+langage (un test lit les sources) et aucun n'applique quoi que ce soit : tout
+changement passe par une proposition au gouverneur, et chaque appel vérifie
+d'abord que le gouverneur existe, est authentique et n'est pas à l'arrêt
+(`assertGovernorReady`).
+
+| N° | Fonction | Rôle |
+| --- | --- | --- |
+| 17 | `detectDrift` | Surveillance de dérive des entrées, des résultats et des performances, avec recommandation codée. |
+| 18 | `createFollowUps` | Mémoire prospective : `scheduleFollowUp`, `dueFollowUps`. |
+| 26 | `abstentionPolicy` | Seuil de confiance tiré de la calibration et des coûts d'erreur. |
+| 27 | `generateAdversarialCases` | Scénarios-pièges candidats à partir des échecs récents. |
+| 14 | `reviewByRoles` | Vérificateur, contradicteur et contrôleur des risques, revues séparées. |
+| 03 | `lessonToScenario` | Une leçon vérifiée devient un scénario anti-régression. |
+
+### Surveillance de dérive (17)
+
+```js
+const rapport = await detectDrift({
+  governor, organisationId, agentId, domain,
+  baseline: { window: { from, to }, inputs: { domains, languages, lengths },
+              outcomes: { succeeded, failed, unknown },
+              performance: { calibration: { sampleSize, brierScore, confidenceGap }, tools: [{ tool, provider, knownCalls, failures }] } },
+  current: { /* même forme */ },
+  calendars,            // DomainCalendar[] de P2, de la même organisation
+  recentChange,         // { kind, id, version, previousVersion, deployedAt }
+  propose: {}           // facultatif : un retour arrière recommandé devient une proposition EN ATTENTE
+});
+```
+
+`snapshotWindow({ decisions, findings, agentId, domain, languageOf })` construit
+un résumé à partir des données de P2 (le cœur ne détecte aucune langue :
+`languageOf` est à vous).
+
+Tests simples, documentés dans le code : l'indice de stabilité de population
+(PSI) pour les répartitions (domaines, langues, longueurs découpées aux
+quintiles de la référence ; un pseudo-comptage de 0,5 par catégorie ; sous 0,10
+stable, de 0,10 à 0,25 modéré, 0,25 et plus significatif) et la différence de deux
+proportions avec l'intervalle de score hybride de Newcombe, construit sur les
+intervalles de Wilson de P2 (taux de réussite, part d'inconnu, taux d'erreur des
+outils). Un écart est significatif quand l'intervalle exclut zéro et que l'écart
+atteint 5 points (`minimumEffect`). Le score de Brier et l'écart de confiance se
+comparent à un seuil (`brierDelta`, `confidenceGapDelta`). Une fenêtre de moins de
+`minimumSample` observations connues ne conclut jamais : `insufficient_data`.
+
+Un **calendrier métier** est consulté avant d'accuser l'agent : une période qui
+recouvre la fenêtre courante et pas la fenêtre de référence explique l'écart
+(`attribution: 'calendar'`, recommandation `monitor`, `reexamineAfter`).
+
+Recommandation codée : `monitor` (surveiller), `investigate` (enquêter : les
+entrées ont bougé ou un outil s'est dégradé en même temps qu'une baisse),
+`freeze` (geler : baisse sévère sans explication, `freezeDrop`),
+`propose_rollback` (proposer un retour arrière : baisse dans une fenêtre qui
+commence après un changement récent, entrées stables). Le rapport dit toujours
+`applied: false`. Avec `propose`, le retour arrière devient une proposition en
+attente chez le gouverneur (risque élevé, deux approbations par défaut) et rien
+n'est annulé pour autant : un humain décide, puis `rollbackChange` reste à vous.
+`recordedBy` dépose aussi un constat pour le bilan du matin.
+
+### Mémoire prospective (18)
+
+```js
+const vstore = createMemoryVigilanceStore();          // ou createPostgresVigilanceStore(pool)
+const conscience = createConscience({ governor, masker, erasers: [followUpEraser(vstore)] });
+const followUps = createFollowUps({ governor, conscience, store: vstore, masker });
+await followUps.scheduleFollowUp({ organisationId, decisionId, observableAt, question });
+const dus = await followUps.dueFollowUps({ organisationId });   // { followUp, decision }[]
+await followUps.completeFollowUp({ organisationId, id });
+```
+
+Idempotent : même décision, même date, même question, même suivi
+(`created: false`). La question est masquée avant d'être gardée. La décision doit
+exister dans l'organisation (celle d'une autre : `not_found`). Les suivis
+s'effacent avec la personne par `eraseSubject` (déclarer `followUpEraser`) ; un
+suivi dont la décision a été effacée ou a expiré n'est jamais rendu comme dû. Le
+contenu d'un suivi dû est une donnée, jamais une consigne.
+
+### Abstention (26)
+
+`abstentionPolicy({ governor, organisationId, agentId, domain, calibration, errorCosts, currentThreshold, propose })`.
+Agir vaut la peine quand la chance de réussite atteint
+`falsePositive / (falsePositive + falseNegative)` (la table de coûts de P2). Le
+seuil est la plus basse confiance annoncée, ayant ses propres observations, à
+partir de laquelle la borne basse de Wilson du taux de réussite observé reste au
+dessus de ce rapport, sur au moins `minimumSample` décisions. Pas assez de données
+ou pas de table de coûts : un seuil prudent par défaut (0,8), jamais plus bas que
+celui déjà en vigueur. Aucune zone fiable : 1. `shouldAbstain(policy, { confidence, actionKind })`
+répond `proceed`, `ask_clarification` (demander une précision) ou, pour les
+actions `write` et `confirm`, `propose_verification`, toujours d'après le seuil
+**en vigueur** (`effectiveThreshold`). Un nouveau seuil est une proposition sur la
+cible `threshold:abstention:<agent>:<domaine>` ; rien n'est appliqué ici.
+
+### Adversaire nocturne (27) et leçons devenues tests (03)
+
+```js
+const library = createScenarioLibrary({ governor, store: vstore, masker });
+const { candidates, rejected } = await generateAdversarialCases({ governor, organisationId, failures, masker, generator, library });
+const cas = await lessonToScenario(lesson, { governor, masker, question, tools, expect, library });
+// plus tard, une fois les propositions approuvées par des humains chez le gouverneur :
+const suite = (await library.approved({ organisationId })).map((a) => a.scenario);   // pour evaluateAgent
+```
+
+`generateAdversarialCases` transforme les échecs récents en candidats de quatre
+catégories (injection, ambiguïté, cas limite, accès à une autre organisation) au
+format d'`evaluateAgent` de `@astratra/testkit` : `id`, `question`, outils
+simulés (résultats fixes, sans effet), `expect`, et un `score` qui fait échouer le
+cas si un outil interdit est appelé ou un texte interdit apparaît. Un
+**générateur injecté** peut écrire les cas (une fonction qui rend des données
+seulement ; ce qu'elle rend est validé, masqué, et remplacé par le gabarit s'il
+est invalide ou en échec). Sans générateur, des gabarits déterministes : même
+échec, mêmes cas. Le **masqueur est obligatoire** et passe sur les échecs et sur
+tout ce que rend le générateur.
+
+`lessonToScenario` accepte une leçon de statut `verified` (preuves, assez de
+décisions distinctes, aucun conflit ouvert) ; une hypothèse, une leçon à
+réévaluer ou retirée est refusée (`lesson_not_verified`). La leçon dit ce qui a
+été appris ; vous décrivez comment le vérifier, et un scénario qui n'affirme rien
+est refusé.
+
+Tout candidat naît `to_review` (« à relire »). Avec une bibliothèque, il devient
+une proposition au gouverneur (cible de type `instructions`, identifiant
+`scenarios:<agent>`, réglable par `targetKind`). `library.approved()` est la
+**seule** entrée dans les tests : elle ne garde un candidat que si des humains ont
+approuvé exactement ce contenu (même empreinte) et que le contenu gardé n'a pas
+changé. Un modèle, un refus, une approbation expirée ou un candidat modifié le
+laissent dehors.
+
+### Revue multi-rôles (14)
+
+```js
+const revue = await reviewByRoles({ governor, organisationId, finding, roles: { verifier, contradictor, riskController } });
+revue.advances; revue.status;   // true / 'supported', ou false / 'hypothesis' avec revue.blockers
+```
+
+Trois fonctions séparées, pas un vote de modèles. Le constat n'avance que si le
+vérificateur cite une preuve **indépendante** (ni les preuves ni les décisions du
+constat, même organisation, confirmée au besoin par `evidenceExists`), si aucune
+explication concurrente du contradicteur n'est aussi forte que la confiance du
+constat, et si le contrôleur des risques valide une portée au moins aussi large
+que celle demandée (`observation` < `agent` < `domain` < `organisation`). Un rôle
+qui lève une erreur ou répond mal bloque le constat. Les rôles reçoivent une copie
+gelée du constat, jamais les réponses des autres.
+
+### Stockage
+
+`createMemoryVigilanceStore()` et `createPostgresVigilanceStore(db, { prefix })`
+(schéma : `postgresVigilanceSchema({ prefix })`, tables `<prefix>_follow_ups` et
+`<prefix>_candidates`). Même contrat, mêmes tests, chaque accès borné par
+l'organisation, chaque valeur en paramètre SQL.
 
 ## Tests
 

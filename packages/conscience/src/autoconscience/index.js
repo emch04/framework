@@ -103,3 +103,6 @@ function createEvaluator(options) {
 module.exports = { runReflection, evaluateOutcomes, createEvaluator, AVAILABLE_FROM,
   wilsonInterval: statistics.wilsonInterval, honestStatistics: statistics.honestStatistics,
   calibratePredictions: statistics.calibratePredictions, scoreErrorCosts: statistics.scoreErrorCosts, ...signals, ...lessons };
+
+/* P3 · vigilance (2/2): drift, follow-ups, abstention, night adversary, multi-role review, lessons turned into tests. */
+Object.assign(module.exports, require('./vigilance'));

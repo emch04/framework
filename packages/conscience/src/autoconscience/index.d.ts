@@ -118,3 +118,6 @@ export function oppositeLessons(a: Partial<LessonVersion>, b: Partial<LessonVers
 export function assessedLessonStatus(input: { evidence: Evidence[]; sampleSize: number; contradictions?: string[]; factualEligible?: boolean }, options?: StatisticsOptions): 'hypothesis' | 'verified' | 'to_reassess';
 export const DEFAULT_CLAIM_RULES: Readonly<Record<string, readonly string[]>>;
 export const AVAILABLE_FROM: 'P2';
+
+/* P3 · vigilance (2/2). */
+export * from './vigilance';

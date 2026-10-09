@@ -5,9 +5,11 @@
  */
 
 const REGLES: Array<[RegExp, string]> = [
-  [/\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}/g, '[jeton]'],
-  [/\b(Bearer|Basic)\s+[A-Za-z0-9._~+/=-]{8,}/gi, '$1 [jeton]'],
-  [/\b(clj_(?:pub|dep|srv)_|sk-(?:proj-|ant-)?|gsk_|xaat-|AIza|ghp_|github_pat_|xox[bp]-|AKIA)[A-Za-z0-9_-]{8,}/g, '[cle]'],
+  /* Segments bornés : sans bornes, une suite « eyJ-eyJ-… » faisait reprendre la recherche à chaque
+     départ possible, en temps quadratique (9 octobre 2026). */
+  [/\beyJ[A-Za-z0-9_-]{8,2048}\.[A-Za-z0-9_-]{8,8192}\.[A-Za-z0-9_-]{8,2048}/g, '[jeton]'],
+  [/\b(Bearer|Basic)\s{1,8}[A-Za-z0-9._~+/=-]{8,8192}/gi, '$1 [jeton]'],
+  [/\b(clj_(?:pub|dep|srv)_|sk-(?:proj-|ant-)?|gsk_|xaat-|AIza|ghp_|github_pat_|xox[bp]-|AKIA)[A-Za-z0-9_-]{8,512}/g, '[cle]'],
   [/\b(password|passwd|mot_?de_?passe|secret|token|api[_-]?key|authorization|cookie)(["']?\s*[:=]\s*["']?)[^\s"'&,;}]+/gi, '$1$2[masque]'],
   /* Bornée (64 avant l'arobase, 255 après, comme la norme) : sans bornes, une longue chaîne sans
      « @ » faisait reprendre la recherche à chaque position, en temps quadratique, assez pour figer

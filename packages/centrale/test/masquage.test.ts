@@ -15,6 +15,10 @@ test('le masquage reste rapide sur des textes piégés de 10 000 caractères', (
     '1 '.repeat(5_000),
     'f'.repeat(10_000),
     'eyJ'.repeat(3_333),
+    'eyJ-'.repeat(2_500),
+    'eyJaaaaaaaaa.'.repeat(770),
+    'Bearer '.repeat(1_400),
+    'AKIA'.repeat(2_500),
     'FR76'.repeat(2_500)
   ];
   const debut = performance.now();

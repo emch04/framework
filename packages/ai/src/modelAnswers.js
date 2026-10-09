@@ -107,7 +107,14 @@ function providerResult(id, answer, detailed) {
     if (answer.retryAfterMs != null) failure.retryAfterMs = answer.retryAfterMs;
     throw failure;
   }
-  if (detailed) return { text: answer.text === undefined ? null : answer.text, toolCalls: answer.toolCalls || [], cut: Boolean(answer.cut) };
+  if (detailed) {
+    return {
+      text: answer.text === undefined ? null : answer.text,
+      toolCalls: answer.toolCalls || [],
+      cut: Boolean(answer.cut),
+      ...(answer.grounding ? { grounding: answer.grounding } : {})
+    };
+  }
   if (answer.toolCalls && answer.toolCalls.length) return { toolCalls: answer.toolCalls };
   if (!answer.text) {
     const empty = new Error(`Provider "${id}" gave no text.`);

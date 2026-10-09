@@ -3,6 +3,13 @@
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Chaque package Astratra est versionné indépendamment.
 
+## 2026-10-09 — `@astratra/ai` 1.9.0 : recherche Google intégrée de Gemini
+
+### Ajouté
+- `googleSearch` sur une requête Gemini : l'outil `google_search` part avec la requête. Avec les fonctions de l'application, `functions: 'combine'` (ensemble), `'alone'` (la recherche seule pour ce tour) ou `'auto'` (défaut : ensemble, puis la recherche seule si l'API refuse le mélange, `functionsDropped: true`). Ignoré par les fournisseurs au format OpenAI.
+- Réponse : `grounding` (`searched`, `queries`, `sources: [{ title, url }]`, `searchSuggestionsHtml`, `functionsDropped`), transmis au routeur par les fournisseurs `detailed`. `readGeminiGrounding` lit une réponse brute. Les pages sont des données non fiables : titres d'une ligne bornés, adresses `http(s)` sans identifiants, dédoublonnées et bornées ; rien n'est relu comme une consigne.
+- Types (`GoogleSearchOption`, `GeminiGrounding`, `GroundingSource`), README français et anglais, tests sur faux transport.
+
 ## 2026-10-09 — `@astratra/centrale` 1.1.0 : client de la conscience d'une IA
 
 ### Ajouté

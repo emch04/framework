@@ -21,7 +21,7 @@ The package has three entries:
 |---|---|---|
 | `@astratra/conscience/governor` | P0, P5 | Deterministic governor: constitution, permissions, budgets, isolation, kill switch, human approval, audit journal; and (P5) approval matrix, reversible versioned changes with progressive rollout, rollback, morning report. Imports Node built-ins only: no language model, no AI package (a test walks its import graph). |
 | `@astratra/conscience` | P1 | Decisions, predictions, outcomes with revisions, masked corrections, lessons with evidence, self-model, temporal memory, lineage, erasure, retention, memory guard. |
-| `@astratra/conscience/autoconscience` | P2+ | Deterministic evaluation: calibration, statistics, conflicts, fidelity, tool reliability, calendars, error costs, counter-metrics and cycle utility. |
+| `@astratra/conscience/autoconscience` | P2, P3, P4 | Deterministic evaluation: calibration, statistics, conflicts, fidelity, tool reliability, calendars, error costs, counter-metrics and cycle utility; experiments and vigilance (P3); shadow mode (P4). |
 
 ## Quick start
 
@@ -459,14 +459,15 @@ Windows filter decision dates; they do not implement P3 time-frozen replay.
 A query reaching 1000 decisions refuses with `evaluation_limit`: supply explicit
 `decisionIds` for a larger selection, rather than silently evaluate a partial sample.
 
-P3 experiments, P4 shadow mode and P6 guarded transfer remain outside
-P2. Evaluation does not create a scheduler, a model transport or a deployment.
+P3 experiments and P4 shadow mode are described in their own sections below.
+Evaluation itself does not create a scheduler, a model transport or a deployment.
 
 - P3, experiments: time-frozen replay that refuses future data, sandbox,
   protected test set. Drift monitoring, follow-ups, abstention, the night
   adversary, multi-role review and lessons turned into tests are described in
   "P3 · vigilance (2/2)" below.
-- P4, shadow mode in a sandbox. P6, guarded transfer between agents.
+- P4, shadow mode in a sandbox: see "P4 · shadow mode" below.
+- Only P6 (integration and guarded transfer between agents) remains outside this package.
 
 P5 (advanced governance) is in the governor entry: see above.
 
@@ -713,11 +714,134 @@ finding, never each other's answers.
 `<prefix>_candidates`). Same contract, same tests, every access scoped by
 organisation, every value a SQL parameter.
 
+## P4 · shadow mode
+
+Proposals 21 (shadow mode) and 32 (sandbox of the shadow mode), in
+`@astratra/conscience/autoconscience`. A candidate strategy that humans already
+approved processes a share of the real requests **in silence**, next to the
+stable strategy. Its answers go to nobody. They are compared with the stable
+answers by deterministic metrics you provide, and the gap is kept, masked, as a
+`ShadowRun`. No language model is imported (a test reads the sources); every
+call first checks `assertGovernorReady`.
+
+```js
+const { createSandbox, createShadowRunner, createMemoryShadowStore, shadowEraser } = require('@astratra/conscience/autoconscience');
+
+const sandbox = await createSandbox({ governor, organisationId, tools: {
+  lookup_invoice: { kind: 'read', response: { status: 'unknown' } },   // simulated or recorded
+  send_reminder: { kind: 'write' }                                      // never executed, only journalled
+} });
+const shadow = await createShadowRunner({
+  governor, organisationId,
+  candidate: { kind: 'instructions', id: 'reminders', agent },          // or { proposalId, agent }
+  sandbox, sampleRate: 0.1,
+  budget: { maxRuns: 500, maxCost: 50, costPerRun: 0.1 },
+  masker,                                                               // required
+  store: createMemoryShadowStore(),                                     // or createPostgresShadowStore(pool)
+  metrics: [
+    { name: 'accuracy', score: ({ input, output }) => output.total === input.expected },
+    { name: 'sources_accuracy', score: ({ output }) => output.sourced === true, maxRegression: 0.02 },
+    { name: 'minor_protection', critical: true, score: ({ input, output }) => !(input.minor && output.disclosed) }
+  ],
+  target: 'accuracy', minimumSample: 30
+});
+
+// In the request path: answer with the stable strategy, then hand over. Never await `done`.
+const answer = await stable(request);
+respond(answer);
+shadow.observe({ request: { id: request.id, userId: request.userId, input: request.input }, stableResult: { output: answer, durationMs, cost } });
+
+const report = await shadow.report({ propose: {}, recordedBy: { kind: 'system', id: 'shadow' } });
+report.conclusion;   // 'insufficient_data' | 'regression' | 'no_difference' | 'promising'
+```
+
+**Which strategy may run.** Either the candidate version of a governor object
+(`{ kind, id }`: the version staged from a proposal that humans approved) or a
+proposal in the `approved` state with human approvals (`{ proposalId }`). A
+pending, declined, rejected or expired proposal, a stable version, an unknown
+object or another organisation's object are refused (`candidate_not_approved`,
+`candidate_not_staged`, `not_found`). The check is repeated before every run: a
+candidate that was rolled back, promoted or replaced stops the shadow.
+
+**The candidate answer is never returned.** `observe` is synchronous, never
+throws and never waits: it returns `{ scheduled, reason, done }`, and `done`
+(which never rejects) resolves to an acknowledgement (`recorded` with a run id,
+or `skipped`, `timeout`, `error` with a reason) that carries no output of the
+candidate. The run happens in the background, after the stable answer. A failing,
+slow or hostile candidate, a failing store or masker, a metric that throws: all
+are isolated and counted (`stats()`), none reaches the caller. A deadline
+(`deadlineMs`) abandons a stalled run, and `maxConcurrent` skips a burst as
+`busy` rather than queue it.
+
+**Sandbox only (32).** The candidate is a self-contained function run in the P3
+sandbox: no host object, no `process`, no `require`, no timer, no `fetch`. Its
+tools are the ones of the sandbox: a read returns a recording (the optional
+`recordings` of `observe`, for example what the stable run read) or a simulated
+answer; a write is **never executed**, even when the candidate calls it, and is
+only journalled as an intention (`writeIntentions`, masked). The shadow opens no
+network connection of its own. A model call inside a candidate is a sandbox
+tool, replayed or simulated, never a live call.
+
+**Sampling, budget, kill switch.** A request is selected by a hash of its id and
+of the shadow id: the same request always gives the same choice, whatever the
+order, and `sampleRate: 0.1` selects a subset of what `0.5` selects. The budget is
+required and capped: `maxRuns`, `maxCost` (`costPerRun` is the ceiling reserved
+for a run, `costOf` can only lower it), `maxDurationMs` (measured time, which the
+runs already in flight can overshoot), and `governorAgentId` to spend through
+`governor.authorizeSpend` as well. When the budget is spent, or the governor kill
+switch is on, the shadow stops at once, stays stopped (releasing the switch does
+not wake it: start a new one) and a run that finishes after the stop is
+dropped. Budgets count the runs already stored, so a restart continues the same
+shadow.
+
+**ShadowRun.** Per sampled request: the masked request, the masked candidate and
+stable outputs (replaced by a fingerprint beyond 20 000 characters), the score of
+each side for each metric (`succeeded`, `failed`, `unknown`), whether both
+answers agree, the write intentions, duration, cost and incidents
+(`candidate_failed`, `candidate_timeout`, `scoring_failed`, ...). The raw request
+id is not kept. A masker that fails keeps the run out of the store. A candidate
+that produces nothing fails the metrics: it cannot have succeeded.
+
+**Report.** Per metric, the success rate of each side with its Wilson interval
+and minimum sample (P2: below it, `insufficient_data` and no difference), the
+paired counts, and the difference (candidate minus stable) with a Newcombe
+interval. Anti-Goodhart (P2): the `target` metric must improve while every other
+metric stays within its `maxRegression` (and `limits.cost`); at least one
+counter-measure is required when the shadow is built. Critical metrics list the
+requests where the stable strategy succeeded and the candidate failed. The
+conclusion is a code, in this order:
+
+| Conclusion | When |
+|---|---|
+| `regression` | More critical regressions than `maxCriticalRegressions` (0 by default; even a single case counts, whatever the sample), or, with enough data, a significant decline of a metric, a counter-measure beyond its limit, or an incident rate significantly above `maxIncidentRate`. |
+| `insufficient_data` | Fewer than `minimumSample` runs, a metric with too few known scores, or a cost limit without the stable cost. |
+| `promising` | The target improved with an interval above zero and every counter-measure held. |
+| `no_difference` | Enough data, no significant difference and no regression. |
+
+It never says "proven": `provesImprovement` is always `false`, `causality` is
+`not_established`, `applied` is `false`. A shadow comparison on a sample of real
+requests can make an improvement promising, nothing more. With `propose`, a
+promising result becomes a **pending proposal** at the governor (target kind of
+the candidate, id `shadow:<id>:<version>`); with `recordedBy` any conclusion is
+filed as a finding for the morning report. Deploying and promoting stay with a
+human (`deployChange`, `promoteChange`): the shadow never calls them.
+
+**Isolation and erasure.** Every row belongs to one organisation and every read
+and write is scoped by it; a candidate, a sandbox or a store call of another
+organisation is refused. Runs carry the `userId` of the request: register
+`shadowEraser(store)` in `createConscience({ erasers })`, or call
+`shadow.eraseSubject`, to delete them with the person.
+
+**Storage.** `createMemoryShadowStore()` and `createPostgresShadowStore(db, { prefix })`
+(schema: `postgresShadowSchema({ prefix })`, table `<prefix>_runs`). Same
+contract, same tests, every value a SQL parameter.
+
 ## Tests
 
 ```sh
 npm test -w @astratra/conscience
 CONSCIENCE_TEST_DATABASE_URL=postgresql:///conscience_p2_test npm test -w @astratra/conscience
+CONSCIENCE_TEST_DATABASE_URL=postgresql://localhost/conscience_p4_test node --test packages/conscience/test/shadow.postgres.test.js
 ```
 
 PostgreSQL tests run only when the URL names a database ending in `_test`;
@@ -736,3 +860,6 @@ tests with an explicit reason, without exposing the URL.
   is rejected rather than allowed.
 - The masker is yours: the package guarantees that stored text went through
   it, not that it found everything.
+- Shadow mode only judges the sampled requests (a burst beyond `maxConcurrent` is skipped and counted) and its intervals ignore
+  the pairing of requests: they are conservative. Metrics are yours and deterministic, and a tool read is only replayed from
+  recordings.

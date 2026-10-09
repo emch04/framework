@@ -22,7 +22,7 @@ Le paquet a trois entrées :
 |---|---|---|
 | `@astratra/conscience/governor` | P0, P5 | Gouverneur déterministe : constitution, permissions, budgets, isolation, arrêt d'urgence, approbation humaine, journal d'audit ; et (P5) matrice d'approbations, changements versionnés réversibles avec déploiement progressif, retour arrière, bilan du matin. N'importe que des modules de Node : aucun modèle de langage, aucun paquet d'IA (un test parcourt son graphe d'imports). |
 | `@astratra/conscience` | P1 | Décisions, prédictions, résultats avec révisions, corrections masquées, leçons avec preuves, modèle de soi, mémoire temporelle, traçabilité, effacement, rétention, garde mémoire. |
-| `@astratra/conscience/autoconscience` | P2+ | Évaluation déterministe : calibration, statistiques, conflits, fidélité, fiabilité, calendriers, coûts, contre-mesures et utilité des cycles. |
+| `@astratra/conscience/autoconscience` | P2, P3, P4 | Évaluation déterministe : calibration, statistiques, conflits, fidélité, fiabilité, calendriers, coûts, contre-mesures et utilité des cycles ; expériences et vigilance (P3) ; mode ombre (P4). |
 
 ## Démarrage
 
@@ -476,14 +476,15 @@ effaceur. `window` filtre les dates des décisions ; ce n'est pas le rejeu tempo
 P3. Une sélection atteignant 1000 décisions lève `evaluation_limit` : fournir
 `decisionIds` explicitement pour une sélection plus grande sans troncature.
 
-P3 (expériences), P4 (mode ombre) et P6 (transfert) restent hors
-P2. L'évaluation ne crée ni planificateur ni transport de modèle ni déploiement.
+P3 (expériences) et P4 (mode ombre) sont décrites dans leurs propres sections plus bas.
+L'évaluation elle-même ne crée ni planificateur ni transport de modèle ni déploiement.
 
 - P3, expériences : rejeu figé à la date qui refuse toute donnée future, bac à
   sable, jeu de tests protégé. Surveillance de dérive, suivis, abstention,
   adversaire nocturne, revue multi-rôles et leçons devenues tests sont décrits
   dans « P3 · vigilance (2/2) » plus bas.
-- P4, mode ombre en bac à sable. P6, transfert encadré entre agents.
+- P4, mode ombre en bac à sable : voir « P4 · mode ombre » plus bas.
+- Seule la P6 (intégration et transfert encadré entre agents) reste hors de ce paquet.
 
 La P5 (gouvernance avancée) est dans l'entrée du gouverneur : voir plus haut.
 
@@ -741,11 +742,142 @@ gelée du constat, jamais les réponses des autres.
 `<prefix>_candidates`). Même contrat, mêmes tests, chaque accès borné par
 l'organisation, chaque valeur en paramètre SQL.
 
+## P4 · mode ombre
+
+Propositions 21 (mode ombre) et 32 (bac à sable du mode ombre), dans
+`@astratra/conscience/autoconscience`. Une stratégie candidate que des humains
+ont déjà approuvée traite **en silence** une partie des vraies demandes, à côté
+de la stratégie stable. Ses réponses ne vont à personne. Elles sont comparées
+aux réponses stables par des métriques déterministes que vous fournissez, et
+l'écart est gardé, masqué, sous forme de `ShadowRun`. Aucun modèle de langage
+n'est importé (un test lit les sources) ; chaque appel vérifie d'abord
+`assertGovernorReady`.
+
+```js
+const { createSandbox, createShadowRunner, createMemoryShadowStore, shadowEraser } = require('@astratra/conscience/autoconscience');
+
+const sandbox = await createSandbox({ governor, organisationId, tools: {
+  lookup_invoice: { kind: 'read', response: { status: 'unknown' } },   // simulé ou enregistré
+  send_reminder: { kind: 'write' }                                      // jamais exécuté, seulement journalisé
+} });
+const shadow = await createShadowRunner({
+  governor, organisationId,
+  candidate: { kind: 'instructions', id: 'reminders', agent },          // ou { proposalId, agent }
+  sandbox, sampleRate: 0.1,
+  budget: { maxRuns: 500, maxCost: 50, costPerRun: 0.1 },
+  masker,                                                               // obligatoire
+  store: createMemoryShadowStore(),                                     // ou createPostgresShadowStore(pool)
+  metrics: [
+    { name: 'accuracy', score: ({ input, output }) => output.total === input.expected },
+    { name: 'sources_accuracy', score: ({ output }) => output.sourced === true, maxRegression: 0.02 },
+    { name: 'minor_protection', critical: true, score: ({ input, output }) => !(input.minor && output.disclosed) }
+  ],
+  target: 'accuracy', minimumSample: 30
+});
+
+// Dans le chemin de la requête : répondre avec la stratégie stable, puis passer la main. Ne jamais attendre `done`.
+const answer = await stable(request);
+respond(answer);
+shadow.observe({ request: { id: request.id, userId: request.userId, input: request.input }, stableResult: { output: answer, durationMs, cost } });
+
+const report = await shadow.report({ propose: {}, recordedBy: { kind: 'system', id: 'shadow' } });
+report.conclusion;   // 'insufficient_data' | 'regression' | 'no_difference' | 'promising'
+```
+
+**Quelle stratégie peut tourner.** Soit la version candidate d'un objet du
+gouverneur (`{ kind, id }` : la version mise en place à partir d'une proposition
+approuvée par des humains), soit une proposition à l'état `approved` avec des
+approbations humaines (`{ proposalId }`). Une proposition en attente, déclinée,
+rejetée ou expirée, une version stable, un objet inconnu ou l'objet d'une autre
+organisation sont refusés (`candidate_not_approved`, `candidate_not_staged`,
+`not_found`). La vérification est refaite avant chaque exécution : une candidate
+annulée, promue ou remplacée arrête l'ombre.
+
+**La réponse de la candidate n'est jamais renvoyée.** `observe` est synchrone, ne
+lève jamais d'erreur et n'attend jamais : il rend `{ scheduled, reason, done }`, et
+`done` (qui ne rejette jamais) donne un accusé (`recorded` avec un identifiant
+d'exécution, ou `skipped`, `timeout`, `error` avec une raison) qui ne contient
+aucune sortie de la candidate. L'exécution se fait en arrière-plan, après la
+réponse stable. Une candidate en erreur, lente ou hostile, un magasin ou un
+masqueur en panne, une métrique qui lève : tout est isolé et compté (`stats()`),
+rien n'atteint l'appelant. Un délai (`deadlineMs`) abandonne une exécution
+bloquée, et `maxConcurrent` écarte une rafale en `busy` au lieu de la mettre en
+file.
+
+**Bac à sable seulement (32).** La candidate est une fonction autonome exécutée
+dans le bac à sable de P3 : aucun objet de l'hôte, ni `process`, ni `require`, ni
+minuterie, ni `fetch`. Ses outils sont ceux du bac à sable : une lecture rend un
+enregistrement (les `recordings` facultatifs de `observe`, par exemple ce que la
+requête stable a lu) ou une réponse simulée ; une écriture n'est **jamais
+exécutée**, même si la candidate l'appelle, et n'est que journalisée comme
+intention (`writeIntentions`, masquée). L'ombre n'ouvre aucune connexion réseau
+de son propre chef. Un appel de modèle dans une candidate est un outil du bac à
+sable, rejoué ou simulé, jamais un appel réel.
+
+**Échantillonnage, budget, arrêt d'urgence.** Une demande est choisie par un
+hachage de son identifiant et de celui de l'ombre : la même demande donne
+toujours le même choix, quel que soit l'ordre, et `sampleRate: 0.1` choisit un
+sous-ensemble de ce que choisit `0.5`. Le budget est obligatoire et plafonné :
+`maxRuns`, `maxCost` (`costPerRun` est le plafond réservé à une exécution,
+`costOf` ne peut que l'abaisser), `maxDurationMs` (temps mesuré, que les
+exécutions déjà en cours peuvent dépasser) et `governorAgentId` pour dépenser
+aussi par `governor.authorizeSpend`. Budget épuisé ou arrêt d'urgence du
+gouverneur : l'ombre s'arrête aussitôt, reste arrêtée (lever l'arrêt ne la
+réveille pas : en démarrer une nouvelle) et une exécution qui se termine après
+l'arrêt est abandonnée. Les budgets comptent les exécutions déjà stockées : un
+redémarrage poursuit la même ombre.
+
+**ShadowRun.** Par demande choisie : la demande masquée, les sorties candidate et
+stable masquées (remplacées par une empreinte au-delà de 20 000 caractères), le
+score de chaque côté pour chaque métrique (`succeeded`, `failed`, `unknown`), si
+les deux réponses concordent, les intentions d'écriture, la durée, le coût et les
+incidents (`candidate_failed`, `candidate_timeout`, `scoring_failed`, ...).
+L'identifiant brut de la demande n'est pas gardé. Un masqueur en échec garde
+l'exécution hors du magasin. Une candidate qui ne produit rien échoue aux
+métriques : elle ne peut pas avoir réussi.
+
+**Rapport.** Par métrique, le taux de réussite de chaque côté avec son
+intervalle de Wilson et l'effectif minimal (P2 : en dessous, `insufficient_data`
+et aucune différence), les comptes appariés et la différence (candidate moins
+stable) avec un intervalle de Newcombe. Anti-Goodhart (P2) : la métrique `target`
+doit s'améliorer pendant que toutes les autres restent dans leur
+`maxRegression` (et `limits.cost`) ; au moins une contre-mesure est exigée à la
+construction. Les métriques critiques listent les demandes où la stratégie stable
+a réussi et la candidate échoué. La conclusion est un code, dans cet ordre :
+
+| Conclusion | Quand |
+|---|---|
+| `regression` | Plus de régressions critiques que `maxCriticalRegressions` (0 par défaut ; un seul cas compte, quel que soit l'effectif), ou, avec assez de données, une baisse significative d'une métrique, une contre-mesure au-delà de sa limite, ou un taux d'incidents significativement au-dessus de `maxIncidentRate`. |
+| `insufficient_data` | Moins de `minimumSample` exécutions, une métrique avec trop peu de scores connus, ou une limite de coût sans le coût stable. |
+| `promising` | La cible s'est améliorée avec un intervalle au-dessus de zéro et toutes les contre-mesures ont tenu. |
+| `no_difference` | Assez de données, aucune différence significative et aucune régression. |
+
+Le rapport ne dit jamais « prouvé » : `provesImprovement` vaut toujours `false`,
+`causality` vaut `not_established`, `applied` vaut `false`. Une comparaison en
+ombre sur un échantillon de vraies demandes peut rendre une amélioration
+prometteuse, rien de plus. Avec `propose`, un résultat prometteur devient une
+**proposition en attente** chez le gouverneur (type de la candidate, identifiant
+`shadow:<id>:<version>`) ; avec `recordedBy`, toute conclusion est classée comme
+constat pour le bilan du matin. Déployer et promouvoir restent à un humain
+(`deployChange`, `promoteChange`) : l'ombre ne les appelle jamais.
+
+**Isolation et effacement.** Chaque ligne appartient à une organisation et chaque
+lecture et écriture est bornée par elle ; une candidate, un bac à sable ou un
+appel de magasin d'une autre organisation est refusé. Les exécutions portent le
+`userId` de la demande : enregistrer `shadowEraser(store)` dans
+`createConscience({ erasers })`, ou appeler `shadow.eraseSubject`, pour les
+supprimer avec la personne.
+
+**Stockage.** `createMemoryShadowStore()` et `createPostgresShadowStore(db, { prefix })`
+(schéma : `postgresShadowSchema({ prefix })`, table `<prefix>_runs`). Même
+contrat, mêmes tests, toute valeur est un paramètre SQL.
+
 ## Tests
 
 ```sh
 npm test -w @astratra/conscience
 CONSCIENCE_TEST_DATABASE_URL=postgresql:///conscience_p2_test npm test -w @astratra/conscience
+CONSCIENCE_TEST_DATABASE_URL=postgresql://localhost/conscience_p4_test node --test packages/conscience/test/shadow.postgres.test.js
 ```
 
 Les tests PostgreSQL ne tournent que si l'URL désigne une base dont le nom
@@ -764,3 +896,6 @@ sont ignorés avec une raison explicite, sans afficher l'URL.
   et tout cas ambigu est rejeté plutôt qu'accepté.
 - Le masqueur est le vôtre : le paquet garantit que le texte stocké y est
   passé, pas qu'il a tout trouvé.
+- Le mode ombre ne juge que les demandes échantillonnées (une rafale au-delà de `maxConcurrent` est écartée et comptée) et ses
+  intervalles ignorent l'appariement des demandes : ils sont prudents. Les métriques sont les vôtres, déterministes, et la
+  lecture d'un outil n'y est rejouée que d'après des enregistrements.

@@ -199,3 +199,5 @@ export interface ExperimentResult {
 export function runExperiment(options: RunExperimentOptions): Promise<ExperimentResult>;
 /* P3 · vigilance (2/2). */
 export * from './vigilance';
+/* P4 · shadow mode. */
+export * from './shadow';

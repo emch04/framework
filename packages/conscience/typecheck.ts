@@ -85,3 +85,32 @@ async function vigilanceTypes() {
   void [generated.candidates[0]?.status, candidate.addedToTests, suite, review.advances, review.reviews.verifier.passed];
 }
 void vigilanceTypes;
+
+import { createShadowRunner, createSandbox as createShadowSandbox, createMemoryShadowStore, shadowEraser } from './src/autoconscience';
+import type { ShadowConclusion, ShadowOutcome } from './src/autoconscience';
+async function shadowTypes() {
+  const sandbox = await createShadowSandbox({ governor, organisationId: 'org', tools: { send: { kind: 'write' }, lookup: { kind: 'read', response: { ok: true } } } });
+  const sstore = createMemoryShadowStore();
+  const shadow = await createShadowRunner({
+    governor, organisationId: 'org', candidate: { kind: 'instructions', id: 'main', agent: async (request, tools) => { await tools.send(request.input); return { answer: 1 }; } },
+    sandbox, sampleRate: 0.1, budget: { maxRuns: 100, maxCost: 10, costPerRun: 1, costOf: (run) => run.durationMs / 1000 }, masker: (text: string) => text, store: sstore,
+    metrics: [{ name: 'accuracy', score: ({ output }) => output.answer === 1 }, { name: 'sources', critical: true, maxRegression: 0.01, score: () => null }], target: 'accuracy', minimumSample: 30
+  });
+  const handle = shadow.observe({ request: { id: 'r1', userId: 'u', input: { q: 1 } }, stableResult: { output: { answer: 1 }, durationMs: 4 } });
+  const outcome: ShadowOutcome = await handle.done;
+  const report = await shadow.report({ propose: {}, recordedBy: { kind: 'system', id: 'shadow' } });
+  const conclusion: ShadowConclusion = report.conclusion;
+  const never: false = report.provesImprovement;
+  const notApplied: false = report.applied;
+  const writes: true = report.writeIntentions.neverExecuted;
+  const runs = await shadow.listRuns();
+  void [outcome, conclusion, never, notApplied, writes, runs[0]?.scores.accuracy.candidate, report.metrics.accuracy.difference?.low, report.criticalRegressions[0]?.stableOutput, shadowEraser(sstore)];
+  // @ts-expect-error A proposal and a version cannot both name the candidate.
+  void createShadowRunner({ governor, organisationId: 'org', candidate: { proposalId: 'p', kind: 'instructions', id: 'x', agent: async () => 1 }, sandbox, sampleRate: 1, budget: {}, masker: (t: string) => t, metrics: [], target: 'a' });
+  // @ts-expect-error The masker is mandatory.
+  void createShadowRunner({ governor, organisationId: 'org', candidate: { proposalId: 'p', agent: async () => 1 }, sandbox, sampleRate: 1, budget: {}, metrics: [], target: 'a' });
+  // @ts-expect-error The conclusion is never "proven".
+  const proven: ShadowConclusion = 'proven';
+  void proven;
+}
+void shadowTypes;

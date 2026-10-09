@@ -3,6 +3,13 @@
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Chaque package Astratra est versionné indépendamment.
 
+## 2026-10-09 — `@astratra/centrale` 1.1.0 : client de la conscience d'une IA
+
+### Ajouté
+- Nouvelle entrée `@astratra/centrale/conscience` : `creerConscienceCentrale({ adresse, jeton })`, client léger des routes « conscience » du tableau de bord, authentifié par le jeton de projet. `lireReglages()` garde les réglages avec leur ETag (`If-None-Match`, un 304 rend la copie) ; `envoyerBilan(rapport, propositions?)` envoie le bilan du matin d'un gouverneur et la liste complète des propositions en attente ; `lireDecisions()` rend les décisions humaines pas encore accusées ; `accuserDecision` / `accuserDecisions` disent ce que le gouverneur en a fait (`failed` n'est pas accusé et revient au passage suivant). Erreurs `ErreurConscience` (statut HTTP ou `null` hors ligne, code).
+- `resumerBilan` et `nettoyerMesures` : le bilan est réduit à des identifiants, des codes et des nombres avant l'envoi (ni question, ni réponse, ni note, ni identifiant de décision, ni objet `tests`, ni plan de retour arrière, ni identité d'une personne ; toute chaîne que le masquage changerait est retirée).
+- Toujours sans dépendance ni autre paquet Astratra (vérifié par test). README anglais (`README.en.md`, publié) ; types ; tests.
+
 ## 2026-10-09 — `@astratra/conscience` 1.1.0 : réglages distants
 
 ### Ajouté

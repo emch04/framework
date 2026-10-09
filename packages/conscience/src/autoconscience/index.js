@@ -112,3 +112,5 @@ const { proposeExperiment, runExperiment } = require('./experiments/laboratory')
 Object.assign(module.exports, { createSandbox, replayDecisions, createHoldout, proposeExperiment, runExperiment });
 /* P3 · vigilance (2/2): drift, follow-ups, abstention, night adversary, multi-role review, lessons turned into tests. */
 Object.assign(module.exports, require('./vigilance'));
+/* P4 · shadow mode: a candidate approved by humans processes real requests in silence, in the sandbox, and is compared with the stable strategy. */
+Object.assign(module.exports, require('./shadow'));

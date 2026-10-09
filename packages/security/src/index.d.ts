@@ -894,3 +894,6 @@ export function createTrustedDeviceService(options: {
 
 export const TRUSTED_DEVICE_ID_PATTERN: RegExp;
 export const TRUSTED_DEVICE_SECRET_PATTERN: RegExp;
+
+export const DEFAULT_PERMISSIONS_POLICY: 'geolocation=(), camera=(), microphone=(), payment=()';
+export const DEFAULT_CSRF_COOKIE_NAME: 'astratra_csrf';

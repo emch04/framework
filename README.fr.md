@@ -90,10 +90,10 @@ est dans [CHANGELOG.md](CHANGELOG.md).
 | Paquet | Version | Rôle |
 |---|---|---|
 | [`@astratra/core`](packages/core/README.md) | 1.1.0 | Réponses d'API, erreurs, journaux, identifiants de requête, configuration par variables d'environnement |
-| [`@astratra/security`](packages/security/README.md) | 1.11.0 | JWT et RBAC, limitation de débit (mémoire ou Redis), CSP, WAF heuristique, passkeys WebAuthn, HMAC entre services, journal d'audit chaîné |
+| [`@astratra/security`](packages/security/README.md) | 1.11.1 | JWT et RBAC, limitation de débit (mémoire ou Redis), CSP, WAF heuristique, passkeys WebAuthn, HMAC entre services, journal d'audit chaîné |
 | [`@astratra/credentials`](packages/credentials/README.md) | 1.1.0 | Clés de service chiffrées en base, modifiables depuis l'interface sans redémarrage |
 | [`@astratra/entitlements`](packages/entitlements/README.md) | 1.0.0 | Plans, fonctionnalités, gardes de facturation et de statut, isolation par locataire qui échoue fermée, invitations par lien, quotas et budgets d'IA |
-| [`@astratra/flags`](packages/flags/README.md) | 1.0.0 | Drapeaux de fonctionnalités et expériences déterministes : ciblage, déploiement progressif, fournisseur compatible OpenFeature |
+| [`@astratra/flags`](packages/flags/README.md) | 1.0.1 | Drapeaux de fonctionnalités et expériences déterministes : ciblage, déploiement progressif, fournisseur compatible OpenFeature |
 | [`@astratra/privacy`](packages/privacy/README.md) | 1.0.0 | Droit d'accès, droit à l'effacement avec validation humaine, anonymisation, nettoyage des journaux |
 | [`@astratra/resilience`](packages/resilience/README.md) | 1.0.0 | Disjoncteur, cache TTL qui se dégrade au lieu d'échouer, relance avec gigue, verrou de tâche à l'échelle du cluster |
 | [`@astratra/i18n-server`](packages/i18n-server/README.md) | 1.0.0 | Traduction des messages d'API, résolution de la langue, audit de lisibilité des messages d'erreur |
@@ -135,14 +135,14 @@ est dans [CHANGELOG.md](CHANGELOG.md).
 | [`@astratra/saas-kit`](packages/saas-kit/README.md) | 1.6.1 | Démarrage côté serveur : `createSaasApp()` assemble utilisateurs, authentification, réglages, notifications et tableau de bord |
 | [`@astratra/store-mongo`](packages/store-mongo/README.md) | 1.1.0 | Adaptateurs de persistance MongoDB (Mongoose) pour les magasins du SaaS |
 | [`@astratra/store-postgres`](packages/store-postgres/README.md) | 1.1.0 | Adaptateurs de persistance PostgreSQL (`pg`) pour les magasins du SaaS |
-| [`@astratra/saas-kit-ui`](packages/saas-kit-ui/README.md) | 1.1.0 | Tableau de bord React pour `@astratra/saas-kit`, barre de retours 👍/👎 |
+| [`@astratra/saas-kit-ui`](packages/saas-kit-ui/README.md) | 1.2.0 | Tableau de bord React pour `@astratra/saas-kit`, barre de retours 👍/👎 |
 | [`@astratra/react`](packages/react/README.md) | 1.0.0 | Primitives React nues pour sessions, permissions et appels d'API, sans tableau de bord imposé |
 | [`@astratra/client`](packages/client/README.md) | 1.1.0 | Plomberie côté client indépendante du framework : rafraîchissement sur 401, garde de route, règles de mot de passe, file hors ligne |
 | [`@astratra/prerender`](packages/prerender/README.md) | 1.0.0 | Prérendu SEO pour un site Vite et React : un HTML par route, sitemap issu de la même liste |
 | [`@astratra/native`](packages/native/README.md) | 1.0.0 | Plomberie mobile : session dans le trousseau, verrou biométrique, enregistrement des notifications, retour de paiement |
 | [`@astratra/native-ui`](packages/native-ui/README.md) | 1.1.0 | Kit d'interface React Native et Expo, dont la logique pure se teste dans Node, barre de retours 👍/👎 |
 | [`@astratra/app-version`](packages/app-version/README.md) | 1.0.0 | Annonces de nouvelles versions d'applications mobiles : route publique des versions, une annonce par version |
-| [`create-astratra-app`](packages/create-astratra-app/README.md) | 1.8.0 | Générateur de projets : pile complète, API seule ou application Expo, briques optionnelles |
+| [`create-astratra-app`](packages/create-astratra-app/README.md) | 1.10.0 | Générateur de projets : pile complète, API seule ou application Expo, briques optionnelles |
 
 ### Supervision et outillage
 

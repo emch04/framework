@@ -3,6 +3,17 @@
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Chaque package Astratra est versionné indépendamment.
 
+## 2026-10-09 — contrats et intégrations
+
+### Ajouté
+- `@astratra/saas-kit-ui` 1.2.0 : déclarations TypeScript complètes du tableau de bord, de l'API et de FeedbackBar avec ses règles ; vérification de compilation à la racine.
+- Tests réels optionnels Redis et MongoDB pour security, resilience et credentials ; tests HTTP de flags et HTTP/WebSocket de live, avec coupures et expiration. Les tests ne sont pas publiés : versions de live, resilience et credentials inchangées.
+- `create-astratra-app` 1.10.0 : planchers security ^1.11.1 et saas-kit-ui ^1.2.0.
+
+### Corrigé
+- `@astratra/security` 1.11.1 : types des constantes DEFAULT_PERMISSIONS_POLICY et DEFAULT_CSRF_COOKIE_NAME.
+- `@astratra/flags` 1.0.1 : nouvelle version pour distribuer le README neutre déjà présent dans le dépôt.
+
 ## 2026-10-09 — `@astratra/centrale` 1.0.3 (sécurité)
 
 ### Corrigé

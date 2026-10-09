@@ -131,3 +131,23 @@ Do not report vulnerabilities in a public issue or pull request. See
 
 By contributing, you agree that your contribution is licensed under the
 [MIT License](LICENSE) of this repository.
+
+## Optional storage integration tests
+
+`security` and `resilience` exercise real Redis when `REDIS_TEST_URL` is set.
+`credentials` and `resilience` exercise real MongoDB when `MONGO_TEST_URL` is
+set. Without these variables, their integration tests are skipped. Use dedicated
+test services: the suites create unique key namespaces and collections, then
+remove only their own data. They never flush a Redis database or drop a MongoDB
+database. Connection failures with a supplied URL fail the tests.
+
+```bash
+REDIS_TEST_URL=redis://127.0.0.1:6390/15 \
+MONGO_TEST_URL=mongodb://127.0.0.1:27017/astratra_test \
+npm test -w @astratra/security -w @astratra/resilience -w @astratra/credentials
+```
+
+The repository already uses `mongodb-memory-server` for local MongoDB tests;
+a caller can start it and pass its URI through `MONGO_TEST_URL`. The `live`
+HTTP/WebSocket and `flags` HTTP integration tests always run, using local
+servers on ephemeral ports and closing them after each test.

@@ -85,10 +85,10 @@ package is in [CHANGELOG.md](CHANGELOG.md).
 | Package | Version | What it does |
 |---|---|---|
 | [`@astratra/core`](packages/core/README.md) | 1.1.0 | API responses, errors, logs, request IDs, environment configuration |
-| [`@astratra/security`](packages/security/README.md) | 1.11.0 | JWT and RBAC, rate limiting (memory or Redis), CSP, heuristic WAF, WebAuthn passkeys, HMAC between services, chained audit log |
+| [`@astratra/security`](packages/security/README.md) | 1.11.1 | JWT and RBAC, rate limiting (memory or Redis), CSP, heuristic WAF, WebAuthn passkeys, HMAC between services, chained audit log |
 | [`@astratra/credentials`](packages/credentials/README.md) | 1.1.0 | Encrypted service keys stored in your database, editable from the interface without a restart |
 | [`@astratra/entitlements`](packages/entitlements/README.md) | 1.0.0 | Plans, features, billing and status guards, tenant isolation that fails closed, invitations by link, AI quotas and budgets |
-| [`@astratra/flags`](packages/flags/README.md) | 1.0.0 | Deterministic feature flags and experiments: targeting, gradual rollout, OpenFeature-compatible provider |
+| [`@astratra/flags`](packages/flags/README.md) | 1.0.1 | Deterministic feature flags and experiments: targeting, gradual rollout, OpenFeature-compatible provider |
 | [`@astratra/privacy`](packages/privacy/README.md) | 1.0.0 | Right of access, right to erasure with human approval, anonymisation, log redaction |
 | [`@astratra/resilience`](packages/resilience/README.md) | 1.0.0 | Circuit breaker, TTL cache that degrades instead of failing, retry with jitter, cluster job lock |
 | [`@astratra/i18n-server`](packages/i18n-server/README.md) | 1.0.0 | Translation of API messages, locale resolution, readability audit of error messages |
@@ -130,14 +130,14 @@ package is in [CHANGELOG.md](CHANGELOG.md).
 | [`@astratra/saas-kit`](packages/saas-kit/README.md) | 1.6.1 | Backend starter: `createSaasApp()` assembles users, authentication, settings, notifications and dashboard routes |
 | [`@astratra/store-mongo`](packages/store-mongo/README.md) | 1.1.0 | MongoDB (Mongoose) persistence adapters for the SaaS stores |
 | [`@astratra/store-postgres`](packages/store-postgres/README.md) | 1.1.0 | PostgreSQL (`pg`) persistence adapters for the SaaS stores |
-| [`@astratra/saas-kit-ui`](packages/saas-kit-ui/README.md) | 1.1.0 | React dashboard for `@astratra/saas-kit`, 👍/👎 feedback bar |
+| [`@astratra/saas-kit-ui`](packages/saas-kit-ui/README.md) | 1.2.0 | React dashboard for `@astratra/saas-kit`, 👍/👎 feedback bar |
 | [`@astratra/react`](packages/react/README.md) | 1.0.0 | Bare React primitives for sessions, permissions and API calls, without an imposed dashboard |
 | [`@astratra/client`](packages/client/README.md) | 1.1.0 | Framework-agnostic client plumbing: refresh on 401, route guard, password rules, offline queue |
 | [`@astratra/prerender`](packages/prerender/README.md) | 1.0.0 | SEO prerendering for Vite and React sites: one HTML file per route, sitemap from the same list |
 | [`@astratra/native`](packages/native/README.md) | 1.0.0 | Mobile plumbing: keychain session, biometric gate, push registration, payment return |
 | [`@astratra/native-ui`](packages/native-ui/README.md) | 1.1.0 | UI kit for React Native and Expo, with pure logic testable in Node, 👍/👎 feedback bar |
 | [`@astratra/app-version`](packages/app-version/README.md) | 1.0.0 | Announcements of new mobile builds: public version route, one announcement per version |
-| [`create-astratra-app`](packages/create-astratra-app/README.md) | 1.8.0 | Project generator: full stack, API only, or Expo app, with optional building blocks |
+| [`create-astratra-app`](packages/create-astratra-app/README.md) | 1.10.0 | Project generator: full stack, API only, or Expo app, with optional building blocks |
 
 ### Monitoring and tooling
 

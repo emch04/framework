@@ -71,7 +71,7 @@ function packageJson(projectName, template, bricks = []) {
     '@astratra/ai': '^1.8.0',
     '@astratra/core': '^1.1.0',
     '@astratra/saas-kit': '^1.6.1',
-    '@astratra/security': '^1.11.0'
+    '@astratra/security': '^1.11.1'
   };
   // Scaffolded (api/stores/mongo.js, api/db/mongo.js) but not wired into
   // api/server.js by default — the project starts on the in-memory store.
@@ -85,7 +85,7 @@ function packageJson(projectName, template, bricks = []) {
   const devDependencies = {};
 
   if (template === 'fullstack') {
-    dependencies['@astratra/saas-kit-ui'] = '^1.1.0';
+    dependencies['@astratra/saas-kit-ui'] = '^1.2.0';
     dependencies.react = '^19.0.0';
     dependencies['react-dom'] = '^19.0.0';
     devDependencies['@vitejs/plugin-react'] = '^4.3.4';

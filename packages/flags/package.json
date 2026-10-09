@@ -1,6 +1,6 @@
 {
   "name": "@astratra/flags",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Évaluation déterministe de fonctionnalités et d'expériences avec ciblage, déploiement progressif et fournisseur compatible OpenFeature.",
   "engines": { "node": ">=20" },
   "main": "src/index.js",

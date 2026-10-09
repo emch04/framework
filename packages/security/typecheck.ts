@@ -303,3 +303,8 @@ async function exerciseTrustedDevices(): Promise<void> {
 }
 
 void exerciseTrustedDevices;
+
+import { DEFAULT_PERMISSIONS_POLICY, DEFAULT_CSRF_COOKIE_NAME } from './src';
+const csrfName: 'astratra_csrf' = DEFAULT_CSRF_COOKIE_NAME;
+const permissions: string = DEFAULT_PERMISSIONS_POLICY;
+void csrfName; void permissions;

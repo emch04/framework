@@ -18,15 +18,15 @@
 
 const { createEndpointBreaker } = require('./breaker');
 
-const ENDPOINTS = Object.freeze(['embed', 'rerank', 'nli', 'entities', 'transcribe']);
+const ENDPOINTS = Object.freeze(['embed', 'rerank', 'nli', 'entities', 'transcribe', 'injection', 'moderation']);
 
 const DEFAULT_TIMEOUTS = Object.freeze({
-  embed: 1500, rerank: 1000, nli: 1500, entities: 800, transcribe: 15000, health: 1000
+  embed: 1500, rerank: 1000, nli: 1500, entities: 800, transcribe: 15000, injection: 2500, moderation: 2500, health: 1000
 });
 
 /* Transcription is heavy and not worth repeating inside a live exchange. */
 const DEFAULT_ATTEMPTS = Object.freeze({
-  embed: 2, rerank: 2, nli: 2, entities: 2, transcribe: 1, health: 1
+  embed: 2, rerank: 2, nli: 2, entities: 2, transcribe: 1, injection: 2, moderation: 2, health: 1
 });
 
 /* Mirrors the server defaults; change both together. */
@@ -42,7 +42,11 @@ const DEFAULT_LIMITS = Object.freeze({
   entitiesMaxLabelChars: 50,
   transcribeMinSeconds: 0.2,
   transcribeMaxSeconds: 30,
-  transcribeMaxPromptChars: 600
+  transcribeMaxPromptChars: 600,
+  injectionMaxTexts: 8,
+  injectionMaxChars: 20000,
+  moderationMaxTexts: 8,
+  moderationMaxChars: 20000
 });
 
 const SAMPLE_RATE = 16000;
@@ -362,6 +366,55 @@ function createModelsClient(options = {}) {
     });
   }
 
+  /* A text, or a list of texts, for a classifier endpoint; null when invalid. */
+  function textList(input, maxTexts, maxChars) {
+    const texts = typeof input === 'string' ? [input] : input;
+    if (!Array.isArray(texts) || !texts.length || texts.length > maxTexts
+      || !texts.every((t) => isText(t) && t.length <= maxChars)) return null;
+    return texts;
+  }
+
+  /**
+   * Prompt-injection check. A string rates one text and answers `score` and
+   * `verdict` at the top level too; a list rates several (`results` in the same
+   * order). A text over the server limit is refused (`invalid_input`) rather
+   * than cut: an instruction hidden after the cut would go unseen — split
+   * longer content (see @astratra/guards) and check every part.
+   */
+  function injection(input, callOptions = {}) {
+    const texts = textList(input, limits.injectionMaxTexts, limits.injectionMaxChars);
+    if (!texts) return Promise.resolve(refuse('injection', 'invalid_input'));
+    return call('injection', 'POST', '/injection', { texts }, callOptions, (data) => {
+      const results = data && data.results;
+      const valid = (r) => r && isNumber(r.score) && r.score >= 0 && r.score <= 1 && (r.verdict === 'injection' || r.verdict === 'safe');
+      if (!Array.isArray(results) || results.length !== texts.length || !results.every(valid)) return null;
+      const list = results.map((r) => ({ score: r.score, verdict: r.verdict }));
+      const value = { results: list, threshold: isNumber(data.threshold) ? data.threshold : null, model: typeof data.model === 'string' ? data.model : null };
+      return typeof input === 'string' ? { ...list[0], ...value } : value;
+    });
+  }
+
+  /**
+   * Content moderation. Same shapes as `injection`: a string also answers
+   * `flagged`, `unsafe`, `categories` and `flaggedCategories` at the top
+   * level. Scores and category names only — the server never sends back an
+   * excerpt of the text.
+   */
+  function moderation(input, callOptions = {}) {
+    const texts = textList(input, limits.moderationMaxTexts, limits.moderationMaxChars);
+    if (!texts) return Promise.resolve(refuse('moderation', 'invalid_input'));
+    return call('moderation', 'POST', '/moderation', { texts }, callOptions, (data) => {
+      const results = data && data.results;
+      const valid = (r) => r && typeof r.flagged === 'boolean' && isNumber(r.unsafe) && r.categories && typeof r.categories === 'object'
+        && Object.values(r.categories).every(isNumber) && Array.isArray(r.flagged_categories)
+        && r.flagged_categories.every((c) => typeof c === 'string');
+      if (!Array.isArray(results) || results.length !== texts.length || !results.every(valid)) return null;
+      const list = results.map((r) => ({ flagged: r.flagged, unsafe: r.unsafe, categories: { ...r.categories }, flaggedCategories: [...r.flagged_categories] }));
+      const value = { results: list, model: typeof data.model === 'string' ? data.model : null };
+      return typeof input === 'string' ? { ...list[0], ...value } : value;
+    });
+  }
+
   /* Health never goes through a breaker: it is how an operator checks a service the breaker gave up on. */
   async function health(callOptions = {}) {
     const result = await attempts('health', 'GET', '/health', undefined, callOptions, (data) => {
@@ -404,7 +457,7 @@ function createModelsClient(options = {}) {
   }
 
   return {
-    embed, rerank, nli, entities, transcribe, health,
+    embed, rerank, nli, entities, transcribe, injection, moderation, health,
     available, breakerStatus, resetBreakers, asMemoryEmbed
   };
 }

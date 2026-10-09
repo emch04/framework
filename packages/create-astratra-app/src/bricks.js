@@ -22,7 +22,7 @@ const FULLSTACK_ONLY = new Set(['client', 'prerender']);
 const BRICKS = {
   credentials: {
     package: '@astratra/credentials',
-    version: '^1.0.0',
+    version: '^1.1.0',
     summary: 'clés de service chiffrées en base, modifiables sans redémarrage',
     file: 'api/bricks/credentials.js',
     contents: () => `import { createFieldCipher } from '@astratra/security';

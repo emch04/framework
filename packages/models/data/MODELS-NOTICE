@@ -1,0 +1,34 @@
+Models downloaded by `astratra-models fetch`
+============================================
+
+No model weight is part of this package or redistributed by it. The command
+downloads each file from Hugging Face at the commit pinned in
+models-manifest.json, under the licence of the model's publisher. Each licence
+below allows commercial use.
+
+embed       Xenova/bge-m3 (ONNX conversion of BAAI/bge-m3)                  MIT
+rerank      onnx-community/gte-multilingual-reranker-base (ONNX conversion
+            of Alibaba-NLP/gte-multilingual-reranker-base, Apache-2.0)      Apache-2.0
+nli         MoritzLaurer/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7        MIT
+entities    urchade/gliner_multi-v2.1                                        Apache-2.0
+            microsoft/mdeberta-v3-base (configuration and tokenizer only)    MIT
+transcribe  Systran/faster-whisper-base (conversion of openai/whisper-base)  MIT
+injection   Horizon-Labs/prompt-injection-guard-small                        Apache-2.0
+moderation  Horizon-Labs/content-safety-guard-small                          Apache-2.0
+
+Credits for the guard models
+----------------------------
+Both are fine-tuned from jhu-clsp/mmBERT-small (MIT). Their publisher states
+that they were trained on permissively licensed data only. Among the sources
+named on the model cards, these ask for attribution:
+  - NVIDIA Nemotron-Safety-Guard-Dataset-v3 (CC-BY-4.0), used by the
+    content-safety model; NVIDIA NeMo/Nemotron agentic and jailbreak sets
+    (CC-BY-4.0), used by the prompt-injection model;
+  - WildChat-1M (ODC-BY), FineWeb-Edu and FineWeb-2 (ODC-BY);
+  - Civil Comments (CC0), OpenAssistant oasst2 and Aya (Apache-2.0).
+Training data and the model cards are at the Hugging Face addresses above.
+
+Notice for the prompt-injection model: it flags text that tries to change what
+an AI does; it is one signal, not a guarantee. The content-safety model is weak
+on the `sexual_minors` category: never use it alone for child-safety or legal
+compliance.

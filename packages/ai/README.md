@@ -12,6 +12,69 @@ fallback, cooldown/dégradation, deux adaptateurs HTTP sans dépendance (le
 format OpenAI et Gemini), et deux boucles d'agent (protocole écrit, ou
 appels d'outils natifs).
 
+## Gardes d'agent / Agent guards (`@astratra/ai/guards`)
+
+Protections prêtes à brancher sur un agent, indépendantes du fournisseur d'IA.
+Elles s'appuient sur le client de `@astratra/models` **injecté** (`models`) :
+aucune dépendance dure. `@astratra/rag` (`verifySources`) est une dépendance
+de pair facultative, ou s'injecte avec l'option `verifySources`.
+
+```js
+const { recommendedGuards } = require('@astratra/ai/guards');
+const { createModelsClient, assertModelsReady } = require('@astratra/models');
+
+assertModelsReady({ required: ['entities', 'injection', 'moderation', 'nli'] }); // en production, refuse de partir sans les modèles
+const guards = recommendedGuards({ models: createModelsClient({ token: () => process.env.MODELS_TOKEN }), onEvent: log });
+
+const run = guards.newRun();                                  // une par conversation ou exécution d'agent
+const safe = await guards.input(question, run);               // noms et données personnelles masqués, réversible
+if (safe.decision === 'block') return refuse();
+// ... l'agent appelle ses outils ...
+const seen = await guards.toolResult(page, run, { tool: 'web_search', external: true });
+messages.push({ role: 'tool', content: seen.content });       // masqué, encadré comme donnée non fiable
+const action = await guards.beforeAction({ name: 'send_email' }, run);
+if (action.decision === 'block') askAHuman();                 // après une injection suspectée : jamais sans humain
+const reply = await guards.output(modelAnswer, run);          // démasqué, puis ancrage, fuite, modération
+```
+
+| Garde | Ce qu'elle fait |
+|---|---|
+| `input(text, run)` | masque les noms (détecteur d'entités + `names` du registre) et les données structurées (e-mail, IBAN, carte, téléphone) ; le texte revient démasqué dans `output`. Rend `text: null` si elle bloque. |
+| `toolResult(result, run, { tool, external })` | pour un résultat **externe** (ou marqué `{ untrusted: true, content }`) : détection d'injection (texte long lu par fenêtres, jamais passé sans contrôle), contenu encadré par des marqueurs à nonce comme *données non fiables*. Injection suspectée : `run.requiresConfirmation = true` pour tout le reste de l'exécution. |
+| `output(text, run)` | démasque ; **ancrage** (chaque phrase contre les sources lues, NLI, via `verifySources` de rag) avec `groundingScore` et la liste `unsupported` ; **fuite** de données personnelles que la personne n'a pas données (`onLeak`: `block`, `redact`, `flag`) ; **modération**. |
+| `beforeAction(action, run, { humanConfirmed })` | refuse toute action tant qu'une injection est suspectée et qu'aucun humain n'a confirmé (`humanConfirmed: true` vient de votre interface, jamais du modèle). |
+
+**Panne** : `policy.failure = { action: 'failClosed', read: 'failClosed' }` par
+défaut (bloquer et signaler). `failOpen` laisse passer en signalant
+`degraded` ; `recommendedGuards({ readOnly: true })` l'applique à un agent qui
+ne fait que lire. Le mode d'une exécution est `newRun({ mode: 'action' | 'read' })`.
+
+**Événements** : chaque décision appelle `onEvent({ type: 'guard', guard, decision,
+reasons, degraded, metrics, runId, mode, at })`. Ils ne contiennent jamais le
+texte (ni saisie, ni résultat d'outil, ni réponse) : des nombres, des codes et
+des noms de catégories. La réponse de `output` rend, elle, les phrases non
+soutenues à l'appelant.
+
+**Tests** : `@astratra/ai/guards/testing` fournit `createFakeModels` (un client
+sans modèle : règles par mots-clés, pannes simulées), `createMockGuards` (les
+vraies gardes sur ce client, avec un enregistreur d'événements) et
+`createEventRecorder`.
+
+Limites : les gardes réduisent le risque, elles ne le suppriment pas. Les
+règles de fuite ne couvrent que les données structurées ; l'ancrage compte
+aussi comme « non soutenues » des phrases de liaison ; la détection d'injection
+lit un texte isolé.
+
+English: ready-to-use guards for an agent, independent of the AI provider.
+Inject the `@astratra/models` client as `models`; nothing is imported. `input`
+masks names and personal data (reversible), `toolResult` scans untrusted
+content for injection, frames it as untrusted data and, when an injection is
+suspected, forbids every action without a human for the rest of the run
+(`beforeAction`), `output` unmasks the reply and checks grounding against the
+sources, personal-data leaks and moderation. Failure policy is `failClosed` for
+actions by default, `failOpen` possible for read-only runs. Events never carry
+the text. Mocks for tests: `@astratra/ai/guards/testing`.
+
 ## Routeur de providers
 
 ```js

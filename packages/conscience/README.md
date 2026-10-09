@@ -21,7 +21,7 @@ The package has three entries:
 |---|---|---|
 | `@astratra/conscience/governor` | P0 | Deterministic governor: constitution, permissions, budgets, isolation, kill switch, human approval, audit journal. Imports Node built-ins only: no language model, no AI package (a test walks its import graph). |
 | `@astratra/conscience` | P1 | Decisions, predictions, outcomes with revisions, masked corrections, lessons with evidence, self-model, temporal memory, lineage, erasure, retention, memory guard. |
-| `@astratra/conscience/autoconscience` | P2+ | Types of the reflective engine. `runReflection()` checks the governor, then refuses: it is not available before P2. |
+| `@astratra/conscience/autoconscience` | P2+ | Deterministic evaluation: calibration, statistics, conflicts, fidelity, tool reliability, calendars, error costs, counter-metrics and cycle utility. |
 
 ## Quick start
 
@@ -171,8 +171,8 @@ stored. Use a deterministic masker.
 A lesson without evidence is always a `hypothesis` (`statusForced: true` when
 another status was asked). Evidence that points to a decision, prediction,
 outcome or correction must exist in the same organisation. This version stores
-lessons and their history; deciding that a lesson is verified belongs to the
-evaluator of P2.
+lessons and their history; P2 checks sample sufficiency and open contradictions
+before a lesson can be verified.
 
 ### Reading
 
@@ -246,36 +246,126 @@ governor store interface (`GovernorStore` in the types) needs an atomic
 
 ## Autoconscience (`/autoconscience`)
 
-This version exports the types the reflective engine will use
-(`ReflectionRun`, `ReflectionFinding`, `CalibrationPoint`, `Hypothesis`,
-`Experiment`, `ErrorCostPolicy`, `CounterMetric`, `ToolReliability`,
-`DomainCalendar`, `ShadowRun`, `Evaluator`) and `runReflection()`, which calls
-`assertGovernorReady()` and then throws `not_available`.
+The P2 core is deterministic and imports no language model. `evaluateOutcomes()`
+(and its alias `runReflection()`) reads P1 records and returns `ReflectionFinding[]`.
+`createEvaluator({ governor, conscience, ...defaults })` binds an evaluator;
+`evaluate({ organisationId, userId?, agentId?, window?, ...options })` evaluates
+one scope. All reflective entries check `assertGovernorReady`; evaluation has
+no storage writes, generated text or automatic action.
 
-Planned next, each behind the governor:
+```js
+const { evaluateOutcomes } = require('@astratra/conscience/autoconscience');
+const findings = await evaluateOutcomes({
+  governor, conscience, organisationId: 'org-1', agentId: 'billing-agent',
+  minimumSample: 30, buckets: 10, level: 0.95,
+  errorCostPolicies: [{ organisationId: 'org-1', domain: 'billing', falsePositive: 1, falseNegative: 20 }],
+  calendars: [{ organisationId: 'org-1', domain: 'billing', name: 'business',
+    periods: [{ label: 'closure', kind: 'closure', from: '2026-12-24', to: '2027-01-02' }] }]
+});
+```
 
-- P2, evaluation: calibration, honest statistics (minimum sample, intervals,
-  the right not to conclude), cautious causality, contradictions, error costs,
-  reasoning fidelity, tool reliability, business calendars, counter-metrics,
-  cycle quality, classification of feedback.
-- P3, experiments: time-frozen replay that refuses future data, sandbox,
-  protected test set, drift monitoring, abstention, lessons turned into tests.
-- P4, shadow mode in a sandbox. P5, versioned rollout, morning review,
-  rollback. P6, guarded transfer between agents.
+### Structured inputs
+
+- Decisions accept `domain` (default `general`), `justification: { claims: ['source_verified'] }`
+  and actual `toolTrace: [{ callId, tool, provider?, status, empty?, durationMs, labels? }]`.
+  A declared list of tools is not an execution trace. Labels such as `source_verified`
+  must come from your instrumented application, not from generated prose.
+- Predictions accept `domain` (inherited from the decision) and an optional `sensor`.
+  Outcomes accept `predictionId`, checked against the decision in the same organisation.
+- Corrections accept an application `class` or structured `tags`: `fact_changed`,
+  `wording_changed`, `goal_changed`, `opinion_changed`. Explicit class wins;
+  absent, unknown or conflicting tags become `disagreement`. Text is never classified
+  by a model or interpreted as a command.
+- Lessons accept `domain`, `subject` and `stance: 'supports' | 'opposes'`.
+  Opposing positions within the same organisation, person, agent and domain open
+  a symmetric conflict (`to_reassess`). Textual summaries alone cannot establish opposition.
+
+### Calculations and contracts
+
+| Function | Result |
+|---|---|
+| `honestStatistics(statuses, options)` | Known sample size, unknown count, success rate, Wilson interval, `insufficient_data` below `minimumSample` (30 by default), refusal to conclude |
+| `wilsonInterval(successes, total, level)` | Two-sided Wilson score interval; levels 0.90, 0.95 (default), 0.99; null only for zero known observations |
+| `calibratePredictions(points, options)` | Per agent/domain reliability curve, Brier score, signed confidence gap, overconfidence and underconfidence; empty bins have null means |
+| `scoreErrorCosts(points, policy, options)` | False positive/negative counts, total cost and `weightedScore = totalCost / knownCount` in your cost units; threshold 0.5 by default |
+| `checkReasoningFidelity(justification, traces, claimRules)` | `faithful`, `unfaithful` or `unknown`; every required label needs a successful, nonempty call; default rule requires `source_verified` |
+| `toolReliability(traces, options)` | Per tool/provider error, empty and slow rates, their Wilson intervals and minimum samples, nearest-rank p95; slow means duration strictly above `slowMs` (5000 by default) |
+| `calendarConfounders(domain, at, calendars)` | `calendar_confounded` for dates in a declared half-open period `[from, to)` |
+| `checkCounterMetrics(target, counters)` | Target improvement rejected if any counter-metric regresses strictly beyond its `maxRegression`; thresholds use absolute metric units |
+| `classifyCorrection(input)` | Deterministic classification; only `factual` corrections can support a factual lesson |
+| `evaluateLessonConflicts(lessons, options)` | Open conflicts with evidence ranking and dates; stronger evidence can suggest a preferred lesson, a newer date alone never resolves one |
+| `reflectionUtility(run, options)` | Useful findings + accepted proposals (configurable weights) minus weighted cost; usefulness requires positive benefit and positive net utility |
+| `recommendReflectionFrequency(runs, options)` | `reduce` after `uselessCycles` consecutive useless completed cycles (default 3); interval multiplier `reductionFactor` (default 2) |
+
+Cycles without measured useful-finding or accepted-proposal counts remain
+`unmeasured`; they do not count as useless cycles. Unknown tool-call statuses
+stay outside the error-rate denominator (empty and slow rates describe actual
+reported emptiness and durations).
+
+Unknown outcomes never enter success/failure denominators or Brier/cost scores.
+Evaluation uses the latest prediction per decision/domain (date, then id), and
+the current outcome for its sensor or explicit prediction link. Missing or
+ambiguous matches, or predictions made after the observation, remain unknown.
+One decision contributes at most one calibration point per domain; duplicate
+points supplied directly to `calibratePredictions` are rejected. The curve's
+bins also expose their own sample adequacy. Scores below the threshold remain
+descriptive; they are not rules or causal evidence.
+
+Findings contain stable ids, evidence references, sample size, interval, status,
+confidence, confounders and competing explanations. The core always emits
+`causality: 'not_established'`: an outcome and the fidelity of its method remain
+separate. A lucky success never creates a general rule. `confidence` describes
+the supplied observation confidence or interval level, not the probability that
+a causal hypothesis is true. Intervals remain visible for small nonzero samples
+while `insufficient_data` explicitly refuses inference.
+
+### Lesson verification and arbitration
+
+`createConscience({ minimumSample: 30, ... })` controls the verification floor;
+a lesson may request a higher `minimumSample`, never lower that floor.
+Verification counts **distinct decisions** represented by current known outcomes
+or factual corrections in the lesson's domain and agent scope. Decision-only,
+prediction-only and external references do not inflate the observed sample;
+unknown or superseded outcomes and duplicate references do not count. A factual
+lesson citing a style/objective/disagreement correction remains a hypothesis.
+Evidence existence, sufficient sample and no open contradiction are all required
+for `verified`; open conflicts produce `to_reassess`, other cases `hypothesis`.
+This is an evidence sufficiency status, not a proof of a causal assertion.
+
+`conscience.resolveLessonConflict({ organisationId, userId?, winnerId, loserId, evidence })`
+is an explicit application arbitration: it requires sufficient factual evidence
+in the same domain, retires the opponent and appends a new revision of the winner.
+All writes pass through `assertGovernorReady`. Earlier revisions are retained.
+`getLesson().current` and `listLessons()` reassess evidence and conflicts, including
+late unknown outcomes and concurrent conflicting writes. `storedStatus` exposes
+the recorded status; `getLesson().history` retains recorded revisions. `asOf`
+uses the evidence and outcomes known at that recording date.
+
+Findings and calibration are recalculated rather than cached or persisted:
+erasing their source records removes them from subsequent evaluations. If your
+application stores findings elsewhere, register an eraser for that store.
+Windows filter decision dates; they do not implement P3 time-frozen replay.
+A query reaching 1000 decisions refuses with `evaluation_limit`: supply explicit
+`decisionIds` for a larger selection, rather than silently evaluate a partial sample.
+
+P3 experiments, P4 shadow mode, P5 rollout and P6 guarded transfer remain outside
+P2. Evaluation does not create a scheduler, a model transport or a deployment.
 
 ## Tests
 
 ```sh
 npm test -w @astratra/conscience
-CONSCIENCE_TEST_DATABASE_URL=postgresql://localhost/conscience_test npm test -w @astratra/conscience
+CONSCIENCE_TEST_DATABASE_URL=postgresql:///conscience_p2_test npm test -w @astratra/conscience
 ```
 
 PostgreSQL tests run only when the URL names a database ending in `_test`;
-each test creates its own tables and drops them.
+each test creates its own tables and drops them. A missing test database is
+created with `createdb` when permitted; an unavailable database skips integration
+tests with an explicit reason, without exposing the URL.
 
 ## Limits
 
-- No language model, no evaluation and no automatic change in this version.
+- No language model and no automatic change. P2 evaluates structured evidence only.
 - The governor recognises protected scopes by names and keys, not by reading
   text: a proposal must describe its target honestly, and anything ambiguous
   is rejected rather than allowed.

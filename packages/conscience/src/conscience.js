@@ -6,6 +6,8 @@ const { createMemoryConscienceStore } = require('./memoryStore');
 const { assertGovernorReady, isGovernor } = require('./governor/governor');
 const { fingerprintOf, copy, isNonEmptyString, GovernorError } = require('./governor/util');
 
+const { oppositeLessons, assessedLessonStatus } = require('./autoconscience/lessons');
+const { minimum } = require('./autoconscience/statistics');
 const PAGE = 1000;
 const ERASURE_MODES = Object.freeze(['delete', 'anonymise']);
 const INTERNAL_EVIDENCE = Object.freeze(['decision', 'prediction', 'outcome', 'correction']);
@@ -67,6 +69,7 @@ function createConscience(options = {}) {
   }
   const now = options.now ?? Date.now;
   const retention = retentionOf(options.retention);
+  const minimumSample = minimum(options.minimumSample);
   const erasers = options.erasers ?? [];
   if (!Array.isArray(erasers) || !erasers.every((fn) => typeof fn === 'function')) throw new ConscienceError('invalid_input', 'erasers must be an array of functions.');
   const iso = () => new Date(now()).toISOString();
@@ -152,7 +155,7 @@ function createConscience(options = {}) {
     const decision = await decisionIn(n.organisationId, n.decisionId);
     const fingerprint = fingerprintOf({ kind: 'prediction', ...n });
     const id = idOf(input, 'pred', fingerprint);
-    const data = { id, ...n, userId: n.userId ?? decision.userId, agentId: decision.agentId, statement: await maskText(n.statement), recordedAt: iso() };
+    const data = { id, ...n, domain: n.domain ?? decision.data.domain ?? 'general', userId: n.userId ?? decision.userId, agentId: decision.agentId, statement: await maskText(n.statement), recordedAt: iso() };
     data.madeAt = n.madeAt ?? data.recordedAt;
     const { record, created } = await put(envelopeOf('prediction', data, { agentId: decision.agentId, decisionId: n.decisionId, eventAt: data.madeAt, fingerprint }));
     return { prediction: record.data, created };
@@ -162,6 +165,10 @@ function createConscience(options = {}) {
     const n = normalize.outcome(input);
     organisationOf(n);
     const decision = await decisionIn(n.organisationId, n.decisionId);
+    if (n.predictionId) {
+      const prediction = await store.get('prediction', n.organisationId, n.predictionId);
+      if (!prediction || prediction.decisionId !== n.decisionId) throw new ConscienceError('not_found', 'Prediction not found for this decision.');
+    }
     const fingerprint = fingerprintOf({ kind: 'outcome', ...n });
     const id = idOf(input, 'out', fingerprint);
     const existing = await store.get('outcome', n.organisationId, id);
@@ -201,35 +208,90 @@ function createConscience(options = {}) {
     if (latest && latest.data.contentFingerprint === contentFingerprint) return { record: latest, created: false };
     const fingerprint = fingerprintOf({ contentFingerprint, previous: latest ? latest.id : null });
     const data = { ...content.data, revisionId: `${prefix}#${fingerprint.slice(0, 20)}`, contentFingerprint, previousRevision: latest ? latest.id : null, recordedAt: iso() };
+    await assertGovernorReady(governor, { organisationId: content.raw.organisationId });
     return put(envelopeOf(kind, data, { ...fields(data), fingerprint }));
   }
 
-  async function recordLesson(input) {
-    const n = normalize.lesson(input);
-    const organisationId = organisationOf(n);
-    await assertGovernorReady(governor, { organisationId });
+  async function lessonSample(n, { strict = true, asOf } = {}) {
+    const decisions = new Set();
+    let factualEligible = true;
     for (const item of n.evidence) {
-      if (INTERNAL_EVIDENCE.includes(item.kind) && !(await store.get(item.kind, organisationId, item.ref))) {
-        throw new ConscienceError('evidence_not_found', `Evidence ${item.kind} "${item.ref}" does not exist in this organisation.`);
+      if (!INTERNAL_EVIDENCE.includes(item.kind)) continue;
+      const found = await store.get(item.kind, n.organisationId, item.ref);
+      if (!found || (asOf != null && found.recordedAt > new Date(asOf).toISOString()) || (n.userId != null && found.userId !== n.userId)) {
+        if (strict) throw new ConscienceError('evidence_not_found', 'Evidence not found in this scope.');
+        continue;
+      }
+      if (n.agentId != null && found.agentId !== n.agentId) continue;
+      const decision = await store.get('decision', n.organisationId, found.decisionId);
+      if (!decision || (decision.data.domain ?? 'general') !== n.domain) continue;
+      if (item.kind === 'correction') {
+        if (found.data.class !== 'factual') { if (n.factual) factualEligible = false; continue; }
+        if (!found.data.delta?.unchanged) decisions.add(found.decisionId);
+      }
+      if (item.kind === 'outcome' && found.data.status !== 'unknown') {
+        const current = (await getOutcomes({ organisationId: n.organisationId, asOf }, found.decisionId)).find((o) => o.id === found.id);
+        if (current?.current) decisions.add(found.decisionId);
       }
     }
-    for (const ref of [...n.contradictions, ...n.supersedes]) {
-      if (!(await store.list('lesson', { organisationId, lessonId: ref, limit: 1 })).length) throw new ConscienceError('not_found', `Lesson "${ref}" does not exist in this organisation.`);
-    }
-    const requested = n.status;
-    if (!n.evidence.length) { n.status = 'hypothesis'; n.evidenceDegree = 'none'; }
-    const lessonId = n.lessonId ?? `lesson_${fingerprintOf({ organisationId, userId: n.userId, agentId: n.agentId, summary: n.summary }).slice(0, 32)}`;
+    return { sampleSize: decisions.size, factualEligible };
+  }
+
+  async function persistLesson(n, requested) {
+    await assertGovernorReady(governor, { organisationId: n.organisationId });
+    const sample = await lessonSample(n);
+    n = { ...n, ...sample };
+    if (n.status !== 'retired') n.status = assessedLessonStatus(n, { minimumSample: Math.max(minimumSample, n.minimumSample) });
+    if (!n.evidence.length) n.evidenceDegree = 'none';
+    const lessonId = n.lessonId;
     const raw = { ...n, lessonId };
-    const data = {
-      id: lessonId, ...n, lessonId: undefined, summary: await maskText(n.summary),
-      evidence: await Promise.all(n.evidence.map(async (item) => ({ ...item, note: await maskText(item.note) }))),
-      statusForced: requested !== n.status
-    };
+    const data = { id: lessonId, ...n, summary: await maskText(n.summary),
+      evidence: await Promise.all(n.evidence.map(async (item) => ({ ...item, note: await maskText(item.note) }))), statusForced: requested !== n.status };
     delete data.lessonId;
     const { record, created } = await appendRevision('lesson', { raw, data }, { lessonId }, lessonId, (d) => ({
       agentId: n.agentId, lessonId, eventAt: d.validFrom ?? d.recordedAt, evidenceRefs: n.evidence.map((item) => item.ref)
     }));
     return { lesson: record.data, created, statusForced: record.data.statusForced };
+  }
+
+  async function recordLesson(input) {
+    const n = normalize.lesson({ minimumSample, ...input });
+    const organisationId = organisationOf(n);
+    await assertGovernorReady(governor, { organisationId });
+    n.lessonId ??= `lesson_${fingerprintOf({ organisationId, userId: n.userId, agentId: n.agentId, summary: n.summary }).slice(0, 32)}`;
+    const requested = n.status;
+    const current = await listLessons({ organisationId, userId: n.userId ?? undefined });
+    for (const ref of [...n.contradictions, ...n.supersedes]) {
+      if (!current.some((l) => l.id === ref)) throw new ConscienceError('not_found', 'Referenced lesson not found in this scope.');
+    }
+    // Open conflicts are symmetric. Retired opponents stay in history but cannot block verification.
+    const opposing = current.filter((l) => oppositeLessons({ ...n, id: n.lessonId }, l));
+    n.contradictions = [...new Set([...n.contradictions.filter((id) => current.some((l) => l.id === id && l.status !== 'retired')), ...opposing.map((l) => l.id)])];
+    const result = await persistLesson(n, requested);
+    for (const other of opposing) {
+      await persistLesson(normalize.lesson({ ...other, lessonId: other.id, status: 'to_reassess', contradictions: [...new Set([...other.contradictions, n.lessonId])] }), other.status);
+    }
+    return result;
+  }
+
+  /** Explicit evidence-based arbitration; preserves every earlier revision. */
+  async function resolveLessonConflict(input) {
+    const s = readScope(input);
+    await assertGovernorReady(governor, s);
+    const winner = (await getLesson(s, input.winnerId))?.current;
+    const loser = (await getLesson(s, input.loserId))?.current;
+    if (!winner || !loser) throw new ConscienceError('not_found', 'Conflict lessons not found.');
+    if (!oppositeLessons(winner, loser)) throw new ConscienceError('invalid_input', 'No opposite lessons in this scope and domain.');
+    const evidence = input.evidence ?? [];
+    if (!evidence.length) throw new ConscienceError('invalid_input', 'Arbitration requires new evidence.');
+    const candidate = normalize.lesson({ ...winner, lessonId: winner.id, evidence, contradictions: [] });
+    const sample = await lessonSample(candidate);
+    if (assessedLessonStatus({ ...candidate, ...sample }, { minimumSample: Math.max(minimumSample, candidate.minimumSample) }) !== 'verified') {
+      throw new ConscienceError('insufficient_evidence', 'Arbitration requires sufficient factual evidence in the same domain.');
+    }
+    const retired = await recordLesson({ ...loser, lessonId: loser.id, status: 'retired' });
+    const resolved = await recordLesson({ ...winner, lessonId: winner.id, evidence, status: 'verified', contradictions: winner.contradictions.filter((id) => id !== loser.id), supersedes: [...new Set([...winner.supersedes, loser.id])] });
+    return { winner: resolved.lesson, loser: retired.lesson };
   }
 
   async function updateSelfModel(input) {
@@ -294,14 +356,28 @@ function createConscience(options = {}) {
     const s = readScope(scope);
     const history = await lessonsCurrent(s, { lessonId, asOf });
     if (!history.length) return null;
-    return { current: history[history.length - 1], history };
+    const current = (await assessedLessons(s, history.filter((l) => l.current), { asOf }))[0];
+    return { current, history };
+  }
+
+  async function assessedLessons(scope, selected, { asOf } = {}) {
+    const all = (await lessonsCurrent(scope, { asOf })).filter((l) => l.current);
+    const assessed = [];
+    for (const l of selected) {
+      const sample = await lessonSample({ ...l, minimumSample: l.minimumSample ?? minimumSample }, { strict: false, asOf });
+      const contradictions = [...new Set([...(l.contradictions ?? []).filter((id) => all.some((other) => other.id === id && other.status !== 'retired')),
+        ...all.filter((other) => oppositeLessons(l, other)).map((other) => other.id)])];
+      const status = l.status === 'retired' ? 'retired' : assessedLessonStatus({ ...l, ...sample, contradictions }, { minimumSample: Math.max(minimumSample, l.minimumSample ?? minimumSample) });
+      assessed.push({ ...l, ...sample, contradictions, storedStatus: l.status, status });
+    }
+    return assessed;
   }
 
   async function listLessons(scope, filter = {}) {
     const s = readScope(scope);
     const at = filter.validAt != null ? new Date(filter.validAt).toISOString() : null;
-    return (await lessonsCurrent(s, filter)).filter((lesson) => lesson.current
-      && (filter.status == null || lesson.status === filter.status)
+    const current = (await lessonsCurrent(s, filter)).filter((l) => l.current);
+    return (await assessedLessons(s, current, { asOf: filter.asOf })).filter((lesson) => (filter.status == null || lesson.status === filter.status)
       && (at == null || ((lesson.validFrom == null || lesson.validFrom <= at) && (lesson.validUntil == null || at < lesson.validUntil))));
   }
 
@@ -376,7 +452,7 @@ function createConscience(options = {}) {
       predictions,
       outcomes,
       corrections,
-      lessons: [...lessons.values()],
+      lessons: await assessedLessons(s, [...lessons.values()]),
       chain: ['objective', 'action', 'tools', 'outcomes', 'corrections', 'lessons']
     };
   }
@@ -392,6 +468,8 @@ function createConscience(options = {}) {
     for (const envelope of touched.values()) {
       const evidence = envelope.data.evidence.filter((item) => !removedRefs.has(item.ref));
       const data = { ...envelope.data, evidence };
+      data.sampleSize = (await lessonSample({ ...data, minimumSample: data.minimumSample ?? minimumSample })).sampleSize;
+      if (data.status === 'verified' && data.sampleSize < Math.max(minimumSample, data.minimumSample ?? minimumSample)) data.status = 'hypothesis';
       if (!evidence.length) { data.status = 'hypothesis'; data.evidenceDegree = 'none'; }
       await store.replace({ ...envelope, evidenceRefs: evidence.map((item) => item.ref), data });
       updated += 1;
@@ -471,7 +549,7 @@ function createConscience(options = {}) {
   return Object.freeze({
     store, governor, retention: copy(retention),
     recordDecision, recordPrediction, attachOutcome, recordCorrection,
-    recordLesson, updateSelfModel,
+    recordLesson, resolveLessonConflict, updateSelfModel,
     getDecision, getOutcomes, recallDecisions, getLesson, listLessons, getSelfModel, getSelfModelHistory,
     getMemoryTimeline, getLineage,
     eraseSubject, applyRetention

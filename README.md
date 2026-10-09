@@ -75,7 +75,7 @@ options and what it does not do. The table below links to them.
 
 ## Packages
 
-The 43 packages in [`packages/`](packages/) are all published under the
+The 44 packages in [`packages/`](packages/) are all published under the
 `@astratra` scope, except `create-astratra-app`, which is published under its
 own name. Versions are the ones in each `package.json`; the history of every
 package is in [CHANGELOG.md](CHANGELOG.md).
@@ -100,6 +100,7 @@ package is in [CHANGELOG.md](CHANGELOG.md).
 | [`@astratra/ai`](packages/ai/README.md) | 1.7.0 | Multi-provider AI routing with quotas and fallback, tool registry, agent loop, risk levels with confirmation, local llama.cpp provider |
 | [`@astratra/agent`](packages/agent/README.md) | 1.0.0 | Durable tasks, budgets, plans, completion checks, context summaries, consumption tracking, and user feedback (👍/👎) the agent learns from |
 | [`@astratra/models`](packages/models/README.md) | 1.0.0 | Local CPU model service (embeddings, reranking, NLI, entities, speech-to-text) and its Node client; price catalogue and cost calculation |
+| [`@astratra/conscience`](packages/conscience/README.md) | 1.0.0 | Documented memory of an agent's decisions (outcomes, corrections, lessons with evidence, self-model, lineage, erasure) under a deterministic governor without any language model |
 | [`@astratra/memory`](packages/memory/README.md) | 2.0.0 | Per-person memories for an assistant: hybrid recall, duplicate merging, undoable corrections, PostgreSQL store |
 | [`@astratra/rag`](packages/rag/README.md) | 1.0.0 | Document retrieval: chunking, injected embeddings, hybrid search, source verification, document reading through an optional service |
 | [`@astratra/voice`](packages/voice/README.md) | 1.1.0 | Server-side text-to-speech (Piper, ffmpeg), versioned caches, provider chain with key rotation, local transcription |

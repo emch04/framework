@@ -3,6 +3,52 @@
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Chaque package Astratra est versionné indépendamment.
 
+## 2026-10-09 — gardes d'agents : `@astratra/models` 1.1.0, `@astratra/ai` 1.8.0 et `create-astratra-app` 1.9.0
+
+Des protections d'agents IA complètes, fondées sur des modèles ouverts existants (rien n'est entraîné),
+téléchargés depuis Hugging Face à des versions figées. Aucun poids dans les paquets npm, aucun
+téléchargement à l'installation. Tout est rétrocompatible.
+
+### `@astratra/models` 1.1.0
+
+#### Ajoute
+- **Deux modèles locaux** dans le service Python, chargés comme les autres (paresseux, facultatifs, ONNX sur
+  processeur) : `POST /injection` (détection d'injection de consignes et de jailbreak, français et anglais
+  vérifiés, texte long lu par fenêtres qui se recouvrent, jamais coupé) et `POST /moderation` (score global et
+  par catégorie : haine, harcèlement, violence, sexuel, sexuel impliquant un mineur, automutilation ; jamais
+  d'extrait du texte). Client : `models.injection(text|texts)` et `models.moderation(text|texts)`, avec délais,
+  relances, disjoncteurs et dégradation par point d'entrée. Réglages `MODELS_INJECTION_*` et
+  `MODELS_MODERATION_*`. Modèles retenus : `Horizon-Labs/prompt-injection-guard-small` et
+  `Horizon-Labs/content-safety-guard-small` (Apache-2.0) ; candidats comparés et écartés dans
+  `docs/guard-models.md` (et `.fr.md`), limites comprises (`sexual_minors` est faible).
+- **Manifeste figé** `data/models-manifest.json` des sept modèles : dépôt Hugging Face, hash de commit, fichiers
+  avec taille et SHA-256, licence. Mentions dans `data/MODELS-NOTICE`. `scripts/build-manifest.js` le régénère.
+- **Commande `astratra-models`** (bin) : `fetch [--models a,b] [--dir DIR] [--check] [--json]` télécharge exactement
+  les fichiers figés, vérifie chaque SHA-256 (un écart supprime le fichier et fait échouer), reprend un
+  téléchargement interrompu, refuse de tourner tant qu'un SHA-256 est à compléter ; `--check` vérifie sans
+  réseau ; `list`.
+- **`assertModelsReady({ required })`** : au démarrage, lève `ModelsNotReadyError` en production si un modèle requis
+  manque ou diffère du manifeste. Aussi exportés : `loadManifest`, `checkModels`, `fetchModels`.
+- Le service passe en version `1.1.0` ; `injection` et `moderation` rejoignent `MODELS_ENABLED` par défaut (un
+  modèle absent répond `503 model_unavailable`, les autres continuent).
+
+### `@astratra/ai` 1.8.0
+
+#### Ajoute
+- **`@astratra/ai/guards`** (champ `exports`, avec `.` et `./package.json` inchangés pour les usages existants) :
+  `createGuards({ models, policy, ... })` et le préréglage `recommendedGuards(...)`. Gardes `input` (masquage
+  réversible des noms et données personnelles), `toolResult` (injection dans les résultats d'outils externes,
+  contenu encadré comme donnée non fiable, interdiction de toute action sans confirmation humaine ensuite),
+  `output` (ancrage dans les sources lues par NLI, fuite de données personnelles, modération),
+  `beforeAction`. Politique de panne `failClosed` par défaut, `failOpen` possible pour la lecture. Chaque décision
+  produit un événement sans texte brut. Le client de `@astratra/models` est injecté (aucune dépendance) ;
+  `@astratra/rag` est une dépendance de pair facultative.
+- **`@astratra/ai/guards/testing`** : `createFakeModels`, `createMockGuards`, `createEventRecorder`, sans modèle.
+
+### `create-astratra-app` 1.9.0
+
+- Le plancher de `@astratra/ai` des projets générés passe à `^1.8.0` et celui de `@astratra/credentials` à `^1.1.0` (ses tests comparent chaque plancher à la version du dépôt).
+
 ## 2026-10-09 — documentation neutre : `@astratra/centrale`, `@astratra/centrale-cli`, `@astratra/loyalty`, `@astratra/testkit` 1.0.1
 
 ### Documentation et commentaires neutres

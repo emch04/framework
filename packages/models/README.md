@@ -4,7 +4,9 @@ Un service de petits modèles d'IA qui tourne sur le **processeur** d'un VPS
 sans carte graphique, et son client Node.
 
 - **Service Python** (`server/app.py`) : vecteurs, reclassement, inférence
-  logique (NLI), entités nommées, transcription de la voix. Chaque modèle est
+  logique (NLI), entités nommées, transcription de la voix, et deux gardes
+  pour agents : détection d'injection de consignes (`/injection`) et
+  modération (`/moderation`). Chaque modèle est
   facultatif, chargé à la demande, derrière un jeton interne, sur
   `127.0.0.1` par défaut. Détails : [server/README.md](server/README.md).
 - **Client Node** (CommonJS, aucune dépendance) : `fetch` injecté, délai par
@@ -17,7 +19,10 @@ sans carte graphique, et son client Node.
 - **Déploiement** : générateurs purs d'une entrée pm2 et d'une unité systemd
   durcie, script d'environnement Python aux versions épinglées.
 
-Les poids des modèles ne sont pas dans le paquet.
+Les poids des modèles ne sont pas dans le paquet et rien n'est téléchargé à
+l'installation. `astratra-models fetch` les récupère depuis Hugging Face à une
+révision et avec des SHA-256 figés dans le manifeste du paquet (voir plus
+bas, « Les modèles »).
 
 ## Le client
 
@@ -43,6 +48,8 @@ Chaque méthode rend `{ ok: true, ...données }` ou
 | `rerank(query, documents)` | `scores` (ordre des documents), `model` |
 | `nli(pairs)` | `results: [{ entailment, neutral, contradiction }]`, `model` |
 | `entities(text, labels?)` | `entities: [{ text, label, start, end, score }]`, `model` |
+| `injection(text ou texts)` | `results: [{ score, verdict }]`, `threshold`, `model` (pour une chaîne, `score` et `verdict` aussi à la racine) |
+| `moderation(text ou texts)` | `results: [{ flagged, unsafe, categories, flaggedCategories }]`, `model` (idem) |
 | `transcribe(audio, { language, prompt, vad })` | `text`, `language`, `avgLogprob`, `noSpeechProb`, `durationMs`, `audioMs`, `model` |
 | `health()` | `version`, `models` (sans disjoncteur) |
 
@@ -82,6 +89,51 @@ vecteur, puis réindexé).
   `available(endpoint)` dit si un appel partirait maintenant.
 - `onEvent` reçoit `retry`, `failure`, `circuit_open`, `breaker` : jamais les
   textes.
+
+### Gardes : injection et modération
+
+```js
+const bad = await models.injection(pageWebLue);       // { ok, score: 0.99, verdict: 'injection', ... }
+const risk = await models.moderation(reponse);        // { ok, flagged, unsafe, categories, flaggedCategories }
+```
+
+`injection` refuse (`invalid_input`) un texte de plus de 20 000 caractères au
+lieu de le couper : une consigne cachée après la coupure passerait inaperçue.
+Découpez et vérifiez chaque morceau (`@astratra/ai/guards` le fait). Les deux
+points d'entrée ont leur propre délai (2,5 s) et leur propre disjoncteur.
+`moderation` rend des scores et des noms de catégories, jamais d'extrait.
+
+## Les modèles : manifeste figé, `fetch`, vérification au démarrage
+
+`data/models-manifest.json` liste les sept modèles du service : dépôt Hugging
+Face, **hash de commit** (jamais une branche), fichiers avec taille et
+SHA-256, licence. `scripts/build-manifest.js` le (re)génère à partir de l'API
+du Hub ; il est relu comme du code.
+
+```bash
+npx astratra-models fetch --dir /srv/models                       # tout
+npx astratra-models fetch --models injection,moderation --dir /srv/models
+npx astratra-models fetch --check --dir /srv/models               # sans réseau
+```
+
+`fetch` télécharge exactement ces fichiers à ces révisions, vérifie chaque
+SHA-256 (un écart supprime le fichier et fait échouer la commande), reprend un
+téléchargement interrompu, et refuse de tourner si un SHA-256 du manifeste est
+encore à compléter. Rien ne s'exécute à l'installation du paquet.
+
+```js
+const { assertModelsReady } = require('@astratra/models');
+
+// au démarrage de l'application : en production, lève ModelsNotReadyError
+// ("model "injection" is missing ...: run astratra-models fetch") si un modèle
+// requis manque ou diffère du manifeste ; ailleurs, rend le rapport sans lever.
+assertModelsReady({ required: ['injection', 'moderation'], dir: process.env.MODELS_DIR });
+```
+
+Choix des deux modèles de garde, candidats comparés et limites :
+[docs/guard-models.fr.md](docs/guard-models.fr.md) (anglais :
+[docs/guard-models.md](docs/guard-models.md)). Licences et mentions :
+[data/MODELS-NOTICE](data/MODELS-NOTICE).
 
 ## Prix des modèles
 

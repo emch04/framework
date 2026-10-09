@@ -338,3 +338,15 @@ async function guarded(): Promise<void> {
   console.log(mock.events.length, mock.recorder.decisions('input'));
 }
 void guarded;
+
+/* Recherche Google intégrée de Gemini : option de requête et sources typées. */
+import { askGeminiModel, readGeminiGrounding } from '@astratra/ai';
+import type { DetailedAnswer, GeminiGrounding, GroundingSource } from '@astratra/ai';
+async function grounded(): Promise<void> {
+  const answer = await askGeminiModel('gemini-x', { messages: [{ role: 'user', text: 'q' }], googleSearch: { functions: 'auto' } }, { key: 'k', fetch: async () => ({ ok: true, status: 200, json: async () => ({}) }) });
+  const sources: GroundingSource[] = answer.grounding?.sources ?? [];
+  const read: GeminiGrounding = readGeminiGrounding({});
+  const detailed: DetailedAnswer = { text: 'x', toolCalls: [], cut: false, grounding: { ...read, functionsDropped: false } };
+  console.log(sources.length, read.searched, detailed.grounding?.functionsDropped);
+}
+void grounded;

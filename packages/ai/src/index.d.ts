@@ -615,12 +615,41 @@ export function readWrittenToolCalls(text: string): Array<{ id: string; name: st
 /** Le raisonnement entre balises think retiré, même ouvert sans fin ou fermé sans ouverture. */
 export function withoutThinking(content: unknown): string;
 
+/**
+ * La recherche Google intégrée de Gemini (outil `google_search`). Ignorée par
+ * les fournisseurs au format OpenAI.
+ *  - 'combine' : la recherche part avec les fonctions de l'application ;
+ *  - 'alone'   : la recherche seule pour ce tour (les fonctions ne partent pas) ;
+ *  - 'auto'    : ensemble d'abord, puis la recherche seule si l'API refuse le mélange (400).
+ */
+export type GoogleSearchOption = boolean | { functions?: 'auto' | 'combine' | 'alone' };
+
+/** Une page citée par la recherche : titre (une ligne, bornée) et adresse http(s). Données non fiables. */
+export interface GroundingSource {
+  title: string;
+  url: string;
+}
+
+/** Les sources d'une réponse Gemini avec recherche Google. */
+export interface GeminiGrounding {
+  /** Vrai quand le modèle a vraiment cherché (requêtes ou pages). */
+  searched: boolean;
+  /** Les recherches faites, dédoublonnées, au plus 10. */
+  queries: string[];
+  /** Les pages, dédoublonnées par adresse, au plus 20. */
+  sources: GroundingSource[];
+  /** Les suggestions de recherche que Google demande d'afficher (HTML tel que rendu par l'API), ou null. */
+  searchSuggestionsHtml: string | null;
+}
+
 export interface ChatRequest {
   system?: string;
   messages: ChatMessage[];
   tools?: Array<Record<string, unknown>>;
   maxTokens?: number;
   temperature?: number;
+  /** Gemini seulement : active la recherche Google intégrée pour cette requête. */
+  googleSearch?: GoogleSearchOption;
 }
 
 /** Ce qu'un fournisseur `detailed` rend au routeur. */
@@ -628,6 +657,8 @@ export interface DetailedAnswer {
   text: string | null;
   toolCalls: ChatToolCall[];
   cut: boolean;
+  /** Présent quand la requête demandait `googleSearch` à un fournisseur Gemini. */
+  grounding?: GeminiGrounding & { functionsDropped: boolean };
 }
 
 export interface ChatProviderOptions {
@@ -655,7 +686,10 @@ export function askGeminiModel(
   model: string,
   request: ChatRequest,
   io: { key: string; fetch: FetchLike; signal?: AbortSignal; timeoutMs?: number; endpoint?: string; noSystemInstruction?: (model: string) => boolean; extra?: Record<string, unknown> }
-): Promise<{ status: number; text?: string | null; toolCalls?: ChatToolCall[]; cut?: boolean; retryAfterMs?: number }>;
+): Promise<{ status: number; text?: string | null; toolCalls?: ChatToolCall[]; cut?: boolean; retryAfterMs?: number; grounding?: GeminiGrounding & { functionsDropped: boolean } }>;
+
+/** Les sources d'une réponse generateContent (ou d'un de ses candidats), nettoyées et bornées. Ne lève jamais. */
+export function readGeminiGrounding(answer: unknown): GeminiGrounding;
 
 export function createGeminiProvider(options: ChatProviderOptions & {
   id?: string;

@@ -177,6 +177,37 @@ appel — et n'est jamais une réponse à montrer. Des arguments illisibles gard
 l'appel, marqué `invalid` avec `invalidReason` (`not_json`, `not_object`), et
 repartent en `{}` au tour suivant.
 
+### La recherche Google intégrée de Gemini
+
+`googleSearch` sur une requête active l'outil de recherche de Gemini
+(`google_search` dans generateContent). Les fournisseurs au format OpenAI
+l'ignorent. Le fournisseur `detailed` rend alors `grounding` : les recherches
+faites et les pages citées, sous une forme stable.
+
+```js
+const { value } = await router.route({
+  system, messages, tools,
+  googleSearch: true // ou { functions: 'auto' | 'combine' | 'alone' }
+});
+// value.grounding = { searched, queries: ['…'], sources: [{ title, url }],
+//                     searchSuggestionsHtml, functionsDropped }
+```
+
+Avec les fonctions de l'application : `combine` envoie les deux outils
+ensemble ; `alone` n'envoie que la recherche pour ce tour (aucun appel de
+fonction n'est lu) ; `auto` (défaut) les envoie ensemble et, si l'API refuse le
+mélange (400), redemande avec la recherche seule — `functionsDropped: true` le
+dit. Selon le modèle, l'API accepte ou non le mélange : `auto` couvre les deux.
+
+Les pages lues sont des **données non fiables**. Le paquet n'en rend que des
+titres (une ligne, 200 caractères au plus, caractères de contrôle retirés) et
+des adresses `http(s)` sans identifiants, dédoublonnées (20 pages, 10 recherches
+au plus) ; il ne les relit jamais comme des consignes et ne les remet jamais
+dans un message. `readGeminiGrounding(réponse)` fait la même lecture sur une
+réponse brute. Google demande d'afficher ses suggestions de recherche avec une
+réponse sourcée : `searchSuggestionsHtml` les rend telles quelles, à afficher
+dans un cadre isolé.
+
 ## Outils natifs : la boucle d'un agent qui appelle ses outils
 
 ```js
@@ -805,6 +836,20 @@ Errors have clean codes: `AI_NO_PROVIDER`, `AI_NO_MATCH`, `AI_UNAVAILABLE`,
 `AI_STATE_UNAVAILABLE`, `AI_ROUTER_STOPPED`. State outages fail closed instead of
 silently losing a distributed quota. Transport messages and credentials are
 not included in these errors.
+
+### Gemini Google Search grounding
+
+Set `googleSearch` on a request to enable Gemini's built-in search tool
+(`google_search`). OpenAI-format providers ignore it. A `detailed` Gemini
+provider then returns `grounding: { searched, queries, sources: [{ title, url }],
+searchSuggestionsHtml, functionsDropped }`. With application functions,
+`combine` sends both tools, `alone` sends only search for that turn, and `auto`
+(default) sends both and retries with search alone when the API rejects the
+combination (HTTP 400). Pages are untrusted data: only cleaned single-line
+titles and credential-free `http(s)` URLs are returned (at most 20 sources and
+10 queries); nothing from a page is ever treated as an instruction.
+`readGeminiGrounding(response)` reads a raw generateContent response the same
+way.
 
 ### Injectable state: memory, Redis, PostgreSQL
 

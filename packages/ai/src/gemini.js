@@ -13,7 +13,11 @@ const { readRetryAfter } = require('./providerLimits');
  *   - une réponse arrêtée à sa longueur (MAX_TOKENS) le dit (`cut`), pour que le
  *     routeur la garde en dernier recours seulement ;
  *   - la clé part dans l'en-tête, jamais dans l'adresse (où elle finirait dans
- *     les journaux).
+ *     les journaux) ;
+ *   - la recherche Google intégrée (`googleSearch` sur la requête) rend ses
+ *     sources sous une forme stable (`grounding`) ; les pages lues sont des
+ *     DONNÉES NON FIABLES : rien ici ne les relit comme des consignes, seuls
+ *     des titres et des adresses http(s) nettoyés sont rendus.
  */
 
 const { providerResult, readWrittenAnswer, withoutThinking } = require('./modelAnswers');
@@ -43,14 +47,90 @@ function contentsOf(messages) {
   });
 }
 
+/* ─────────── Recherche Google intégrée ─────────── */
+
+const SEARCH_FUNCTION_MODES = new Set(['auto', 'combine', 'alone']);
+const MAX_QUERIES = 10;
+const MAX_SOURCES = 20;
+const MAX_QUERY_LENGTH = 300;
+const MAX_TITLE_LENGTH = 200;
+const MAX_URL_LENGTH = 2048;
+
+/**
+ * L'option `googleSearch` d'une requête : `true` vaut `{ functions: 'auto' }`.
+ *  - 'combine' : l'outil de recherche part avec les fonctions de l'application ;
+ *  - 'alone'   : pour ce tour, la recherche seule (les fonctions ne partent pas) ;
+ *  - 'auto'    : d'abord ensemble ; si l'API refuse le mélange (400), une seconde
+ *                demande part avec la recherche seule.
+ */
+function searchOptions(value) {
+  if (!value) return null;
+  const functions = value === true ? 'auto' : (value.functions || 'auto');
+  if (!SEARCH_FUNCTION_MODES.has(functions)) throw new TypeError('googleSearch.functions must be "auto", "combine" or "alone".');
+  return { functions };
+}
+
+/* Une chaîne lue dans une page : caractères de contrôle retirés, espaces resserrés, bornée. */
+function cleanLine(value, max) {
+  if (typeof value !== 'string') return '';
+  // eslint-disable-next-line no-control-regex
+  const line = value.replace(/[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u2028-\u202e\u2066-\u2069]/g, ' ').replace(/\s+/g, ' ').trim();
+  return line.length > max ? `${line.slice(0, max - 1).trimEnd()}…` : line;
+}
+
+/* Une adresse http(s) seulement, sans identifiants ; sinon null. */
+function cleanUrl(value) {
+  if (typeof value !== 'string' || value.length > MAX_URL_LENGTH) return null;
+  let url;
+  try {
+    url = new URL(value.trim());
+  } catch (_error) {
+    return null;
+  }
+  if ((url.protocol !== 'https:' && url.protocol !== 'http:') || url.username || url.password) return null;
+  return url.href;
+}
+
+/**
+ * Les sources d'une réponse Gemini (`groundingMetadata`) : les recherches faites,
+ * et les pages (titre, adresse) dédoublonnées et bornées. Accepte la réponse
+ * entière de generateContent ou l'un de ses candidats. Ne lève jamais.
+ * @returns {{ searched: boolean, queries: string[], sources: { title: string, url: string }[], searchSuggestionsHtml: string|null }}
+ */
+function readGeminiGrounding(answer) {
+  const candidate = answer && Array.isArray(answer.candidates) ? answer.candidates[0] : answer;
+  const metadata = (candidate && typeof candidate === 'object' && candidate.groundingMetadata) || {};
+  const queries = [];
+  for (const raw of Array.isArray(metadata.webSearchQueries) ? metadata.webSearchQueries : []) {
+    const query = cleanLine(raw, MAX_QUERY_LENGTH);
+    if (query && !queries.includes(query) && queries.length < MAX_QUERIES) queries.push(query);
+  }
+  const sources = [];
+  for (const chunk of Array.isArray(metadata.groundingChunks) ? metadata.groundingChunks : []) {
+    const web = chunk && typeof chunk === 'object' ? chunk.web : null;
+    const url = web ? cleanUrl(web.uri) : null;
+    if (!url || sources.some((source) => source.url === url)) continue;
+    const title = cleanLine(web.title, MAX_TITLE_LENGTH) || new URL(url).hostname;
+    sources.push({ title, url });
+    if (sources.length >= MAX_SOURCES) break;
+  }
+  const entry = metadata.searchEntryPoint && typeof metadata.searchEntryPoint.renderedContent === 'string'
+    ? metadata.searchEntryPoint.renderedContent
+    : null;
+  return { searched: queries.length > 0 || sources.length > 0, queries, sources, searchSuggestionsHtml: entry };
+}
+
 /** Le corps de la requête pour un modèle. */
-function requestBody(model, request, noSystemInstruction) {
+function requestBody(model, request, noSystemInstruction, search = null, dropFunctions = false) {
   const contents = contentsOf(request.messages);
   const generationConfig = {
     temperature: request.temperature === undefined ? 0.4 : request.temperature,
     maxOutputTokens: request.maxTokens || 1200
   };
-  const functions = request.tools && request.tools.length ? { tools: [{ functionDeclarations: request.tools }] } : {};
+  const toolList = [];
+  if (request.tools && request.tools.length && !dropFunctions) toolList.push({ functionDeclarations: request.tools });
+  if (search) toolList.push({ google_search: {} });
+  const functions = toolList.length ? { tools: toolList } : {};
   const system = request.system || '';
   if (!noSystemInstruction(model)) {
     return { ...(system ? { systemInstruction: { parts: [{ text: system }] } } : {}), contents, generationConfig, ...functions };
@@ -69,38 +149,50 @@ function requestBody(model, request, noSystemInstruction) {
 /**
  * Demande à un modèle Gemini.
  * @param {string} model
- * @param {{ system?: string, messages: object[], tools?: object[], maxTokens?: number, temperature?: number }} request
+ * @param {{ system?: string, messages: object[], tools?: object[], maxTokens?: number, temperature?: number, googleSearch?: boolean|{ functions?: 'auto'|'combine'|'alone' } }} request
  * @param {{ key: string, fetch: Function, signal?: AbortSignal, timeoutMs?: number, endpoint?: string, noSystemInstruction?: Function }} io
- * @returns {Promise<{ status: number, text?: string|null, toolCalls?: object[], cut?: boolean }>}
- *   Un refus se résout en `{ status }` — rien n'est levé pour lui.
+ * @returns {Promise<{ status: number, text?: string|null, toolCalls?: object[], cut?: boolean, grounding?: object }>}
+ *   Un refus se résout en `{ status }` — rien n'est levé pour lui. Avec
+ *   `googleSearch`, la réponse porte `grounding` (voir readGeminiGrounding),
+ *   plus `functionsDropped` : vrai quand les fonctions ne sont pas parties.
  */
 async function askGeminiModel(model, request, io = {}) {
   if (typeof io.fetch !== 'function') throw new Error('askGeminiModel requires io.fetch.');
+  const search = searchOptions(request.googleSearch);
+  const hasFunctions = Boolean(request.tools && request.tools.length);
   const timeout = globalThis.AbortSignal.timeout(io.timeoutMs || DEFAULT_TIMEOUT_MS);
   const signal = io.signal ? globalThis.AbortSignal.any([io.signal, timeout]) : timeout;
-  const response = await io.fetch(`${io.endpoint || DEFAULT_ENDPOINT}/${model}:generateContent`, {
+  const send = (dropFunctions) => io.fetch(`${io.endpoint || DEFAULT_ENDPOINT}/${model}:generateContent`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', 'x-goog-api-key': io.key },
-    body: JSON.stringify({ ...requestBody(model, request, io.noSystemInstruction || noSystemInstructionByDefault), ...(io.extra || {}) }),
+    body: JSON.stringify({ ...requestBody(model, request, io.noSystemInstruction || noSystemInstructionByDefault, search, dropFunctions), ...(io.extra || {}) }),
     signal
   });
+  let functionsDropped = Boolean(search && hasFunctions && search.functions === 'alone');
+  let response = await send(functionsDropped);
+  /* Le mélange recherche + fonctions refusé par l'API : la recherche seule, pour ce tour. */
+  if (!response.ok && response.status === 400 && search && hasFunctions && search.functions === 'auto') {
+    functionsDropped = true;
+    response = await send(true);
+  }
   if (!response.ok) {
     const retryAfterMs = readRetryAfter(response);
     return { status: response.status, ...(retryAfterMs === null ? {} : { retryAfterMs }) };
   }
   const answer = await response.json();
   const candidate = (answer && answer.candidates && answer.candidates[0]) || {};
+  const grounding = search ? { grounding: { ...readGeminiGrounding(candidate), functionsDropped } } : {};
   const parts = (candidate.content && candidate.content.parts) || [];
-  const toolCalls = parts.filter((part) => part.functionCall).map((part, index) => ({
+  const toolCalls = functionsDropped ? [] : parts.filter((part) => part.functionCall).map((part, index) => ({
     id: part.functionCall.id || `call_${index}`,
     name: part.functionCall.name,
     args: argsOf(part.functionCall.args)
   }));
-  if (toolCalls.length) return { status: response.status, text: null, toolCalls };
-  const text = withoutThinking(parts.filter((part) => !part.thought).map((part) => part.text || '').join(''));
-  const written = readWrittenAnswer(text, Boolean(request.tools && request.tools.length));
-  if (written) return { status: response.status, ...written };
-  return { status: response.status, text, cut: candidate.finishReason === 'MAX_TOKENS' };
+  if (toolCalls.length) return { status: response.status, text: null, toolCalls, ...grounding };
+  const text = withoutThinking(parts.filter((part) => !part.thought && !part.functionCall).map((part) => part.text || '').join(''));
+  const written = readWrittenAnswer(text, hasFunctions && !functionsDropped);
+  if (written) return { status: response.status, ...written, ...grounding };
+  return { status: response.status, text, cut: candidate.finishReason === 'MAX_TOKENS', ...grounding };
 }
 
 /**
@@ -155,4 +247,4 @@ function createGeminiProvider(options = {}) {
   };
 }
 
-module.exports = { askGeminiModel, createGeminiProvider };
+module.exports = { askGeminiModel, createGeminiProvider, readGeminiGrounding };

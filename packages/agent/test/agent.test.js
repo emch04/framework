@@ -68,9 +68,10 @@ test('rejected confirmation never performs the tool', async () => {
 });
 test('locks exclude concurrent runs and renew during slow model requests', async () => {
   let resolve; const blocked = new Promise(done => { resolve = done; });
-  const store = createMemoryTaskStore(); const agent = createAgent({ store, leaseMs: 30, turn: async () => { await blocked; return { text: 'Done' }; } });
+  const store = createMemoryTaskStore(); const agent = createAgent({ store, leaseMs: 300, turn: async () => { await blocked; return { text: 'Done' }; } });
   const task = await agent.create({ question: 'Work' }); const running = agent.resume(task.id);
-  await new Promise(done => setTimeout(done, 80));
+  /* Bail large : sous une machine chargée, une boucle d'événements en retard ne doit pas faire perdre le verrou. */
+  await new Promise(done => setTimeout(done, 800));
   await assert.rejects(agent.resume(task.id), /locked/); resolve(); await running;
 });
 test('abort interrupts a non-cooperative model and persists cancellation', async () => {

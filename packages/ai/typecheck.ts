@@ -316,3 +316,25 @@ void [exerciseConfiguredServices, estimateRequestComplexity('hi'), estimateReque
 import { createInferenceQueue, readRetryAfter } from '@astratra/ai';
 createInferenceQueue({ maxConcurrent: 2, maxQueue: 4 }).run(async () => 'ok').then((answer: string) => answer);
 readRetryAfter({ headers: { get: () => '2' } });
+
+import { createGuards, recommendedGuards, frameUntrusted } from '@astratra/ai/guards';
+import type { GuardEvent, Guards } from '@astratra/ai/guards';
+import { createFakeModels, createMockGuards } from '@astratra/ai/guards/testing';
+
+const guardModels = createFakeModels({ names: ['Ada Lovelace'], down: ['nli'] });
+const guards: Guards = recommendedGuards({ models: guardModels, readOnly: false, onEvent: (event: GuardEvent) => console.log(event.guard, event.decision) });
+const custom: Guards = createGuards({ models: guardModels, policy: { failure: { action: 'failClosed', read: 'failOpen' }, onLeak: 'redact' }, injection: { actionThreshold: 0.3 } });
+async function guarded(): Promise<void> {
+  const run = guards.newRun({ mode: 'action' });
+  const masked = await guards.input('Bonjour Ada Lovelace', run);
+  if (masked.text) console.log(masked.text.length, masked.masked);
+  const tool = await custom.toolResult({ rows: [] }, run, { tool: 'web_search', external: true });
+  console.log(tool.content, tool.suspected, run.requiresConfirmation);
+  const reply = await guards.output('Réponse', run, { sources: ['source'] });
+  console.log(reply.groundingScore, reply.unsupported[0]?.claim, reply.leaks.length, reply.moderation?.categories);
+  const allowed = await guards.beforeAction({ name: 'send_email' }, run, { humanConfirmed: false });
+  console.log(allowed.needsConfirmation, frameUntrusted('x', { source: 'mail' }));
+  const mock = createMockGuards({ rules: { names: ['Ada'] } });
+  console.log(mock.events.length, mock.recorder.decisions('input'));
+}
+void guarded;

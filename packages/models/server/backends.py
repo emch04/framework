@@ -9,6 +9,8 @@ Each backend exposes one method, the contract app.py relies on:
   NliBackend.classify(pairs)                        -> [{"entailment","neutral","contradiction"}]
   EntitiesBackend.predict(chunks, labels, threshold)-> [[{"text","label","start","end","score"}]] per chunk
   TranscribeBackend.transcribe(pcm, language, prompt, vad) -> (segments, detected_language)
+  InjectionBackend.score(texts)                     -> [float]    (0..1, probability of an injection)
+  ModerationBackend.classify(texts)                 -> [{"unsafe", <category>...: float}]  (0..1 each)
 """
 
 import json
@@ -35,11 +37,15 @@ def _onnx_file(folder):
     raise FileNotFoundError('no ONNX graph under onnx/')
 
 
-def _tokenizer(folder, max_tokens):
+def _tokenizer(folder, max_tokens, pad_id=None):
     from tokenizers import Tokenizer
     tokenizer = Tokenizer.from_file(os.path.join(folder, 'tokenizer.json'))
     tokenizer.enable_truncation(max_length=max_tokens)
-    tokenizer.enable_padding()
+    if pad_id is None:
+        tokenizer.enable_padding()
+    else:
+        # The padding token the model was trained with, not the library default.
+        tokenizer.enable_padding(pad_id=pad_id, pad_token=tokenizer.id_to_token(pad_id) or '[PAD]')
     return tokenizer
 
 
@@ -52,6 +58,11 @@ def _inputs(tokenizer, items, names):
         'token_type_ids': [e.type_ids for e in encoded],
     }
     return {name: np.array(columns[name], dtype=np.int64) for name in names}
+
+
+def _read_json(path):
+    with open(path, encoding='utf-8') as handle:
+        return json.load(handle)
 
 
 class _OnnxBackend:
@@ -109,6 +120,70 @@ class EmbedBackend(_OnnxBackend):
             norms = np.linalg.norm(cls, axis=1, keepdims=True)
             result.extend((cls / np.maximum(norms, 1e-12)).tolist())
         return [[float(x) for x in v] for v in result]
+
+
+class _ClassifierBackend(_OnnxBackend):
+    """A text classifier whose labels and padding token come from its config.json."""
+
+    def __init__(self, section):
+        folder = section['path']
+        config = _read_json(os.path.join(folder, 'config.json'))
+        self.session = _onnx_session(_onnx_file(folder), section['threads'])
+        self.tokenizer = _tokenizer(folder, section['max_tokens'], config.get('pad_token_id', 0))
+        self.names = [i.name for i in self.session.get_inputs()]
+        self.section = section
+        id2label = config['id2label']
+        self.labels = [str(id2label[str(i)]) for i in range(len(id2label))]
+
+    def _logits(self, texts):
+        import numpy as np
+        size = self.section['batch_size']
+        rows = []
+        for i in range(0, len(texts), size):
+            rows.append(self.session.run(None, _inputs(self.tokenizer, texts[i:i + size], self.names))[0])
+        return np.concatenate(rows, axis=0)
+
+
+class InjectionBackend(_ClassifierBackend):
+    """Prompt-injection and jailbreak classifier (two classes, SAFE and INJECTION): the
+    softmax probability of INJECTION. The tokenizer carries its own normalizer (full-width
+    forms, invisible characters, smuggled text), so nothing is done to the text here."""
+
+    def __init__(self, section):
+        super().__init__(section)
+        upper = [label.upper() for label in self.labels]
+        if len(upper) != 2 or 'INJECTION' not in upper:
+            raise ValueError('not a SAFE/INJECTION classifier')
+        self.positive = upper.index('INJECTION')
+
+    def score(self, texts):
+        import numpy as np
+        logits = self._logits(texts)
+        exp = np.exp(logits - logits.max(axis=1, keepdims=True))
+        probabilities = exp / exp.sum(axis=1, keepdims=True)
+        return [float(row[self.positive]) for row in probabilities]
+
+
+class ModerationBackend(_ClassifierBackend):
+    """Content-safety classifier: an overall "unsafe" score and one score per harm category,
+    each an independent sigmoid. The thresholds chosen on validation data ship next to the
+    weights (thresholds.json) and are exposed as `thresholds`."""
+
+    def __init__(self, section):
+        super().__init__(section)
+        if 'unsafe' not in self.labels:
+            raise ValueError('not a content-safety classifier')
+        self.thresholds = {}
+        path = os.path.join(section['path'], 'thresholds.json')
+        if os.path.isfile(path):
+            data = _read_json(path)
+            self.thresholds['unsafe'] = float(data['unsafe'])
+            self.thresholds.update({name: float(v) for name, v in data.get('categories', {}).items()})
+
+    def classify(self, texts):
+        import numpy as np
+        probabilities = 1.0 / (1.0 + np.exp(-self._logits(texts)))
+        return [{label: float(row[i]) for i, label in enumerate(self.labels)} for row in probabilities]
 
 
 class EntitiesBackend:
@@ -171,6 +246,7 @@ class TranscribeBackend:
 BACKENDS = {
     'embed': EmbedBackend, 'rerank': RerankBackend, 'nli': NliBackend,
     'entities': EntitiesBackend, 'transcribe': TranscribeBackend,
+    'injection': InjectionBackend, 'moderation': ModerationBackend,
 }
 
 

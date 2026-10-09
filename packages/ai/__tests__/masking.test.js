@@ -229,3 +229,20 @@ describe('outbound masking in the agent loop', () => {
     expect(prompts[1]).not.toContain('Grace Ilunga');
   });
 });
+
+describe('masker snapshot', () => {
+  test('restore gives the same tokens and keeps counting after them', () => {
+    const first = createReversibleMasker({ names: ['Grace Ilunga'] });
+    const masked = first.mask('Grace Ilunga est là.');
+    const copy = createReversibleMasker();
+    copy.restore(JSON.parse(JSON.stringify(first.snapshot())));
+    expect(copy.unmask(masked)).toBe('Grace Ilunga est là.');
+    expect(copy.mask('Grace Ilunga est là.')).toBe(masked);
+    expect(copy.mask('Paul Mbala', { names: ['Paul Mbala'] })).toContain('0002');
+  });
+
+  test('restore refuses a snapshot that is not valid', () => {
+    expect(() => createReversibleMasker().restore({ version: 1 })).toThrow(TypeError);
+    expect(() => createReversibleMasker().restore(null)).toThrow(TypeError);
+  });
+});

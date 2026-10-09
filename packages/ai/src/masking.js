@@ -248,6 +248,37 @@ function createReversibleMasker(options = {}) {
     return 0;
   }
 
+  /**
+   * The table as plain JSON, to keep a run across a restart. It holds the real
+   * values (that is what lets the answer be unmasked), so store it like the
+   * data it protects.
+   */
+  function snapshot() {
+    return {
+      version: 1,
+      sequence,
+      tokens: [...byToken.entries()],
+      loose: [...loose],
+      register: [...register],
+      types: [...typeOverride.entries()]
+    };
+  }
+
+  /** Put a table from `snapshot()` back; what was known before is replaced. */
+  function restore(state) {
+    const list = (value) => Array.isArray(value) && value.every((item) => item !== null && item !== undefined);
+    if (!state || state.version !== 1 || !Number.isInteger(state.sequence) || !list(state.tokens) || !list(state.loose) || !list(state.register) || !list(state.types)
+      || ![...state.tokens, ...state.types].every((pair) => Array.isArray(pair) && pair.length === 2 && pair.every((part) => typeof part === 'string'))) {
+      throw new TypeError('createReversibleMasker: invalid snapshot.');
+    }
+    byToken.clear(); byValue.clear(); loose.clear(); register.clear(); typeOverride.clear();
+    for (const [token, value] of state.tokens) { byToken.set(token, value); byValue.set(value, token); }
+    for (const value of state.loose) loose.add(value);
+    for (const value of state.register) register.add(value);
+    for (const [value, type] of state.types) typeOverride.set(value, type);
+    sequence = state.sequence;
+  }
+
   return {
     mask,
     maskAsync,
@@ -257,7 +288,9 @@ function createReversibleMasker(options = {}) {
     unmaskStream,
     detectNames,
     /** How many values are masked so far — never the values. */
-    size: () => byToken.size
+    size: () => byToken.size,
+    snapshot,
+    restore
   };
 }
 

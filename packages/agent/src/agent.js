@@ -7,6 +7,9 @@ const { summarizeContext } = require('./context');
 const { createMemoryTaskStore } = require('./taskStore');
 
 class BudgetStop extends Error {}
+const GUARD_FUNCTIONS = ['newRun', 'input', 'toolResult', 'beforeAction', 'output'];
+const GUARDS_REQUIRED = 'guards required in production: pass guards or guards:false';
+const guardBlocked = (what) => Object.assign(new Error(`${what} blocked by a guard.`), { code: 'GUARD_BLOCKED' });
 class ConfirmationStop extends Error {}
 function abortable(work, signal) {
   if (signal.aborted) return Promise.reject(signal.reason);
@@ -28,6 +31,12 @@ function createAgent(options = {}) {
   validateNativeTools(options.tools || []);
   if ((options.tools || []).some((tool) => tool.name === 'update_plan')) throw new Error('update_plan is reserved.');
   const now = options.now || Date.now;
+  // Guards: protected by default. Without a choice, production refuses to start; elsewhere a single warning is sent.
+  if (options.guards === undefined && process.env.NODE_ENV === 'production') throw new Error(GUARDS_REQUIRED);
+  if (options.guards !== undefined && options.guards !== false && (!options.guards || GUARD_FUNCTIONS.some((name) => typeof options.guards[name] !== 'function'))) throw new Error(`guards must be false or an object from createGuards (${GUARD_FUNCTIONS.join(', ')}).`);
+  const guards = options.guards || null;
+  const guardMode = (options.tools || []).some((tool) => tool.kind === 'write' || tool.kind === 'confirm') ? 'action' : 'read';
+  let warned = false;
   const feedback = options.feedback;
   if (feedback != null && typeof feedback !== 'function' && typeof feedback.feedbackDigest !== 'function' && typeof feedback.digest !== 'function') throw new Error('feedback must be a function or an object with feedbackDigest().');
   const digestOf = feedback && (typeof feedback === 'function' ? feedback : (input) => (feedback.feedbackDigest || feedback.digest).call(feedback, input));
@@ -44,6 +53,10 @@ function createAgent(options = {}) {
     let task;
     let heartbeat;
     let deadline;
+    let run;
+    let unsubscribe;
+    let subscribed = false;
+    const guardEvents = [];
     const controller = new globalThis.AbortController();
     const signal = externalSignal ? globalThis.AbortSignal.any([externalSignal, controller.signal]) : controller.signal;
     const began = now();
@@ -65,6 +78,20 @@ function createAgent(options = {}) {
         store.renew(id, owner, leaseMs).then((ok) => { if (!ok) controller.abort(new Error('Task lock lost.')); }, (error) => controller.abort(error));
       }, Math.max(10, Math.floor(leaseMs / 3)));
       deadline = setTimeout(() => controller.abort(new BudgetStop('time')), Math.max(0, budget.maxMs - task.elapsedMs));
+      // Guards: events are relayed through onEvent, the run state is kept in the task.
+      const flushGuardEvents = async () => {
+        while (guardEvents.length) { const event = { ...guardEvents.shift() }; delete event.type; await emit('guard', { taskId: id, ...event }); }
+      };
+      const guarded = async (work) => {
+        const value = await abortable(work, signal);
+        if (!subscribed && value?.event) guardEvents.push(value.event);
+        await flushGuardEvents();
+        return value;
+      };
+      const persistGuards = (inputDone = task.guards?.inputDone === true) => {
+        task.guards = { version: 1, inputDone, ...(typeof guards.exportRun === 'function' ? { run: guards.exportRun(run) } : {}) };
+      };
+      const toolContext = (key) => ({ ...(options.context || {}), taskId: id, idempotencyKey: key, ...(guards ? { unmask: (text) => run.unmask(text) } : {}) });
       const tools = [...(options.tools || []), createPlanTool(async (plan) => { signal.throwIfAborted(); task.plan = plan; await save(); await emit('plan', { taskId: id, plan }); })];
       async function execute(call) {
         signal.throwIfAborted();
@@ -76,34 +103,68 @@ function createAgent(options = {}) {
         const key = `${id}:${task.pending.step}:${index}`;
         const tool = tools.find((item) => item.name === call.name);
         let result;
+        const rejected = () => ({ role: 'tool', toolCallId: call.id, name: call.name, result: { status: 'rejected' } });
+        const refused = (verdict) => ({ role: 'tool', toolCallId: call.id, name: call.name, result: { error: `Blocked by a guard: ${verdict.reason || 'refused'}.` } });
+        // What the model reads from a tool goes through the guards: masked, and framed as data when the tool is external.
+        const finish = async (message) => {
+          if (!guards) return message;
+          const outcome = await guarded(() => guards.toolResult(message.result, run, { tool: call.name, external: tool?.external === true }));
+          persistGuards();
+          return { ...message, result: outcome.content };
+        };
+        const beforeAction = async (humanConfirmed) => {
+          const verdict = await guarded(() => guards.beforeAction({ name: call.name, kind: tool.kind, args: call.args }, run, { humanConfirmed }));
+          persistGuards();
+          return verdict;
+        };
+        const waitForHuman = async (extra) => {
+          task.state = 'waiting_confirmation'; task.confirmation = { key, call, ...extra };
+          await save(); await emit('confirmation', { taskId: id, confirmation: task.confirmation });
+          throw new ConfirmationStop();
+        };
         if (tool?.kind === 'confirm') {
           task.pending.preparations ||= [];
           if (!task.pending.preparations[index]) {
-            const prepared = await createToolCaller({ tools: [tool], context: { ...(options.context || {}), taskId: id, idempotencyKey: key }, signal, timeoutMs: options.toolTimeoutMs })(call);
+            const prepared = await createToolCaller({ tools: [tool], context: toolContext(key), signal, timeoutMs: options.toolTimeoutMs })(call);
             task.pending.preparations[index] = prepared;
             await save();
           }
           const prepared = task.pending.preparations[index];
           if (prepared.result?.error) {
-            task.pending.results[index] = prepared;
-            task.steps.push({ key, call, result: prepared });
-            await save(); await emit('step', { taskId: id, key, call, result: prepared });
-            return prepared;
+            const failed = await finish(prepared);
+            task.pending.results[index] = failed;
+            task.steps.push({ key, call, result: failed });
+            await save(); await emit('step', { taskId: id, key, call, result: failed });
+            return failed;
           }
-          if (!confirmation || confirmation.key !== key) {
-            task.state = 'waiting_confirmation'; task.confirmation = { key, call, prepared: prepared.result };
-            await save(); await emit('confirmation', { taskId: id, confirmation: task.confirmation });
-            throw new ConfirmationStop();
-          }
+          if (!confirmation || confirmation.key !== key) await waitForHuman({ prepared: prepared.result, ...(guards && run.requiresConfirmation ? { guard: { requiresConfirmation: true } } : {}) });
           if (confirmation.approved) {
-            const approved = { ...tool, kind: 'read', run: tool.perform };
-            result = await createToolCaller({ tools: [approved], context: { ...(options.context || {}), taskId: id, idempotencyKey: key }, signal, timeoutMs: options.toolTimeoutMs })(call);
-          } else result = { role: 'tool', toolCallId: call.id, name: call.name, result: { status: 'rejected' } };
+            // The person's confirmation comes from the application, never from the model.
+            const verdict = guards ? await beforeAction(true) : null;
+            if (verdict?.decision === 'block') result = refused(verdict);
+            else {
+              const approved = { ...tool, kind: 'read', run: tool.perform };
+              result = await createToolCaller({ tools: [approved], context: toolContext(key), signal, timeoutMs: options.toolTimeoutMs })(call);
+            }
+          } else result = rejected();
           delete task.confirmation;
           confirmation = undefined;
+        } else if (guards && tool?.kind === 'write') {
+          // A tool that writes alone: refused after a suspected injection until a person confirms this very call.
+          const mine = Boolean(confirmation && confirmation.key === key);
+          if (mine && !confirmation.approved) result = rejected();
+          else {
+            const verdict = await beforeAction(mine && confirmation.approved === true);
+            if (verdict.decision === 'block') {
+              if (verdict.needsConfirmation) await waitForHuman({ guard: { reason: verdict.reason } });
+              result = refused(verdict);
+            } else result = await createToolCaller({ tools, context: toolContext(key), signal, timeoutMs: options.toolTimeoutMs })(call);
+          }
+          if (mine) { delete task.confirmation; confirmation = undefined; }
         } else {
-          result = await createToolCaller({ tools, context: { ...(options.context || {}), taskId: id, idempotencyKey: key }, signal, timeoutMs: options.toolTimeoutMs })(call);
+          result = await createToolCaller({ tools, context: toolContext(key), signal, timeoutMs: options.toolTimeoutMs })(call);
         }
+        result = await finish(result);
         task.pending.results[index] = result;
         task.steps.push({ key, call, result });
         await save(); await emit('step', { taskId: id, key, call, result });
@@ -142,13 +203,43 @@ function createAgent(options = {}) {
         try { const value = await abortable(() => digestOf({ userId: task.userId, tenantId: task.tenantId, task: JSON.parse(JSON.stringify(task)), signal }), signal); if (typeof value === 'string') text = value.trim().slice(0, 4000); } catch (_error) { signal.throwIfAborted(); }
         task.feedbackDigest = text; await save();
       }
+      if (guards) {
+        if (typeof guards.subscribe === 'function') { subscribed = true; unsubscribe = guards.subscribe((event) => { if (event.runId === id) guardEvents.push(event); }); }
+        run = task.guards?.run && typeof guards.restoreRun === 'function' ? guards.restoreRun(task.guards.run) : guards.newRun({ id, mode: guardMode });
+        if (!task.guards?.inputDone) {
+          // The question and the earlier messages are masked once, before any model sees them.
+          const question = task.messages.at(-1);
+          const asked = question?.text === task.question;
+          for (const message of task.messages) {
+            if (!['user', 'assistant', 'system'].includes(message.role) || typeof message.text !== 'string' || !message.text) continue;
+            const out = await guarded(() => guards.input(message.text, run));
+            if (out.decision === 'block' || typeof out.text !== 'string') throw guardBlocked('Input');
+            message.text = out.text;
+          }
+          if (asked) task.maskedQuestion = question.text;
+          persistGuards(true); await save();
+        }
+      } else if (options.guards === undefined && !warned) {
+        warned = true;
+        await emit('warning', { taskId: id, code: 'guards_missing', message: 'No guards: pass guards (createGuards / recommendedGuards from @astratra/ai/guards) or guards:false to silence this.' });
+      }
       await emit('run', { taskId: id, runId: id });
-      const system = () => `${options.system || ''}${task.feedbackDigest ? `\n${task.feedbackDigest}` : ''}\nTask: ${task.question}\nCurrent plan: ${JSON.stringify(task.plan)}`;
+      const system = () => `${options.system || ''}${task.feedbackDigest ? `\n${task.feedbackDigest}` : ''}\nTask: ${task.maskedQuestion ?? task.question}\nCurrent plan: ${JSON.stringify(task.plan)}`;
       const summarize = options.summarize || (async ({ messages, plan }) => {
         const response = await model({ system: options.summaryInstruction || 'Summarize the completed work, evidence, constraints and remaining work. Preserve references needed to continue.', messages: [...messages, { role: 'system', text: JSON.stringify(plan) }], tools: [] }, signal, false, 'summary');
         return response.text;
       });
       let text;
+      let blocked = false;
+      // The reply is unmasked and checked (grounding, leaks, moderation); a blocked reply is never given out.
+      const checkOutput = async (raw) => {
+        if (!guards) return raw;
+        const out = await guarded(() => guards.output(raw, run));
+        if (out.decision !== 'allow' || out.degraded.length) task.guard = { decision: out.decision, reasons: out.reasons, degraded: out.degraded, groundingScore: out.groundingScore, unsupportedClaims: out.unsupported.length };
+        else delete task.guard;
+        if (out.decision === 'block' || typeof out.text !== 'string') { blocked = true; task.stopReason ||= 'guard'; return undefined; }
+        return out.text;
+      };
       try {
         if (task.pending) {
           const results = [];
@@ -167,8 +258,9 @@ function createAgent(options = {}) {
             else task.messages = request.messages;
             return model({ ...request, system: system() });
           } });
-          text = response.text;
-          task.messages.push({ role: 'assistant', text }); await save();
+          task.messages.push({ role: 'assistant', text: response.text }); await save();
+          text = await checkOutput(response.text);
+          if (blocked) break;
           let verdict = { complete: true };
           if (options.verify) verdict = await abortable(() => options.verify({ task: JSON.parse(JSON.stringify(task)), text, signal }), signal);
           else if (options.verificationInstruction) {
@@ -194,12 +286,12 @@ function createAgent(options = {}) {
           const finalMessages = JSON.parse(JSON.stringify(task.messages));
           if (task.pending) finalMessages.push(...task.pending.calls.map((call, index) => task.pending.results[index] || { role: 'tool', toolCallId: call.id, name: call.name, result: { error: 'Not executed: task budget exhausted.' } }));
           const response = await model({ system: `${system()}\n${options.finalInstruction || 'The task budget is exhausted. Give a final answer stating completed work and remaining work accurately.'}`, messages: finalMessages, tools: [] }, finalSignal, true, 'final');
-          text = response.text;
+          text = await checkOutput(response.text);
         } finally { clearTimeout(timer); }
       }
-      if (typeof text !== 'string' || !text.trim()) throw new Error('The model gave no final text.');
-      task.text = text;
-      task.state = task.verified || !options.verify && !options.verificationInstruction && !task.stopReason ? 'completed' : 'failed';
+      if (!blocked && (typeof text !== 'string' || !text.trim())) throw new Error('The model gave no final text.');
+      if (!blocked) task.text = text;
+      task.state = blocked ? 'failed' : task.verified || !options.verify && !options.verificationInstruction && !task.stopReason ? 'completed' : 'failed';
       await save(); await emit('final', { taskId: id, runId: id, text, state: task.state, stopReason: task.stopReason, verified: task.verified });
       return task;
     } catch (error) {
@@ -208,6 +300,7 @@ function createAgent(options = {}) {
       throw error;
     } finally {
       clearInterval(heartbeat); clearTimeout(deadline);
+      if (unsubscribe) unsubscribe();
       await store.release(id, owner);
     }
   }

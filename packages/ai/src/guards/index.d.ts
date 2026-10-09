@@ -109,12 +109,33 @@ export interface OutputResult {
   event: GuardEvent;
 }
 
+/** A run as plain JSON, from `exportRun`. Holds the masking table (real values): store it like the data it protects. */
+export interface GuardRunSnapshot {
+  version: 1;
+  id: string;
+  mode: RunMode;
+  requiresConfirmation: boolean;
+  suspicions: number;
+  /** Hashes, never the data. */
+  allowed: string[];
+  kinds: Array<[string, string]>;
+  /** External texts read, masked. */
+  sources: string[];
+  masker: unknown;
+}
+
 export interface Guards {
   newRun(options?: { id?: string; mode?: RunMode; sources?: string[]; names?: string[] }): GuardRun;
   input(text: string, run: GuardRun): Promise<InputResult>;
   toolResult(result: unknown, run: GuardRun, context?: ToolResultContext): Promise<ToolResultOutcome>;
   output(text: string, run: GuardRun, context?: { sources?: string[] }): Promise<OutputResult>;
   beforeAction(action: { name?: string; [key: string]: unknown }, run: GuardRun, context?: { humanConfirmed?: boolean }): Promise<{ decision: GuardDecision; reason?: string; needsConfirmation: boolean }>;
+  /** The state of a run as JSON, to resume it after a restart. */
+  exportRun(run: GuardRun): GuardRunSnapshot;
+  /** A run identical to the exported one (same tokens, same confirmation flag). */
+  restoreRun(snapshot: GuardRunSnapshot): GuardRun;
+  /** Listen to every guard event, like `onEvent`; returns the function that stops listening. */
+  subscribe(listener: (event: GuardEvent) => void): () => void;
   policy: Required<GuardPolicy>;
 }
 

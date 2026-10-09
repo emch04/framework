@@ -1,5 +1,6 @@
 export * from './feedback';
 import type { NativeTool, NativeToolCall, ToolMessage } from '@astratra/ai';
+import type { Guards, GuardRunSnapshot } from '@astratra/ai/guards';
 export type PlanState = 'todo' | 'in_progress' | 'done' | 'abandoned';
 export interface PlanStep { id: string; text: string; state: PlanState }
 export type TaskState = 'pending' | 'running' | 'waiting_confirmation' | 'completed' | 'failed' | 'cancelled';
@@ -13,7 +14,13 @@ export interface Task {
   pending: { step: number; calls: NativeToolCall[]; results: Array<ToolMessage | null>; preparations?: Array<ToolMessage | null> } | null;
   verificationRetries: number; verified: boolean; createdAt: number; updatedAt: number;
   userId?: string; tenantId?: string; feedbackDigest?: string;
-  confirmation?: { key: string; call: NativeToolCall; prepared?: unknown }; text?: string; error?: string; stopReason?: string;
+  /** Question as the model saw it (names and personal data masked); set when guards are on. */
+  maskedQuestion?: string;
+  /** State of the guards, kept so a resumed task behaves the same. Holds the masking table: store it like the data it protects. */
+  guards?: { version: 1; inputDone: boolean; run?: GuardRunSnapshot };
+  /** Last reply check when it was not a plain allow: decision, reason codes, numbers (no text). */
+  guard?: { decision: 'allow' | 'flag' | 'block'; reasons: string[]; degraded: string[]; groundingScore: number | null; unsupportedClaims: number };
+  confirmation?: { key: string; call: NativeToolCall; prepared?: unknown; guard?: { requiresConfirmation?: boolean; reason?: string } }; text?: string; error?: string; stopReason?: string;
 }
 export interface TaskStore {
   create(task: Task): Promise<Task>; get(id: string): Promise<Task | null>;
@@ -29,7 +36,13 @@ export interface SummaryInput { messages: Message[]; plan: PlanStep[]; signal: A
 export interface ContextSummaryOptions { maxChars?: number; maxTokens?: number; keepLast?: number }
 export interface AgentOptions {
   turn(request: TurnRequest): Promise<TurnResponse> | TurnResponse;
-  tools?: NativeTool<any>[]; system?: string; context?: Record<string, unknown>; store?: TaskStore;
+  /**
+   * Guards from `createGuards` / `recommendedGuards` (`@astratra/ai/guards`), or `false` to run without.
+   * Required in production (`NODE_ENV=production`); elsewhere a missing choice sends one `warning` event.
+   */
+  guards?: Guards | false;
+  /** Tools marked `external: true` return outside content (web, e-mail, files): scanned for injection and framed as data. */
+  tools?: Array<NativeTool<any> & { external?: boolean }>; system?: string; context?: Record<string, unknown>; store?: TaskStore;
   budget?: Budget; pricing?: { inputPerMillion?: number; outputPerMillion?: number };
   verify?(input: { task: Task; text: string; signal: AbortSignal }): Promise<boolean | Verification> | boolean | Verification;
   verificationInstruction?: string; maxVerificationRetries?: number;

@@ -10,3 +10,6 @@ async function exercise() {
   void postgresTaskSchema();
 }
 void exercise;
+import { createGuards } from '@astratra/ai/guards';
+const guarded = createAgent({ guards: createGuards({}), tools: [{ name: 'web_search', description: 'Search the web.', parameters: { type: 'object' }, kind: 'read', external: true, run: async () => ({ data: 'x' }) }], turn: () => ({ text: 'Done' }) });
+void guarded; void createAgent({ guards: false, turn: () => ({ text: 'Done' }) });

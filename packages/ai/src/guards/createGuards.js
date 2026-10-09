@@ -29,6 +29,16 @@ const SEVERITY = { allow: 0, flag: 1, block: 2 };
 const DEFAULT_MAX_SCAN_CHARS = 100000;
 const WITHHELD = '[content withheld by a guard]';
 
+const keyHash = (key) => crypto.createHash('sha256').update(String(key)).digest('hex');
+
+/** Personal-data keys the person gave, kept as hashes: enough to recognise them, never to read them. */
+class KeySet {
+  constructor(hashes = []) { this.hashes = new Set(hashes); }
+  add(key) { this.hashes.add(keyHash(key)); return this; }
+  has(key) { return this.hashes.has(keyHash(key)); }
+  list() { return [...this.hashes]; }
+}
+
 const worst = (a, b) => (SEVERITY[b] > SEVERITY[a] ? b : a);
 
 function normalisePolicy(policy = {}) {
@@ -76,9 +86,12 @@ function lazyVerifySources() {
 function createGuards(options = {}) {
   const models = options.models || null;
   const policy = normalisePolicy(options.policy);
+  const listeners = new Set();
   const emit = (event) => {
-    if (typeof options.onEvent !== 'function') return;
-    try { options.onEvent(event); } catch (_error) { /* observers never break a guard */ }
+    for (const listener of [options.onEvent, ...listeners]) {
+      if (typeof listener !== 'function') continue;
+      try { listener(event); } catch (_error) { /* observers never break a guard */ }
+    }
   };
   const now = options.now || (() => new Date().toISOString());
   const labels = options.entityLabels || ['person'];
@@ -118,7 +131,7 @@ function createGuards(options = {}) {
       requiresConfirmation: false,
       suspicions: 0,
       /** Personal data given by the person in this run: a reply may repeat it. */
-      allowed: new Set(),
+      allowed: new KeySet(),
       detection: { failed: false },
       masker: null
     };
@@ -130,6 +143,44 @@ function createGuards(options = {}) {
     });
     run.kinds = kinds;
     run.unmask = (text) => run.masker.unmask(text);
+    return run;
+  }
+
+  /* ---- keeping a run across a restart ------------------------------------ */
+
+  /**
+   * The state of a run as plain JSON: the masking table, the confirmation flag,
+   * hashes of the personal data the person gave, and the external texts read,
+   * masked. No other raw text. The table holds the real values (that is how a
+   * reply is unmasked): store it like the data it protects.
+   */
+  function exportRun(run) {
+    const sources = run.sources.map((text) => run.masker.mask(text));
+    return {
+      version: 1,
+      id: run.id,
+      mode: run.mode,
+      requiresConfirmation: run.requiresConfirmation,
+      suspicions: run.suspicions,
+      allowed: run.allowed.list(),
+      kinds: [...run.kinds.entries()],
+      sources,
+      masker: run.masker.snapshot()
+    };
+  }
+
+  /** A run identical to the one `exportRun` described. */
+  function restoreRun(state) {
+    if (!state || state.version !== 1 || typeof state.id !== 'string' || !Array.isArray(state.allowed) || !Array.isArray(state.kinds) || !Array.isArray(state.sources)) {
+      throw new TypeError('restoreRun: invalid snapshot.');
+    }
+    const run = newRun({ id: state.id, mode: state.mode });
+    run.masker.restore(state.masker);
+    run.requiresConfirmation = state.requiresConfirmation === true;
+    run.suspicions = Number.isInteger(state.suspicions) ? state.suspicions : 0;
+    run.allowed = new KeySet(state.allowed);
+    for (const [value, type] of state.kinds) run.kinds.set(value, type);
+    run.sources = state.sources.map((text) => run.masker.unmask(text));
     return run;
   }
 
@@ -390,6 +441,14 @@ function createGuards(options = {}) {
     output,
     // async-shaped like the others, so the four compose the same way
     beforeAction: async (action, run, context) => beforeAction(action, run, context),
+    exportRun,
+    restoreRun,
+    /** Listen to every event, as `onEvent` does; returns the function that stops listening. */
+    subscribe(listener) {
+      if (typeof listener !== 'function') throw new TypeError('subscribe: a function is expected.');
+      listeners.add(listener);
+      return () => { listeners.delete(listener); };
+    },
     policy
   };
 }

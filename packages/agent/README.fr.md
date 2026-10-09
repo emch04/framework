@@ -17,6 +17,7 @@ npm install @astratra/agent
 const { createAgent, createMemoryTaskStore } = require('@astratra/agent');
 
 const agent = createAgent({
+  guards: false, // ou recommendedGuards({ models }) de '@astratra/ai/guards' : voir « Gardes »
   store: createMemoryTaskStore(),
   turn: async ({ system, messages, tools, signal, phase }) => ({ text: 'Le résultat est 3.', usage: { inputTokens: 40, outputTokens: 8 } }),
   budget: { maxMs: 600000, maxTurns: 200, maxTokens: 100000, maxCost: 2 },
@@ -84,6 +85,70 @@ app.use('/api', createFeedbackRouter({
 
 Les composants d'interface sont `FeedbackBar` dans `@astratra/native-ui`
 (React Native) et `@astratra/saas-kit-ui` (web).
+
+## Gardes (actives par défaut)
+
+`createAgent({ guards })` accepte les gardes de `@astratra/ai/guards`
+(`recommendedGuards` ou `createGuards`, fondées sur le client
+`@astratra/models` injecté) : tout agent créé avec le paquet est protégé.
+
+```js
+const { recommendedGuards } = require('@astratra/ai/guards');
+const guards = recommendedGuards({ models });          // readOnly: true pour un agent qui n'agit pas
+const agent = createAgent({ guards, turn, tools, onEvent });
+```
+
+| Moment | Garde |
+| --- | --- |
+| début d'une tâche | `newRun` : mode `action` si un outil est de genre `write` ou `confirm`, sinon `read` (la politique de panne suit le mode) |
+| la question et les messages précédents, avant tout modèle | `input` : noms et données personnelles masqués. Une saisie bloquée fait échouer la tâche (`error.code === 'GUARD_BLOCKED'`) |
+| chaque résultat d'outil | `toolResult` : masqué ; pour un outil marqué `external: true` (web, e-mail, fichiers), contrôlé aussi contre l'injection et encadré comme donnée non fiable. Un résultat `{ untrusted: true, content }` est traité comme externe |
+| avant un outil `write` ou `confirm` | `beforeAction` |
+| la réponse finale | `output` : démasquée, puis ancrage dans les sources lues, fuite de données personnelles, modération |
+
+**Action refusée.** Une injection suspectée, un outil `write` ne s'exécute pas :
+la tâche passe en `waiting_confirmation` avec
+`confirmation: { key, call, guard: { reason: 'confirmation_required' } }`. On
+reprend avec `{ confirmation: { key, approved: true } }` (depuis votre
+interface, jamais depuis le modèle) pour exécuter cet appel, ou `approved: false`
+pour enregistrer un refus que le modèle lit. Un refus pour toute autre raison est
+rendu au modèle comme une erreur d'outil (`Blocked by a guard: ...`), sans
+exécution. Les outils `confirm` attendent déjà une personne ; leur confirmation
+porte `guard: { requiresConfirmation: true }` quand une injection est suspectée,
+et `beforeAction` est interrogée à nouveau, avec la confirmation, avant `perform`.
+
+**Réponse.** Une réponse bloquée n'est jamais livrée : la tâche est `failed`,
+`stopReason: 'guard'`, sans `task.text`. Une réponse signalée (par exemple des
+affirmations que les sources ne soutiennent pas) est livrée, et `task.guard`
+garde `{ decision, reasons, degraded, groundingScore, unsupportedClaims }`
+(nombres et codes, aucun texte). `verify` reçoit la réponse démasquée et contrôlée.
+
+**Événements.** Les décisions arrivent dans `onEvent` sous la forme
+`{ type: 'guard', taskId, guard, decision, reasons, degraded, metrics, runId, mode, at }`
+(l'identifiant d'exécution est celui de la tâche). Jamais de texte.
+
+**État et reprise.** L'état des gardes est gardé dans la tâche (`task.guards`)
+après la saisie et après chaque résultat d'outil : table de masquage, drapeau de
+confirmation, empreintes des données personnelles données, sources externes lues
+(masquées). Une tâche reprise, même dans un autre processus avec de nouvelles
+gardes, démasque avec les mêmes jetons et exige toujours la confirmation. Les
+messages de la tâche sont stockés masqués et `task.maskedQuestion` est ce que le
+modèle lit. La table de masquage contient les vraies valeurs (c'est ainsi que la
+réponse est démasquée) et `task.question` reste telle quelle : protégez le
+magasin de tâches comme les données qu'il contient. Les outils reçoivent
+`context.unmask(texte)` pour retrouver la vraie valeur d'un jeton écrit par le
+modèle ; les arguments sont sinon transmis comme le modèle les a écrits.
+
+**Par défaut.** `guards` est un choix à faire, pas une option à oublier :
+
+- `NODE_ENV=production` sans `guards` : `createAgent` lève
+  `guards required in production: pass guards or guards:false`.
+- ailleurs, sans `guards` : rien n'est gardé et un événement `warning`
+  (`code: 'guards_missing'`) est envoyé par agent.
+- `guards: false` : choix explicite et silencieux.
+
+Pour les tests : `createMockGuards` et `createFakeModels` de
+`@astratra/ai/guards/testing`.
 
 ## Tests
 

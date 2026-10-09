@@ -304,3 +304,44 @@ describe('configuration', () => {
     expect(events[0]).toMatchObject({ guard: 'toolResult', decision: 'flag' });
   });
 });
+
+describe('keeping a run across a restart', () => {
+  test('exportRun / restoreRun give back the same tokens, flag and sources, as plain JSON', async () => {
+    const { guards } = setup();
+    const run = guards.newRun({ id: 'run-1' });
+    const out = await guards.input(`Write to ${SECRET_NAME} at zorg@example.org please.`, run);
+    await guards.toolResult(`Page about ${SECRET_NAME}. ${ATTACK}`, run, { tool: 'web', external: true });
+    expect(run.requiresConfirmation).toBe(true);
+    const snapshot = JSON.parse(JSON.stringify(guards.exportRun(run)));
+    // sources are masked, the confirmed personal data only appears as hashes
+    expect(JSON.stringify(snapshot.sources)).not.toContain(SECRET_NAME);
+    expect(JSON.stringify(snapshot.allowed)).not.toContain('zorg@example.org');
+    const again = guards.restoreRun(snapshot);
+    expect(again.id).toBe('run-1');
+    expect(again.requiresConfirmation).toBe(true);
+    expect(again.sources[0]).toContain(SECRET_NAME);
+    const token = out.text.match(/#PERSON_\d+/)[0];
+    expect(again.unmask(`Hello ${token}`)).toBe(`Hello ${SECRET_NAME}`);
+    // personal data the person gave may be repeated; a new token continues the sequence
+    const reply = await guards.output(`Sent to ${token} (zorg@example.org).`, again);
+    expect(reply.reasons).not.toContain('personal_data_leak');
+    expect((await guards.beforeAction({ name: 'send' }, again)).decision).toBe('block');
+  });
+
+  test('restoreRun refuses a snapshot that is not one', () => {
+    const { guards } = setup();
+    expect(() => guards.restoreRun({ version: 2 })).toThrow(TypeError);
+    expect(() => guards.restoreRun(null)).toThrow(TypeError);
+  });
+
+  test('subscribe relays events like onEvent and can be stopped', async () => {
+    const { guards } = setup();
+    const seen = [];
+    const stop = guards.subscribe((event) => seen.push(event.guard));
+    const run = guards.newRun();
+    await guards.input('hello', run);
+    stop();
+    await guards.input('again', run);
+    expect(seen).toEqual(['input']);
+  });
+});

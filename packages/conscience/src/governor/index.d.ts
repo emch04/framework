@@ -288,7 +288,7 @@ export class GovernorError extends Error {
     | 'self_approval' | 'not_found' | 'not_pending' | 'protected_scope' | 'invalid_spend' | 'actor_required'
     | 'not_approved' | 'approval_expired' | 'approval_insufficient' | 'approval_invalid' | 'approver_role_missing' | 'approval_roles_not_distinct' | 'already_approved' | 'decline_reason_required'
     | 'proposal_tampered' | 'already_staged' | 'candidate_exists' | 'stale_base' | 'change_conflict' | 'no_candidate' | 'rollout_incomplete' | 'invalid_rollout'
-    | 'nothing_to_rollback' | 'object_exists' | 'invalid_object' | 'invalid_finding' | 'invalid_period' | 'actor_not_allowed' | string;
+    | 'nothing_to_rollback' | 'object_exists' | 'invalid_object' | 'invalid_finding' | 'invalid_period' | 'actor_not_allowed' | 'invalid_settings' | string;
   constructor(code: string, message: string);
 }
 
@@ -306,3 +306,80 @@ export const FINDING_SEVERITIES: readonly FindingSeverity[];
 export const MORNING_REPORT_SCHEMA: 'morning-report/1';
 /** The bucket (0 to 1) of an identifier, identical to bucket() of @astratra/flags. */
 export function rolloutBucket(seed: string, identifier: string | null | undefined): number | null;
+
+/* ---------- Remote settings (a dashboard turns the agent on, halts it, names approvers, decides) ---------- */
+
+/** Remote settings as a dashboard sends them (schema "conscience-settings/1"). Unknown fields are ignored, never applied. */
+export interface RemoteSettingsInput {
+  schema?: 'conscience-settings/1';
+  version?: number;
+  enabled: boolean;
+  halted: boolean;
+  /** Human identity who released the kill switch: the only one allowed to resume a halt pulled remotely. */
+  resumedBy?: string | null;
+  approvers?: string[];
+  reflection?: { automatic: boolean; hour: number; timeZone?: string };
+  cyclesPerDay?: number;
+  [field: string]: unknown;
+}
+export interface RemoteSettings {
+  version: number; enabled: boolean; halted: boolean; resumedBy: string | null; approvers: readonly string[];
+  reflection: { automatic: boolean; hour: number; timeZone: string }; cyclesPerDay: number;
+  /** Fields of the answer that were not applied (constitution, budgets, permissions… are never taken from a remote source). */
+  ignored: readonly string[];
+}
+export interface RemoteSettingsState {
+  /** remote: the last read succeeded; last_known: the source is silent or invalid, the last valid settings stay; none: nothing valid ever seen (all off). */
+  source: 'remote' | 'last_known' | 'none';
+  known: boolean; version: number | null; fetchedAt: string | null;
+  error: 'source_unavailable' | 'invalid_settings' | 'stale_settings' | null;
+  enabled: boolean; halted: boolean; resumedBy: string | null; approvers: string[];
+  reflection: { automatic: boolean; hour: number; timeZone: string }; cyclesPerDay: number; ignored: string[];
+}
+/** A human decision taken on the dashboard. */
+export interface RemoteDecision { id: string; proposalId: string; decision: 'approve' | 'decline'; approver: HumanActor; reasonCode?: string | null; [field: string]: unknown }
+export interface RemoteDecisionResult {
+  id: string | null; proposalId: string | null;
+  /** failed: the governor could not be reached, try again later (do not acknowledge). */
+  result: 'applied' | 'already_applied' | 'refused' | 'failed';
+  code: string | null;
+}
+export interface RemoteSettingsOptions {
+  /** Returns the remote settings (e.g. a dashboard client with its own cache). May throw: the last valid settings then stay. */
+  read(): Promise<RemoteSettingsInput | unknown> | RemoteSettingsInput | unknown;
+  /** The local policy: constitution, permissions, approval matrix, and budget CEILINGS. Remote settings only narrow it. */
+  policy: GovernorPolicyInput;
+  organisationId: string;
+  /** Budget units of one reflection cycle (default 1): perAgent and perOrganisation become min(local, cyclesPerDay × costPerCycle). */
+  costPerCycle?: number;
+  /** Keeps the last valid settings across restarts. */
+  storage?: { load(): unknown | Promise<unknown>; save(snapshot: { settings: unknown; fetchedAt: string | null }): void | Promise<void> };
+  now?(): number;
+  /** Who pulls the kill switch in the governor's journal (default { kind: 'system', id: 'remote-settings' }). Never a human. */
+  actor?: { kind: string; id: string };
+  onEvent?(event: { type: 'remote_settings'; action: string; [key: string]: unknown }): void;
+}
+export interface RemoteSettingsController {
+  /** Reads the source once; never throws. */
+  refresh(): Promise<{ source: RemoteSettingsState['source']; changed: boolean; error: RemoteSettingsState['error'] }>;
+  current(): RemoteSettingsState;
+  /** The governor policy in force: local policy narrowed by the remote settings; halted when disabled, halted or unknown. */
+  policy(): GovernorPolicyInput;
+  /** The governor for the policy in force, rebuilt when it changes. Ask for it each time instead of keeping it. */
+  governor(options?: GovernorOptions): Governor;
+  /** Applies the remote kill switch to the governor's store now; resumes only a halt it pulled, and only by the human in resumedBy. */
+  sync(governor: Governor): Promise<{ action: 'halt' | 'resume' | 'none'; halted: boolean; reason?: 'halted_by_another_actor' | 'resume_needs_human' }>;
+  /** Submits human decisions through approveProposal / declineProposal. Replays come back as already_applied. */
+  applyDecisions(governor: Governor, decisions: RemoteDecision[]): Promise<RemoteDecisionResult[]>;
+  /** True during the configured local hour when the agent is enabled, not halted, with automatic reflection. */
+  reflectionDue(at?: number): boolean;
+  /** reflection_YYYY-MM-DD in the configured time zone: one idempotent cycle per local day. */
+  reflectionCycleId(at?: number): string;
+}
+export function createRemoteSettings(options: RemoteSettingsOptions): RemoteSettingsController;
+/** Validates remote settings; throws GovernorError invalid_settings. */
+export function parseRemoteSettings(raw: unknown): RemoteSettings;
+/** The local policy narrowed by remote settings (null: unknown, everything off). */
+export function remotePolicy(localPolicy: GovernorPolicyInput, settings: RemoteSettings | null, options?: { costPerCycle?: number }): GovernorPolicyInput;
+export const REMOTE_SETTINGS_SCHEMA: 'conscience-settings/1';
+export const DECISION_RESULTS: readonly ['applied', 'already_applied', 'refused', 'failed'];

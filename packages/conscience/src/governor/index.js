@@ -11,10 +11,12 @@ const { GovernorError } = require('./util');
 const { RISK_LEVELS, DECLINE_REASONS } = require('./approvals');
 const { SEVERITIES, REPORT_SCHEMA } = require('./review');
 const { bucket } = require('./rollout');
+const { createRemoteSettings, parseRemoteSettings, remotePolicy, REMOTE_SETTINGS_SCHEMA, DECISION_RESULTS } = require('./remote');
 
 module.exports = {
   createGovernor, assertGovernorReady, isGovernor, validatePolicy, scopesOf, protectedRulesTouched,
   createMemoryGovernorStore, createPostgresGovernorStore, postgresGovernorSchema, GovernorError,
   PROPOSAL_STATUSES: STATUSES, REASONS, PROTECTED_SCOPES, MODIFIABLE_KINDS, AUTOMATIC_CHANGES, DEFAULT_CONSTITUTION,
-  RISK_LEVELS, DECLINE_REASONS, FINDING_SEVERITIES: SEVERITIES, MORNING_REPORT_SCHEMA: REPORT_SCHEMA, rolloutBucket: bucket
+  RISK_LEVELS, DECLINE_REASONS, FINDING_SEVERITIES: SEVERITIES, MORNING_REPORT_SCHEMA: REPORT_SCHEMA, rolloutBucket: bucket,
+  createRemoteSettings, parseRemoteSettings, remotePolicy, REMOTE_SETTINGS_SCHEMA, DECISION_RESULTS
 };

@@ -244,6 +244,57 @@ The report copies no free text of the proposer, only ids, codes, numbers and the
 `tests` and rollback plan objects it supplied. Everything is read inside one
 organisation.
 
+### Remote settings (dashboard)
+
+`createRemoteSettings` lets a dashboard turn the agent on or off, pull or
+release its kill switch, name its approvers and set its reflection schedule,
+and lets humans approve or decline proposals there. The governor stays the only
+judge: the adapter turns the settings into governor options and submits each
+human decision through `approveProposal` / `declineProposal`. It imports
+nothing but this folder: you pass the function that reads the settings.
+
+```js
+const { createRemoteSettings, createPostgresGovernorStore } = require('@astratra/conscience/governor');
+
+const remote = createRemoteSettings({
+  read: () => dashboard.readSettings(),        // your client, with its own cache
+  policy: localPolicy,                         // constitution, permissions, budget CEILINGS
+  organisationId: 'org-1',
+  storage: { load: () => cache.get(), save: (s) => cache.set(s) } // optional: survives restarts
+});
+const store = createPostgresGovernorStore(pool);
+
+setInterval(async () => {
+  await remote.refresh();                      // never throws
+  const governor = remote.governor({ store }); // ask for it each time: rebuilt when the policy changes
+  await remote.sync(governor);                 // remote kill switch, applied now
+  const results = await remote.applyDecisions(governor, await dashboard.readDecisions());
+  // report results back (applied, already_applied, refused + code; failed = retry later)
+}, 60_000);
+
+if (remote.reflectionDue()) await runCycle({ cycleId: remote.reflectionCycleId() });
+```
+
+Settings (`conscience-settings/1`): `version`, `enabled`, `halted`,
+`resumedBy`, `approvers`, `reflection { automatic, hour, timeZone }`,
+`cyclesPerDay`. Rules:
+
+| Situation | Effect |
+|---|---|
+| Source silent, slow or invalid | The last valid settings stay (`source: 'last_known'`), from memory or `storage` |
+| Nothing valid ever seen | Everything off: disabled, governor halted, no approver |
+| Older `version` than the one in force | Ignored (`stale_settings`) |
+| `halted: true` | Applied at once, even inside an invalid or stale answer; `sync` pulls the governor's kill switch (candidates go back to stable) |
+| Halt released | `sync` resumes only a halt it pulled, and only as the human named in `resumedBy`; a halt pulled by anyone else stays |
+| `enabled: false` | Governor halted; `reflectionDue()` is false |
+| `cyclesPerDay` | `perAgent` and `perOrganisation` become `min(local, cyclesPerDay × costPerCycle)`, never above the local values |
+| `approvers` | The governor's approvers; within the local `approvers` list when it has one |
+| Anything else (`constitution`, `budgets`, `permissions`, `approvals`…) | Never applied, listed in `current().ignored` |
+
+`applyDecisions` is safe to replay: a decision the governor already holds comes
+back as `already_applied`, so one approval is never counted twice. Approvers,
+halt, protected scopes, roles and expiry are still checked by the governor.
+
 ### Bootstrap check
 
 `assertGovernorReady(governor, { organisationId })` throws `governor_missing`,

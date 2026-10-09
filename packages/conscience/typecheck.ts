@@ -114,3 +114,26 @@ async function shadowTypes() {
   void proven;
 }
 void shadowTypes;
+
+import { createRemoteSettings, remotePolicy, parseRemoteSettings } from './src/governor';
+import type { RemoteSettingsState, RemoteDecisionResult } from './src/governor';
+
+async function remoteTypes() {
+  const remote = createRemoteSettings({
+    read: async () => ({ enabled: true, halted: false, approvers: ['admin'], cyclesPerDay: 2, reflection: { automatic: true, hour: 4, timeZone: 'UTC' } }),
+    policy: { budgets: { perCycle: 1, perAgent: 2, perOrganisation: 2 } },
+    organisationId: 'org'
+  });
+  await remote.refresh();
+  const state: RemoteSettingsState = remote.current();
+  const ruler = remote.governor();
+  await remote.sync(ruler);
+  const results: RemoteDecisionResult[] = await remote.applyDecisions(ruler, [{ id: 'd1', proposalId: 'p1', decision: 'approve', approver: { kind: 'human', id: 'admin' } }]);
+  const due: boolean = remote.reflectionDue();
+  void [state.source, results[0]?.result, due, remote.reflectionCycleId(), remotePolicy({ budgets: { perCycle: 1, perAgent: 1, perOrganisation: 1 } }, parseRemoteSettings({ enabled: false, halted: false }))];
+  // @ts-expect-error The organisation is required.
+  void createRemoteSettings({ read: async () => null, policy: { budgets: { perCycle: 1, perAgent: 1, perOrganisation: 1 } } });
+  // @ts-expect-error A decision is approve or decline.
+  void remote.applyDecisions(ruler, [{ id: 'd', proposalId: 'p', decision: 'apply', approver: { kind: 'human', id: 'a' } }]);
+}
+void remoteTypes;

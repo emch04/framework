@@ -197,3 +197,5 @@ export interface ExperimentResult {
   stages: { development: ExperimentStageScore; validation: ExperimentStageScore; holdout: AggregateExperimentScore };
 }
 export function runExperiment(options: RunExperimentOptions): Promise<ExperimentResult>;
+/* P3 · vigilance (2/2). */
+export * from './vigilance';

@@ -7,7 +7,7 @@
  * through untouched.
  */
 import type { ComponentType, ReactElement, ReactNode } from 'react';
-import type { ColorScheme, GlassMode, PictureSize } from './logic';
+import type { ColorScheme, FeedbackLabels, FeedbackPayload, FeedbackRating, GlassMode, PictureSize } from './logic';
 
 export * from './logic';
 
@@ -343,3 +343,31 @@ export interface ImageViewerProps<P extends ViewerPicture = ViewerPicture> {
   testID?: string;
 }
 export function ImageViewer<P extends ViewerPicture>(props: ImageViewerProps<P>): ReactElement;
+
+export interface FeedbackBarProps {
+  /** The person's current choice; the bar is controlled. */
+  value?: FeedbackRating | null;
+  /** A rating to send: `{ rating: 'up' }`, or `{ rating: 'down', reason?, comment? }`. */
+  onSubmit?: (payload: FeedbackPayload) => void;
+  /** The chosen thumb was pressed again: withdraw the feedback. */
+  onRemove?: () => void;
+  disabled?: boolean;
+  /** Reason ids offered on the sheet. Default: FEEDBACK_REASONS. */
+  reasons?: readonly string[];
+  maxComment?: number;
+  /** Overrides of the default words. */
+  labels?: Partial<FeedbackLabels>;
+  /** 'fr…' picks the French defaults, anything else English. */
+  locale?: string;
+  icons?: { up?: ReactNode; down?: ReactNode };
+  /** false: silent. A function: your own tick. Default: expo-haptics when installed. */
+  haptics?: false | (() => void);
+  accent?: string;
+  size?: number;
+  scheme?: ColorScheme;
+  pageBackground?: string;
+  ink?: string;
+  style?: NativeStyle;
+  testID?: string;
+}
+export function FeedbackBar(props: FeedbackBarProps): ReactElement;

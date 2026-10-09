@@ -67,3 +67,30 @@ Utilisez ce paquet si `AstratraDashboardApp` vous convient tel quel ; utilisez `
 ## Licence
 
 MIT.
+
+## FeedbackBar : 👍 / 👎 sous une réponse d'IA
+
+Le même composant que dans `@astratra/native-ui`, pour le web. Contrôlé :
+l'application garde `value` et parle à son serveur (par exemple
+`createFeedbackRouter` de `@astratra/agent`).
+
+```jsx
+import { FeedbackBar } from '@astratra/saas-kit-ui';
+
+<FeedbackBar
+  value={feedback?.rating ?? null}
+  onSubmit={(payload) => api.giveFeedback(runId, payload)} // { rating, reason?, comment? }
+  onRemove={() => api.removeFeedback(runId)}
+  locale="fr"
+/>
+```
+
+Le pouce haut part aussitôt ; le pouce bas ouvre un panneau (raison,
+commentaire facultatif) ; appuyer sur le pouce choisi le retire. Libellés par
+défaut en anglais et en français (`locale`), remplaçables un par un (`labels`) ;
+raisons ajoutables (`reasons`) ; `icons` remplace les émojis ; `haptics` est une
+fonction facultative (rien par défaut). Accessibilité : groupe nommé, boutons à
+`aria-pressed`, puces `radio`, panneau `dialog`, Échap le ferme. Le style vient
+des classes `.astratra-feedback*` de `styles.css` et des variables CSS du kit.
+Les règles pures (`feedbackPress`, `buildFeedbackPayload`, `resolveFeedbackLabels`,
+`feedbackReasonOptions`, `clampComment`) sont exportées.

@@ -76,3 +76,13 @@ createElement(AutoRatioImage, { load: async () => ({ uri: 'x' }), sourceKey: 'x'
 createElement(ImageShimmer, { ratio: 1, accessibilityLabel: 'Loading' });
 void naturalRatio({ width: 1, height: 2 }).toFixed();
 void reducePicturesArriving(PICTURES_ARRIVING_EMPTY, { type: 'started', id: 'a' }).slots.length;
+
+import { FeedbackBar, buildFeedbackPayload, feedbackPress, resolveFeedbackLabels } from './src';
+import type { FeedbackPayload } from './src';
+
+const action = feedbackPress(null, 'down');
+if (action.type === 'submit') void action.payload.rating;
+const payload: FeedbackPayload = buildFeedbackPayload({ rating: 'down', reason: 'too_long', comment: ' hi ' });
+void payload.reason;
+void resolveFeedbackLabels({ locale: 'fr', labels: { submit: 'OK' } }).reasons.inaccurate;
+createElement(FeedbackBar, { value: 'up', onSubmit: (body) => void body.rating, onRemove: () => undefined, locale: 'fr', haptics: false });

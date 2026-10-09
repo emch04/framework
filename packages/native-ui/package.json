@@ -1,7 +1,7 @@
 {
   "name": "@astratra/native-ui",
-  "version": "1.0.0",
-  "description": "Mobile UI kit for React Native / Expo: Apple's Liquid Glass on iOS and a calibrated visible surface on Android, glass buttons, pale cards, bars that fold on scroll, an Instagram-style tab bar, a collapsible header, a Markdown renderer for AI answers, and pictures: natural-ratio images revealed gently, a shimmer placeholder, and a full-screen viewer with pinch, double-tap and pull-to-close. Pure rules exported separately and tested in plain Node.",
+  "version": "1.1.0",
+  "description": "Mobile UI kit for React Native / Expo: Apple's Liquid Glass on iOS and a calibrated visible surface on Android, glass buttons, pale cards, bars that fold on scroll, an Instagram-style tab bar, a collapsible header, a Markdown renderer for AI answers, pictures (natural-ratio images revealed gently, a shimmer placeholder, a full-screen viewer with pinch, double-tap and pull-to-close), and a thumbs up/down feedback bar for AI answers. Pure rules exported separately and tested in plain Node.",
   "engines": {
     "node": ">=20"
   },
@@ -52,10 +52,16 @@
   "peerDependencies": {
     "expo-blur": ">=14",
     "expo-glass-effect": ">=0.1",
+    "expo-haptics": ">=14",
     "expo-linear-gradient": ">=14",
     "react": ">=18",
     "react-native": ">=0.76",
     "react-native-reanimated": ">=3.16"
+  },
+  "peerDependenciesMeta": {
+    "expo-haptics": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@testing-library/react": "^16.3.2",

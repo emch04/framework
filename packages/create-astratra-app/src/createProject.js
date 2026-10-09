@@ -85,7 +85,7 @@ function packageJson(projectName, template, bricks = []) {
   const devDependencies = {};
 
   if (template === 'fullstack') {
-    dependencies['@astratra/saas-kit-ui'] = '^1.0.1';
+    dependencies['@astratra/saas-kit-ui'] = '^1.1.0';
     dependencies.react = '^19.0.0';
     dependencies['react-dom'] = '^19.0.0';
     devDependencies['@vitejs/plugin-react'] = '^4.3.4';

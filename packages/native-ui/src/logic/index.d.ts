@@ -305,3 +305,61 @@ export function countRunningSteps(
   steps: ReadonlyArray<{ tool: string; state: string } | null> | null | undefined,
   tool: string | readonly string[]
 ): number;
+
+/* ───────────────────────────── Feedback bar ─────────────────────────── */
+
+export type FeedbackRating = 'up' | 'down';
+export const FEEDBACK_REASONS: readonly string[];
+export const FEEDBACK_COMMENT_MAX: number;
+export interface FeedbackLabels {
+  group: string;
+  up: string;
+  down: string;
+  sheetTitle: string;
+  commentLabel: string;
+  commentPlaceholder: string;
+  submit: string;
+  cancel: string;
+  /** Visible name of each reason id; an id without a label is shown as is. */
+  reasons: Record<string, string>;
+  /** "12/500". */
+  counter: (used: number, max: number) => string;
+}
+export interface FeedbackPayload {
+  rating: FeedbackRating;
+  reason?: string;
+  comment?: string;
+}
+/** Default labels, English and French. */
+export const FEEDBACK_LABELS: Readonly<Record<'en' | 'fr', Readonly<FeedbackLabels>>>;
+export function resolveFeedbackLabels(options?: { locale?: string; labels?: Partial<FeedbackLabels> }): FeedbackLabels;
+export type FeedbackPressAction =
+  | { type: 'none' }
+  | { type: 'remove' }
+  | { type: 'ask' }
+  | { type: 'submit'; payload: FeedbackPayload };
+export function feedbackPress(value: FeedbackRating | null | undefined, rating: FeedbackRating): FeedbackPressAction;
+export function clampComment(text: unknown, max?: number): string;
+export function buildFeedbackPayload(options: {
+  rating: FeedbackRating;
+  reason?: string | null;
+  comment?: string | null;
+  reasons?: readonly string[];
+  maxComment?: number;
+}): FeedbackPayload;
+export function feedbackButtonState(options: {
+  value: FeedbackRating | null | undefined;
+  rating: FeedbackRating;
+  labels: FeedbackLabels;
+  disabled?: boolean;
+}): {
+  selected: boolean;
+  accessibilityRole: 'button';
+  accessibilityLabel: string;
+  accessibilityState: { selected: boolean; disabled: boolean };
+};
+export function feedbackReasonOptions(options: {
+  reasons?: readonly string[];
+  labels: FeedbackLabels;
+  selected?: string | null;
+}): Array<{ id: string; label: string; selected: boolean }>;

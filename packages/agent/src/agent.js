@@ -28,10 +28,15 @@ function createAgent(options = {}) {
   validateNativeTools(options.tools || []);
   if ((options.tools || []).some((tool) => tool.name === 'update_plan')) throw new Error('update_plan is reserved.');
   const now = options.now || Date.now;
+  const feedback = options.feedback;
+  if (feedback != null && typeof feedback !== 'function' && typeof feedback.feedbackDigest !== 'function' && typeof feedback.digest !== 'function') throw new Error('feedback must be a function or an object with feedbackDigest().');
+  const digestOf = feedback && (typeof feedback === 'function' ? feedback : (input) => (feedback.feedbackDigest || feedback.digest).call(feedback, input));
   const emit = async (type, data) => { if (options.onEvent) await options.onEvent({ type, ...JSON.parse(JSON.stringify(data)) }); };
-  async function create({ id = randomUUID(), question, messages = [] }) {
+  async function create({ id = randomUUID(), question, messages = [], userId, tenantId }) {
     if (typeof question !== 'string' || !question.trim()) throw new Error('question is required.');
-    return store.create({ id, question, messages: [...messages, { role: 'user', text: question }], plan: [], state: 'pending', turns: 0, elapsedMs: 0, usage: { inputTokens: 0, outputTokens: 0, cost: 0 }, usageHistory: [], steps: [], pending: null, verificationRetries: 0, verified: false, createdAt: now(), updatedAt: now() });
+    if (tenantId != null && (typeof tenantId !== 'string' || !tenantId || tenantId.length > 200)) throw new Error('tenantId must be a non-empty string of at most 200 characters.');
+    if (userId != null && (typeof userId !== 'string' || !userId || userId.length > 200)) throw new Error('userId must be a non-empty string of at most 200 characters.');
+    return store.create({ id, question, ...(userId != null ? { userId } : {}), ...(tenantId != null ? { tenantId } : {}), messages: [...messages, { role: 'user', text: question }], plan: [], state: 'pending', turns: 0, elapsedMs: 0, usage: { inputTokens: 0, outputTokens: 0, cost: 0 }, usageHistory: [], steps: [], pending: null, verificationRetries: 0, verified: false, createdAt: now(), updatedAt: now() });
   }
   async function resume(id, { signal: externalSignal, confirmation } = {}) {
     const owner = randomUUID();
@@ -131,7 +136,14 @@ function createAgent(options = {}) {
         await save(); await emit('usage', { taskId: id, turn: task.turns, phase, usage, total: task.usage });
         return response;
       }
-      const system = () => `${options.system || ''}\nTask: ${task.question}\nCurrent plan: ${JSON.stringify(task.plan)}`;
+      // The person's recent dislikes, computed once per task and kept so a resumed task sees the same prompt.
+      if (digestOf && task.feedbackDigest === undefined && (task.userId || typeof feedback === 'function')) {
+        let text = '';
+        try { const value = await abortable(() => digestOf({ userId: task.userId, tenantId: task.tenantId, task: JSON.parse(JSON.stringify(task)), signal }), signal); if (typeof value === 'string') text = value.trim().slice(0, 4000); } catch (_error) { signal.throwIfAborted(); }
+        task.feedbackDigest = text; await save();
+      }
+      await emit('run', { taskId: id, runId: id });
+      const system = () => `${options.system || ''}${task.feedbackDigest ? `\n${task.feedbackDigest}` : ''}\nTask: ${task.question}\nCurrent plan: ${JSON.stringify(task.plan)}`;
       const summarize = options.summarize || (async ({ messages, plan }) => {
         const response = await model({ system: options.summaryInstruction || 'Summarize the completed work, evidence, constraints and remaining work. Preserve references needed to continue.', messages: [...messages, { role: 'system', text: JSON.stringify(plan) }], tools: [] }, signal, false, 'summary');
         return response.text;
@@ -188,7 +200,7 @@ function createAgent(options = {}) {
       if (typeof text !== 'string' || !text.trim()) throw new Error('The model gave no final text.');
       task.text = text;
       task.state = task.verified || !options.verify && !options.verificationInstruction && !task.stopReason ? 'completed' : 'failed';
-      await save(); await emit('final', { taskId: id, text, state: task.state, stopReason: task.stopReason, verified: task.verified });
+      await save(); await emit('final', { taskId: id, runId: id, text, state: task.state, stopReason: task.stopReason, verified: task.verified });
       return task;
     } catch (error) {
       if (error instanceof ConfirmationStop) return task;

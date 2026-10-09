@@ -488,6 +488,46 @@ Aucun texte, aucune icône, aucun chargement en dur : tout vient des props.
 
 ---
 
+# Les retours
+
+## FeedbackBar : 👍 / 👎 sous une réponse
+
+Deux boutons en verre discrets sous la réponse d'une IA. Le pouce haut part
+tout de suite ; le pouce bas ouvre une feuille (raison, commentaire facultatif)
+avant d'envoyer ; appuyer de nouveau sur le pouce choisi le retire. Le composant
+est **contrôlé** : l'application garde `value` et parle à son serveur (par
+exemple `createFeedbackRouter` de `@astratra/agent`).
+
+```js
+import { FeedbackBar } from '@astratra/native-ui';
+
+<FeedbackBar
+  value={feedback?.rating ?? null}
+  onSubmit={(payload) => api.giveFeedback(runId, payload)} // { rating, reason?, comment? }
+  onRemove={() => api.removeFeedback(runId)}
+  locale="fr"
+  labels={{ sheetTitle: 'Dites-nous pourquoi' }}
+/>
+```
+
+- **Textes** : aucun en dur qui ne se surcharge pas. `locale` choisit les
+  libellés par défaut (anglais, ou français pour `fr…`), `labels` remplace
+  chacun (`up`, `down`, `group`, `sheetTitle`, `commentLabel`,
+  `commentPlaceholder`, `submit`, `cancel`, `reasons`, `counter`). Une raison
+  ajoutée par l'application (`reasons={['slow']}`) a son libellé dans
+  `labels.reasons`.
+- **Accessibilité** : une barre `toolbar` nommée, deux `button` avec libellé et
+  état `selected`/`disabled`, puces `radio`, feuille modale.
+- **Haptique** : `expo-haptics` (pair facultatif) donne un léger tic ; `haptics={false}`
+  le coupe, `haptics={() => …}` le remplace. Sans le module, la barre est muette.
+- **Style** : `accent`, `size`, `scheme`, `pageBackground`, `ink`, `icons`
+  (nœuds à la place des émojis).
+- **Règles pures** (entrée `@astratra/native-ui/logic`, testées en Node) :
+  `FEEDBACK_REASONS`, `FEEDBACK_LABELS`, `resolveFeedbackLabels`,
+  `feedbackPress`, `buildFeedbackPayload` (raison seulement avec `down` et si
+  listée, commentaire rogné et coupé), `clampComment`, `feedbackButtonState`,
+  `feedbackReasonOptions`.
+
 # Tests
 
 ```sh

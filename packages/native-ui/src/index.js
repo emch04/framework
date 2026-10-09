@@ -19,5 +19,6 @@ module.exports = {
   ...require('./components/ImageShimmer'),
   ...require('./components/AutoRatioImage'),
   ...require('./components/ImageViewer'),
+  ...require('./components/FeedbackBar'),
   getGlassMode: require('./components/runtime').getGlassMode
 };

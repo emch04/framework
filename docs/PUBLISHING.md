@@ -82,32 +82,33 @@ par tri topologique des dépendances réelles :
 13. `@astratra/ai` (core ; resilience en développement)
 14. `@astratra/agent` (ai)
 15. `@astratra/memory` (ai en développement)
-16. `@astratra/models`
-17. `@astratra/i18n-server`
-18. `@astratra/pdf`
-19. `@astratra/loyalty`
-20. `@astratra/wallet` (core)
-21. `@astratra/closure`
-22. `@astratra/app-version`
-23. `@astratra/app-guide`
-24. `@astratra/voice`
-25. `@astratra/live` (voice, ai)
-26. `@astratra/prerender`
-27. `@astratra/react`
-28. `@astratra/tooling` (core)
-29. `@astratra/saas-kit` (ai, core, security)
-30. `@astratra/saas-kit-ui`
-31. `@astratra/store-mongo`
-32. `@astratra/store-postgres`
-33. `@astratra/booking`
-34. `@astratra/collab`
-35. `@astratra/fhir`
-36. `@astratra/flags`
-37. `@astratra/ledger` (store-postgres en développement)
-38. `@astratra/repomap`
-39. `@astratra/srs`
-40. `@astratra/testkit`
-41. `create-astratra-app` (planchers de ses gabarits : ai, core, saas-kit,
+16. `@astratra/conscience` (ai ; après agent et memory)
+17. `@astratra/models`
+18. `@astratra/i18n-server`
+19. `@astratra/pdf`
+20. `@astratra/loyalty`
+21. `@astratra/wallet` (core)
+22. `@astratra/closure`
+23. `@astratra/app-version`
+24. `@astratra/app-guide`
+25. `@astratra/voice`
+26. `@astratra/live` (voice, ai)
+27. `@astratra/prerender`
+28. `@astratra/react`
+29. `@astratra/tooling` (core)
+30. `@astratra/saas-kit` (ai, core, security)
+31. `@astratra/saas-kit-ui`
+32. `@astratra/store-mongo`
+33. `@astratra/store-postgres`
+34. `@astratra/booking`
+35. `@astratra/collab`
+36. `@astratra/fhir`
+37. `@astratra/flags`
+38. `@astratra/ledger` (store-postgres en développement)
+39. `@astratra/repomap`
+40. `@astratra/srs`
+41. `@astratra/testkit`
+42. `create-astratra-app` (planchers de ses gabarits : ai, core, saas-kit,
     security, store-mongo, saas-kit-ui, credentials, entitlements, notify,
     payments, privacy, resilience, i18n-server, pdf, closure, client,
     prerender, native)

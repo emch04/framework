@@ -3,6 +3,11 @@
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Chaque package Astratra est versionné indépendamment.
 
+## 2026-10-09 — `@astratra/centrale` 1.0.2 (sécurité)
+
+### Corrigé
+- Masquage : la règle des adresses e-mail était quadratique sur une longue chaîne sans « @ » (environ 30 ms par texte de 10 000 caractères, de quoi bloquer un serveur avec quelques envois). Elle est maintenant bornée (64 caractères avant l'arobase, 255 après) et sautée quand le texte ne contient aucun « @ ». Test de non-régression : 100 textes piégés masqués en moins d'une seconde.
+
 ## 2026-10-09 — retours 👍/👎 : `@astratra/native-ui` 1.1.0, `@astratra/saas-kit-ui` 1.1.0 (et `@astratra/agent` 1.0.0)
 
 ### Added

@@ -16,6 +16,7 @@ Chaque package Astratra est versionné indépendamment.
 
 ### Added
 - `@astratra/agent`: long task execution built on the existing native tool loop, time/turn/token/cost budgets, cancellation, plans, completion verification and context compaction.
+- `@astratra/agent`: guards by default. `createAgent({ guards })` takes the guards of `@astratra/ai/guards` (`createGuards` / `recommendedGuards`) and calls them at the right moments: `newRun` at the start of a task (mode `action` when a tool writes or confirms, else `read`), `input` on the question and earlier messages before any model, `toolResult` on every tool result (tools marked `external: true` are scanned for injection and framed as untrusted data), `beforeAction` before any tool that writes or needs confirmation (a refusal after a suspected injection puts the task in `waiting_confirmation` until the application confirms that very call, and the tool does not run; a refusal for another reason is read by the model), `output` on the final reply (unmasking, grounding, leaks, moderation; a blocked reply is never delivered: task `failed`, `stopReason: 'guard'`). Guard events are relayed by `onEvent` as `type: 'guard'`. The run state (masking table, confirmation flag, hashes, masked sources) is kept in `task.guards` so a resumed task behaves identically; tools receive `context.unmask`. Without `guards`, production (`NODE_ENV=production`) refuses with `guards required in production: pass guards or guards:false`; elsewhere one `warning` event (`guards_missing`) is sent and nothing is guarded; `guards: false` is the explicit opt-out. The package is not yet published, so this stays 1.0.0 and is not a breaking change. `@astratra/ai` floor raised to ^1.8.0.
 - Durable task checkpoints, per-turn consumption events, confirmation suspension, memory and injected PostgreSQL task stores with renewable fenced leases and an exported schema.
 - `@astratra/testkit`: injected agent scenario evaluation, simulated tool traces, assertions, custom scoring and aggregate reports compatible with `node --test`.
 - Root validation: declare ESM fixtures and Node fetch in ESLint; align a mobile refresh regression with the existing refusal-versus-network contract. No published mobile source changes.
@@ -62,6 +63,7 @@ téléchargement à l'installation. Tout est rétrocompatible.
   `beforeAction`. Politique de panne `failClosed` par défaut, `failOpen` possible pour la lecture. Chaque décision
   produit un événement sans texte brut. Le client de `@astratra/models` est injecté (aucune dépendance) ;
   `@astratra/rag` est une dépendance de pair facultative.
+- **Run kept across a restart**: `guards.exportRun(run)` / `guards.restoreRun(snapshot)` (plain JSON: masking table, confirmation flag, hashes of the personal data given, external sources masked), `guards.subscribe(listener)` for every event, and `snapshot()` / `restore()` on `createReversibleMasker`. Used by `@astratra/agent`.
 - **`@astratra/ai/guards/testing`** : `createFakeModels`, `createMockGuards`, `createEventRecorder`, sans modèle.
 
 ### `create-astratra-app` 1.9.0

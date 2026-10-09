@@ -14,6 +14,7 @@ npm install @astratra/agent
 const { createAgent, createMemoryTaskStore } = require('@astratra/agent');
 
 const agent = createAgent({
+  guards: false, // or recommendedGuards({ models }) from '@astratra/ai/guards': see "Guards" below
   store: createMemoryTaskStore(),
   turn: async ({ system, messages, tools, signal, phase }) => {
     // Adapt the application's provider to this response shape.
@@ -144,10 +145,74 @@ Schema creation is explicit and idempotent, with a JSONB task record and lease
 columns. All data uses SQL parameters. Table names must be plain identifiers.
 No other package's migration is changed. PostgreSQL is not a runtime dependency.
 
+## Guards (on by default)
+
+`createAgent({ guards })` takes the guards of `@astratra/ai/guards`
+(`recommendedGuards` or `createGuards`, built on the injected
+`@astratra/models` client) so every agent made with the package is protected:
+
+```js
+const { recommendedGuards } = require('@astratra/ai/guards');
+const guards = recommendedGuards({ models });          // add readOnly: true for an agent that cannot act
+const agent = createAgent({ guards, turn, tools, onEvent });
+```
+
+| Moment | Guard |
+| --- | --- |
+| start of a task | `newRun`: mode `action` when a tool has kind `write` or `confirm`, otherwise `read` (the failure policy follows the mode) |
+| the question and earlier messages, before any model | `input`: names and personal data masked. A blocked input fails the task (`error.code === 'GUARD_BLOCKED'`) |
+| each tool result | `toolResult`: masked; for a tool marked `external: true` (web, e-mail, files) also scanned for injection and framed as untrusted data. A result `{ untrusted: true, content }` is treated as external too |
+| before a tool of kind `write` or `confirm` | `beforeAction` |
+| the final reply | `output`: unmasked, then grounding in the sources read, personal-data leak, moderation |
+
+**Refused action.** After an injection is suspected, a `write` tool does not
+run: the task becomes `waiting_confirmation` with
+`confirmation: { key, call, guard: { reason: 'confirmation_required' } }`.
+Resume with `{ confirmation: { key, approved: true } }` (from your interface,
+never from the model) to run that call, or `approved: false` to record a
+rejection the model reads. A refusal for any other reason is returned to the
+model as a tool error (`Blocked by a guard: ...`) and the tool does not run.
+`confirm` tools already wait for a person; their confirmation carries
+`guard: { requiresConfirmation: true }` when an injection was suspected, and
+`beforeAction` is asked again, with the person's confirmation, before `perform`.
+
+**Reply.** A blocked reply is never delivered: the task is `failed`,
+`stopReason: 'guard'`, `task.text` is absent. A flagged reply (for example
+claims the sources do not support) is delivered, and `task.guard` keeps
+`{ decision, reasons, degraded, groundingScore, unsupportedClaims }` (numbers
+and codes, no text). `verify` receives the unmasked, checked reply.
+
+**Events.** Guard decisions reach `onEvent` as `{ type: 'guard', taskId, guard,
+decision, reasons, degraded, metrics, runId, mode, at }` (the run id is the task
+id). They never contain text.
+
+**State and resumption.** The state of the guards is kept in the task
+(`task.guards`) after the input and after each tool result: the masking table,
+the confirmation flag, hashes of the personal data the person gave, and the
+external sources read, masked. A resumed task, even in a new process with new
+guards, unmasks with the same tokens and still requires the confirmation.
+The messages in the task are stored masked and `task.maskedQuestion` is what
+the model reads. Note that the masking table holds the real values (it is how a
+reply is unmasked) and `task.question` is kept as given: protect the task store
+as the data it holds. Tools receive `context.unmask(text)` to turn a token the
+model wrote back into the real value; arguments are otherwise passed as the
+model wrote them.
+
+**Default.** `guards` is a choice, not an option to forget:
+
+- `NODE_ENV=production` and no `guards`: `createAgent` throws
+  `guards required in production: pass guards or guards:false`.
+- elsewhere and no `guards`: nothing is guarded and one `warning` event
+  (`code: 'guards_missing'`) is sent per agent.
+- `guards: false`: explicit, silent opt-out.
+
+Tests can use `createMockGuards` and `createFakeModels` from
+`@astratra/ai/guards/testing`.
+
 ## Events and helper exports
 
 `onEvent(event)` is awaited. Events: `plan`, `step`, `usage`, `summary`,
-`verification`, `confirmation`, `final`; each carries `taskId`. Event delivery
+`verification`, `confirmation`, `final`, `guard`, `warning`; each carries `taskId`. Event delivery
 is not transactional with the checkpoint; use application outbox infrastructure
 if delivery must survive a crash. Handler errors fail execution explicitly.
 
@@ -255,6 +320,7 @@ and `@astratra/saas-kit-ui` (web).
 
 ## Tests
 
-`npm test -w @astratra/agent` uses `node --test`. Real PostgreSQL tests run only
+`npm test -w @astratra/agent` uses `node --test`; the guard tests run on
+`@astratra/ai/guards/testing` with no model. Real PostgreSQL tests run only
 with `AGENT_TEST_DATABASE_URL` naming a database ending in `_test`; otherwise
 that test is skipped (feedback tests included). The tests create and drop their own randomly named tables.

@@ -422,6 +422,10 @@ export interface ReversibleMasker {
   unmaskStream(chunks: AsyncIterable<unknown>): AsyncGenerator<string>;
   detectNames(text: string): Promise<string[]>;
   size(): number;
+  /** The table as JSON (it holds the real values: store it like the data it protects). */
+  snapshot(): unknown;
+  /** Put a table from `snapshot()` back, replacing what was known. */
+  restore(snapshot: unknown): void;
 }
 
 export function createReversibleMasker(options?: {

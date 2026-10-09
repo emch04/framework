@@ -1,6 +1,6 @@
 {
   "name": "@astratra/testkit",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "description": "Disposable test databases (MongoDB or Postgres in a container), reproducible per-country fake data, and a guard that refuses any production-looking database URI.",
   "engines": {
     "node": ">=22.22"
@@ -13,7 +13,7 @@
     "jest-preset.js"
   ],
   "scripts": {
-    "test": "jest"
+    "test": "jest && node --test test/*.test.js"
   },
   "jest": {
     "preset": "./jest-preset.js",

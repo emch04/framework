@@ -1,95 +1,107 @@
 # @astratra/testkit
 
-Trois outils pour des tests qui ne touchent jamais à la vraie base :
+[English](README.md) | [Français](README.fr.md)
 
-1. une **base jetable** (MongoDB ou Postgres dans un conteneur Docker) ;
-2. de **fausses données réalistes par pays**, reproductibles par graine ;
-3. un **garde-fou** qui refuse toute URI de base qui ressemble à de la production.
+Disposable MongoDB and PostgreSQL databases, seeded country-specific fixtures,
+production database guards and provider-independent agent evaluations. MIT.
+Install as a development dependency. Node >= 22.22.
 
-À installer en `devDependency`. Dépendances : `@faker-js/faker` 10 (MIT, à
-l'exécution) et `@babel/plugin-transform-modules-commonjs` (MIT, pour le
-préréglage Jest ci-dessous) ; `@testcontainers/mongodb` et/ou
-`@testcontainers/postgresql` (MIT, optionnelles, à n'ajouter que pour le moteur
-utilisé — elles apportent `testcontainers`). Node ≥ 22.22 (exigence de
-testcontainers 12).
+```sh
+npm install --save-dev @astratra/testkit
+```
 
-### Avec Jest
+## Agent evaluation
 
-`@faker-js/faker` 10 n'existe qu'en module ES (les versions antérieures à 10.5
-ont une faille d'exécution de code par `helpers.fake`). Node le charge sans
-réglage par `require()`, mais pas le chargeur de Jest en CommonJS. Le paquet
-fournit un préréglage qui fait convertir faker, et lui seul, par babel-jest :
+`evaluateAgent({ scenarios, run, signal? })` evaluates an injected runner and
+returns `{ results, score, passed, total }`. No model provider is imposed.
+
+```js
+const { test } = require('node:test');
+const assert = require('node:assert/strict');
+const { evaluateAgent } = require('@astratra/testkit');
+
+test('uses a lookup result', async () => {
+  const report = await evaluateAgent({
+    scenarios: [{
+      id: 'lookup', question: 'Find the value.',
+      tools: [{ name: 'lookup', run: async () => ({ data: '42' }) }],
+      expect: { tools: ['lookup'], content: ['42'] }
+    }],
+    run: async ({ question, tools, signal }) => {
+      const value = await tools[0].run({});
+      return { text: value.data };
+    }
+  });
+  assert.equal(report.passed, report.total);
+});
+```
+
+Each scenario has `id`, `question`, optional simulated `tools`, `expect` and
+`score`. The runner receives `{ question, tools, signal }` and returns text or
+an object with `text`. Tools retain their other fields, allowing native tool
+fixtures to be passed to a task runner. Recorded calls include names and args.
+Expected tool names must have been called; content expectations accept strings
+or regular expressions. The default score is the fraction of satisfied checks,
+or one when no checks are defined. `score({ text, calls, output, checks })` can
+return an asynchronous number between zero and one. Scenario failures produce
+a zero score and an error; cancellation propagates. Overall score is the mean
+of scenario scores (zero for an empty report). A scenario passes only when all
+checks pass and its score is one. The report is data, suitable for `node --test`
+assertions or application reporting. It does not judge tool ordering or absence
+unless a custom scoring function does so.
+
+## Disposable databases
+
+Install `@testcontainers/mongodb` or `@testcontainers/postgresql` for the engine
+used. Docker is required for real containers.
+
+```js
+const { startPostgres, startMongo, isDockerAvailable } = require('@astratra/testkit');
+if (isDockerAvailable()) {
+  const db = await startPostgres({ database: 'app_test' });
+  // Connect the application's driver to db.uri.
+  await db.stop();
+}
+```
+
+MongoDB uses `mongo:8` with a replica set; PostgreSQL uses `postgres:17-alpine`.
+Both expose `{ uri, stop }`, use a random port and validate the generated URI.
+Without Docker, skip container integration tests explicitly.
+
+## Seeded fixtures
+
+```js
+const { createFakeData, supportedCountries } = require('@astratra/testkit');
+const data = createFakeData({ country: 'FR', seed: 42 });
+data.person();
+data.people(3, { minAge: 6, maxAge: 18 });
+data.organization();
+data.phone();
+```
+
+Twenty countries are supported; `supportedCountries()` lists them. The faker
+instance is available as `data.faker`. Ages use a fixed reference date so a seed
+stays reproducible. Emails use the reserved `example.test` domain. Geographic
+fields are independent fixtures and do not form an address directory.
+
+## Database guard
+
+`assertSafeTestDatabaseUri(uri, { allowRemoteHosts? })` throws
+`UnsafeTestDatabaseError` with `reason` on refusal; `isSafeTestDatabaseUri`
+returns a boolean. Production environment, managed hosts, `mongodb+srv`,
+production-looking host/database names, unapproved remote hosts and unmarked
+production environment URIs are refused. Even explicitly allowed remote hosts
+must use a test-marked database. Call the guard before destructive test setup.
+
+## Jest compatibility
+
+Faker 10 is ESM. Node loads it directly; Jest CommonJS needs the provided
+preset to transform faker through Babel:
 
 ```json
 { "jest": { "preset": "@astratra/testkit" } }
 ```
 
-Si le projet a déjà son propre `transform`, reprends les deux réglages de
-`jest-preset.js` (le `transform` babel-jest et le `transformIgnorePatterns`).
-Autre voie, sans préréglage : Node ≥ 24.9 et
-`NODE_OPTIONS=--experimental-vm-modules jest`.
-
-## Base jetable
-
-```js
-const { startMongo, startPostgres, isDockerAvailable } = require('@astratra/testkit');
-
-let db;
-beforeAll(async () => {
-  db = await startMongo({ database: 'app_test' }); // image mongo:8, replica set à un nœud
-  process.env.MONGODB_URI = db.uri;                    // mongodb://127.0.0.1:PORT/app_test?directConnection=true
-}, 120_000);
-afterAll(() => db.stop());
-```
-
-`startPostgres()` (image `postgres:17-alpine`) rend `{ uri, stop }` de la même
-façon. Si Docker est absent, `isDockerAvailable()` renvoie `false` : saute la
-suite proprement (`const suite = isDockerAvailable() ? describe : describe.skip`).
-Le conteneur démarre sur un port aléatoire, l'URI obtenue est elle-même passée
-au garde-fou, et un conteneur dont l'URI serait refusée est arrêté aussitôt.
-
-## Fausses données par pays
-
-```js
-const { createFakeData } = require('@astratra/testkit');
-
-const data = createFakeData({ country: 'CD', seed: 42 });
-data.person();            // { firstName, lastName, birthDate, email, phone: '+243 81 234 5678', address, … }
-data.people(30, { minAge: 6, maxAge: 12 });
-data.organization();
-data.faker;               // l'instance faker graînée, pour le reste
-```
-
-Pays : `CD` (RDC, listes écrites ici car faker n'a pas de locale), `FR`, `BE`,
-`CH`, `CA`, `SN`, `US`, `GB`, `GH`, `NG`, `ZA`, `IN`, `ES`, `MX`, `PT`, `BR`,
-`DE`, `IT`, `JP`, `KR` (`supportedCountries()`). Noms et adresses suivent la
-locale de faker ; les téléphones suivent le plan de numérotation du pays.
-
-- **Reproductible** : même pays + même graine = même suite, à l'octet près. La
-  date de référence des âges est fixe (1er janvier 2026), sinon la graine ne
-  reproduirait rien d'une année à l'autre.
-- **Sans risque** : les e-mails sont en `@example.test` (domaine réservé).
-- La géographie n'est pas toujours cohérente (une ville et une région tirées
-  indépendamment) : ce sont des données de test, pas un annuaire.
-
-## Garde-fou
-
-```js
-const { assertSafeTestDatabaseUri } = require('@astratra/testkit');
-
-assertSafeTestDatabaseUri(process.env.MONGODB_URI); // lance UnsafeTestDatabaseError, avec .reason
-```
-
-Refusé, dans l'ordre : `NODE_ENV=production` ; hébergeur géré (Atlas, RDS,
-Supabase, Neon… — **même listé**) ; schéma `mongodb+srv` ; « prod »,
-« production » ou « live » dans l'hôte ou le nom de base ; hôte distant (ni
-boucle locale, ni `.test`/`.localhost`, ni nom de service sans point) sauf s'il
-figure dans `allowRemoteHosts` **et** que la base porte « test » dans son nom ;
-URI identique à `MONGODB_URI`/`DATABASE_URL`… de l'environnement sans nom de base
-marqué test. Appelle-le au début de ton `globalSetup` : une suite qui vide des
-collections ne doit jamais découvrir trop tard où elle est branchée.
-
-## Limite
-
-Le test de conteneurs réel de ce paquet n'est exécuté que si un démon Docker
-répond ; sinon il est ignoré (les doublures testent le reste du chemin).
+Existing transform settings can copy `jest-preset.js`. Runtime dependencies
+are faker 10 and the Babel CommonJS transform plugin, both MIT. The evaluation
+harness also works directly with `node --test`.

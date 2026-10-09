@@ -1,0 +1,15 @@
+{
+  "name": "@astratra/agent",
+  "version": "1.0.0",
+  "description": "Budgeted, verifiable and durable task execution with injected models and tools.",
+  "engines": { "node": ">=20" },
+  "main": "src/index.js",
+  "types": "src/index.d.ts",
+  "type": "commonjs",
+  "files": ["src"],
+  "scripts": { "test": "node --test test/*.test.js" },
+  "license": "MIT",
+  "publishConfig": { "access": "public" },
+  "dependencies": { "@astratra/ai": "^1.7.0" },
+  "devDependencies": { "pg": "^8.13.1" }
+}

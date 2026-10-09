@@ -75,7 +75,7 @@ options and what it does not do. The table below links to them.
 
 ## Packages
 
-The 42 packages in [`packages/`](packages/) are all published under the
+The 43 packages in [`packages/`](packages/) are all published under the
 `@astratra` scope, except `create-astratra-app`, which is published under its
 own name. Versions are the ones in each `package.json`; the history of every
 package is in [CHANGELOG.md](CHANGELOG.md).
@@ -98,6 +98,7 @@ package is in [CHANGELOG.md](CHANGELOG.md).
 | Package | Version | What it does |
 |---|---|---|
 | [`@astratra/ai`](packages/ai/README.md) | 1.7.0 | Multi-provider AI routing with quotas and fallback, tool registry, agent loop, risk levels with confirmation, local llama.cpp provider |
+| [`@astratra/agent`](packages/agent/README.md) | 1.0.0 | Durable tasks, budgets, plans, completion checks, context summaries and consumption tracking |
 | [`@astratra/models`](packages/models/README.md) | 1.0.0 | Local CPU model service (embeddings, reranking, NLI, entities, speech-to-text) and its Node client; price catalogue and cost calculation |
 | [`@astratra/memory`](packages/memory/README.md) | 2.0.0 | Per-person memories for an assistant: hybrid recall, duplicate merging, undoable corrections, PostgreSQL store |
 | [`@astratra/rag`](packages/rag/README.md) | 1.0.0 | Document retrieval: chunking, injected embeddings, hybrid search, source verification, document reading through an optional service |
@@ -145,7 +146,7 @@ package is in [CHANGELOG.md](CHANGELOG.md).
 | [`@astratra/centrale`](packages/centrale/README.md) | 1.0.1 | Collection package for a self-hosted monitoring dashboard: errors, crashes, views, usage, AI calls; masked at the source, sent in batches; no dependencies |
 | [`@astratra/centrale-cli`](packages/centrale-cli/README.md) | 1.0.1 | Command-line tool for the same dashboard: debug IDs and source maps, deployment declaration |
 | [`@astratra/tooling`](packages/tooling/README.md) | 1.5.0 | Workspace audit (secrets, routes, translations), test runner, deployment with rollback, app publishing, AI evaluation |
-| [`@astratra/testkit`](packages/testkit/README.md) | 1.0.1 | Disposable MongoDB or PostgreSQL test databases, reproducible per-country fake data, guard against production databases |
+| [`@astratra/testkit`](packages/testkit/README.md) | 1.1.0 | Disposable MongoDB or PostgreSQL test databases, reproducible per-country fake data, guard against production databases |
 
 The example [`examples/dashboard-ui`](examples/dashboard-ui/README.md) shows
 `@astratra/saas-kit-ui` against the `saas-kit` API. It is not published.
@@ -203,7 +204,7 @@ Publishing rules (versions, order, checks) are in
 
 ```
 .github/workflows/   continuous integration (lint, typecheck, tests, package installation)
-packages/            the 42 published packages, one directory each
+packages/            the 43 published packages, one directory each
 examples/            the unpublished dashboard example
 scripts/             publication script and package installation check
 docs/                publishing rules, design notes, guides

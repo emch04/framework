@@ -35,6 +35,7 @@ ORDER=(
   "@astratra/privacy"
   "@astratra/resilience"
   "@astratra/ai"
+  "@astratra/agent"
   "@astratra/memory"
   "@astratra/models"
   "@astratra/i18n-server"

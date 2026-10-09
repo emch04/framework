@@ -9,7 +9,10 @@ const REGLES: Array<[RegExp, string]> = [
   [/\b(Bearer|Basic)\s+[A-Za-z0-9._~+/=-]{8,}/gi, '$1 [jeton]'],
   [/\b(clj_(?:pub|dep|srv)_|sk-(?:proj-|ant-)?|gsk_|xaat-|AIza|ghp_|github_pat_|xox[bp]-|AKIA)[A-Za-z0-9_-]{8,}/g, '[cle]'],
   [/\b(password|passwd|mot_?de_?passe|secret|token|api[_-]?key|authorization|cookie)(["']?\s*[:=]\s*["']?)[^\s"'&,;}]+/gi, '$1$2[masque]'],
-  [/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g, '[email]'],
+  /* Bornée (64 avant l'arobase, 255 après, comme la norme) : sans bornes, une longue chaîne sans
+     « @ » faisait reprendre la recherche à chaque position, en temps quadratique, assez pour figer
+     un serveur avec quelques envois. */
+  [/[A-Za-z0-9._%+-]{1,64}@[A-Za-z0-9.-]{1,255}\.[A-Za-z]{2,24}/g, '[email]'],
   [/\b[A-Z]{2}\d{2}(?:\s?[A-Z0-9]{4}){2,7}(?:\s?[A-Z0-9]{1,4})?\b/g, '[iban]'],
   [/\b[a-f0-9]{32,}\b/gi, '[empreinte]']
 ];
@@ -45,7 +48,11 @@ export interface OptionsMasquage {
 
 export function masquerTexte(texte: string, options: OptionsMasquage = {}): string {
   let resultat = texte;
-  for (const [motif, remplacement] of REGLES) resultat = resultat.replace(motif, remplacement);
+  for (const [motif, remplacement] of REGLES) {
+    // Sans arobase, aucune adresse e-mail possible : on évite même le parcours.
+    if (remplacement === '[email]' && !resultat.includes('@')) continue;
+    resultat = resultat.replace(motif, remplacement);
+  }
   resultat = masquerCartes(resultat);
   resultat = masquerTelephones(resultat);
   for (const nom of options.noms ?? []) {

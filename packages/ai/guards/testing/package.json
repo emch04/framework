@@ -1,0 +1,4 @@
+{
+  "main": "../../src/guards/testing/index.js",
+  "types": "../../src/guards/testing/index.d.ts"
+}

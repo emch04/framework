@@ -1,6 +1,6 @@
 export type Awaitable<T> = T | Promise<T>;
 
-export type ModelsEndpoint = 'embed' | 'rerank' | 'nli' | 'entities' | 'transcribe';
+export type ModelsEndpoint = 'embed' | 'rerank' | 'nli' | 'entities' | 'transcribe' | 'injection' | 'moderation';
 
 export type ModelsResultCode =
   | 'invalid_input'
@@ -64,6 +64,28 @@ export interface TranscribeData {
   model: string | null;
 }
 
+export interface InjectionScore { score: number; verdict: 'injection' | 'safe' }
+export interface InjectionData {
+  results: InjectionScore[];
+  /** Score from which the server answers `injection`. */
+  threshold: number | null;
+  model: string | null;
+}
+/** Answer for one string: the first result is also spread at the top level. */
+export type InjectionOneData = InjectionData & InjectionScore;
+
+export type ModerationCategory = 'hate' | 'harassment' | 'violence' | 'sexual' | 'sexual_minors' | 'self_harm';
+export interface ModerationScore {
+  /** True when the text is unsafe as a whole (overall score over the model's threshold). */
+  flagged: boolean;
+  unsafe: number;
+  categories: Partial<Record<ModerationCategory, number>>;
+  /** Categories over their threshold; empty unless `flagged`. Names only, never an excerpt. */
+  flaggedCategories: string[];
+}
+export interface ModerationData { results: ModerationScore[]; model: string | null }
+export type ModerationOneData = ModerationData & ModerationScore;
+
 export interface ModelStatus { configured: boolean; loaded: boolean; failed: boolean; model: string | null }
 export interface HealthData { version: string | null; models: Record<string, ModelStatus> }
 
@@ -110,6 +132,10 @@ export interface ModelsLimits {
   transcribeMinSeconds: number;
   transcribeMaxSeconds: number;
   transcribeMaxPromptChars: number;
+  injectionMaxTexts: number;
+  injectionMaxChars: number;
+  moderationMaxTexts: number;
+  moderationMaxChars: number;
 }
 
 export type FetchLike = (url: string, init: {
@@ -155,6 +181,12 @@ export interface ModelsClient {
   entities(text: string, options: CallOptions): Promise<ModelsResult<EntitiesData>>;
   /** `audio`: PCM 16-bit little-endian mono 16 kHz, as bytes or base64. */
   transcribe(audio: Uint8Array | string, options?: TranscribeOptions): Promise<ModelsResult<TranscribeData>>;
+  /** Prompt-injection check of one text (answers `score`, `verdict`) or of a list (`results`). */
+  injection(text: string, options?: CallOptions): Promise<ModelsResult<InjectionOneData>>;
+  injection(texts: string[], options?: CallOptions): Promise<ModelsResult<InjectionData>>;
+  /** Content moderation of one text (answers `flagged`, `categories`...) or of a list (`results`). */
+  moderation(text: string, options?: CallOptions): Promise<ModelsResult<ModerationOneData>>;
+  moderation(texts: string[], options?: CallOptions): Promise<ModelsResult<ModerationData>>;
   /** Bypasses the breakers. */
   health(options?: CallOptions): Promise<ModelsResult<HealthData>>;
   /** False while the endpoint's breaker refuses calls. */
@@ -436,3 +468,69 @@ export const BILLINGS: readonly Billing[];
 export const COST_CODES: readonly PriceResultCode[];
 export const PROVIDER_ALIASES: Readonly<Record<string, string>>;
 export const CATALOG_URL: string;
+
+/* ---- model files: manifest, fetch, startup check ---------------------------- */
+
+export interface ManifestFile { path: string; size: number; /** 64 hex characters, or null / "TO_COMPLETE" while unverified. */ sha256: string | null }
+export interface ManifestSource { repo: string; /** Commit hash, never a branch. */ revision: string; dir?: string; files: ManifestFile[] }
+export interface ManifestModel { folder: string; description: string; license: string; sources: ManifestSource[] }
+export interface ModelsManifest { schema: 1; models: Record<string, ManifestModel> }
+
+export interface ModelFile {
+  model: string;
+  repo: string;
+  revision: string;
+  path: string;
+  /** Path under the models directory. */
+  relative: string;
+  absolute: string | null;
+  size: number;
+  sha256: string | null;
+}
+
+export const MANIFEST_PATH: string;
+export function loadManifest(file?: string): ModelsManifest;
+export function manifestProblems(manifest: unknown): string[];
+export function listModelFiles(manifest: ModelsManifest, models: string[] | undefined, dir?: string): ModelFile[];
+
+export type FileStatus = 'ok' | 'missing' | 'altered';
+export interface CheckReport {
+  ok: boolean;
+  models: Record<string, { status: FileStatus; files: Array<{ path: string; status: FileStatus }> }>;
+}
+/** Offline: sizes and SHA-256 of what is under `dir`. Throws ManifestIncompleteError on an unverifiable manifest. */
+export function checkModels(options: { dir: string; models?: string[]; manifest?: ModelsManifest; verify?: 'sha256' | 'size' }): CheckReport;
+
+export type FetchEvent =
+  | { type: 'download'; model: string; path: string; resumedAt: number; size: number }
+  | { type: 'verified' | 'present'; model: string; path: string }
+  | { type: 'retry'; model: string; path: string; attempt: number; message: string };
+/** Downloads the pinned files, verifies every SHA-256, resumes interrupted downloads. */
+export function fetchModels(options: {
+  dir: string;
+  models?: string[];
+  manifest?: ModelsManifest;
+  fetch?: (url: string, init: { headers: Record<string, string>; redirect: 'follow' }) => Promise<{
+    status: number; headers: { get(name: string): string | null }; body: AsyncIterable<Uint8Array> | null;
+  }>;
+  /** Default https://huggingface.co (or HF_ENDPOINT). */
+  endpoint?: string;
+  attempts?: number;
+  onEvent?: (event: FetchEvent) => void;
+}): Promise<{ ok: true; models: Record<string, { downloaded: string[]; present: string[] }> }>;
+
+export class ManifestIncompleteError extends Error { code: 'MANIFEST_INCOMPLETE'; files: Array<{ model: string; path: string }> }
+export class ChecksumError extends Error { code: 'CHECKSUM_MISMATCH'; model: string; path: string }
+
+export interface ModelProblem { model: string; status: FileStatus; path?: string }
+export class ModelsNotReadyError extends Error { code: 'MODELS_NOT_READY'; problems: ModelProblem[] }
+/** Throws ModelsNotReadyError in production (or with `strict`); otherwise returns the report. */
+export function assertModelsReady(options: {
+  required: string[];
+  dir?: string;
+  production?: boolean;
+  strict?: boolean;
+  verify?: 'sha256' | 'size';
+  manifest?: ModelsManifest;
+  env?: Record<string, string | undefined>;
+}): { ok: boolean; production: boolean; problems: ModelProblem[] };

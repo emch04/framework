@@ -20,6 +20,12 @@ Endpoints (JSON in, JSON out):
   POST /entities    {"text": str, "labels": [str]?}              -> {"entities": [{"text","label","start","end","score"}], "model"}
   POST /transcribe  {"audio": base64 PCM16LE mono, "language": str|null?, "prompt": str?, "vad": bool?}
                     -> {"text","language","avg_logprob","no_speech_prob","duration_ms","audio_ms","model"}
+  POST /injection   {"texts": [str]}                             -> {"results": [{"score","verdict"}], "threshold", "model"}
+                    verdict: "injection" | "safe". A long text is read in overlapping
+                    windows and keeps its highest score.
+  POST /moderation  {"texts": [str]}                             -> {"results": [{"flagged","unsafe","categories",
+                    "flagged_categories"}], "model"}. Scores and category names only,
+                    never an excerpt of the text.
 
 Errors: {"error": {"code": "...", "message": "..."}} with a stable `code`.
 
@@ -41,13 +47,13 @@ import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = '0.1.0'
+VERSION = '1.1.0'
 
 os.environ.setdefault('HF_HUB_OFFLINE', '1')
 os.environ.setdefault('TRANSFORMERS_OFFLINE', '1')
 os.environ.setdefault('TOKENIZERS_PARALLELISM', 'false')
 
-MODEL_NAMES = ('embed', 'rerank', 'nli', 'entities', 'transcribe')
+MODEL_NAMES = ('embed', 'rerank', 'nli', 'entities', 'transcribe', 'injection', 'moderation')
 
 # Folder looked up under `models_dir` when a model has no explicit `path`.
 DEFAULT_FOLDERS = {
@@ -58,7 +64,16 @@ DEFAULT_FOLDERS = {
     # "base" over "small": measured 0.35 s against 1.2 s per sentence on a
     # laptop CPU, for a lower recognition rate. Point `path` elsewhere to trade.
     'transcribe': 'faster-whisper-base',
+    'injection': 'prompt-injection-guard-small',
+    'moderation': 'content-safety-guard-small',
 }
+
+# Categories reported by the moderation endpoint, out of the 15 the model scores.
+MODERATION_CATEGORIES = ('hate', 'harassment', 'violence', 'sexual', 'sexual_minors', 'self_harm')
+MODERATION_ALL_CATEGORIES = (
+    'hate', 'harassment', 'violence', 'weapons', 'sexual', 'sexual_minors', 'self_harm', 'criminal_planning',
+    'drugs', 'privacy', 'profanity', 'fraud_manipulation', 'misinformation', 'unauthorized_advice', 'other',
+)
 
 DEFAULTS = {
     'host': '127.0.0.1',
@@ -111,6 +126,24 @@ DEFAULTS = {
             'min_seconds': 0.2, 'max_seconds': 30, 'max_prompt_chars': 600,
             'languages': None, 'auto_languages': [], 'vad': False, 'allow_vad': True,
         },
+        'injection': {
+            'path': None, 'id': None, 'threads': 0,
+            # A text longer than `max_chars` is refused, never cut: an injection hidden after
+            # the cut would pass unseen. The caller splits what is longer.
+            'max_batch': 8, 'max_chars': 20000, 'max_tokens': 1024, 'batch_size': 4,
+            # Long texts are read in overlapping windows; the highest score wins.
+            'window_chars': 3000, 'overlap_chars': 300,
+            'threshold': 0.5,
+        },
+        'moderation': {
+            'path': None, 'id': None, 'threads': 0,
+            'max_batch': 8, 'max_chars': 20000, 'max_tokens': 1024, 'batch_size': 4,
+            'window_chars': 3000, 'overlap_chars': 300,
+            'categories': list(MODERATION_CATEGORIES),
+            # Overrides of the thresholds shipped with the model (thresholds.json):
+            # {"unsafe": 0.5, "self_harm": 0.1, ...}.
+            'thresholds': {},
+        },
     },
 }
 
@@ -121,6 +154,10 @@ TOKEN_MIN_CHARS = 16
 SAMPLE_RATE = 16000
 LOGPROB_WITHOUT_TEXT = -10.0
 NLI_KEYS = ('entailment', 'neutral', 'contradiction')
+
+
+# Objects whose keys are chosen by the operator, not fixed by the schema.
+FREE_OBJECTS = ('label_map', 'thresholds')
 
 
 class ConfigError(ValueError):
@@ -141,7 +178,7 @@ def _merge(base, extra, where='config'):
     for key, value in extra.items():
         if key not in base:
             raise ConfigError(f'{where}.{key}: unknown key')
-        if isinstance(base[key], dict) and key != 'label_map':
+        if isinstance(base[key], dict) and key not in FREE_OBJECTS:
             if not isinstance(value, dict):
                 raise ConfigError(f'{where}.{key}: object expected')
             _merge(base[key], value, f'{where}.{key}')
@@ -271,7 +308,7 @@ def validate_config(config):
         section = models[name]
         _positive_int(section['threads'], f'models.{name}.threads', allow_zero=True)
         for key in ('max_batch', 'max_chars', 'max_tokens', 'batch_size', 'max_labels', 'max_label_chars',
-                    'chunk_chars', 'max_prompt_chars'):
+                    'chunk_chars', 'max_prompt_chars', 'window_chars'):
             if key in section:
                 _positive_int(section[key], f'models.{name}.{key}')
     entities = models['entities']
@@ -294,6 +331,24 @@ def validate_config(config):
             continue
         if not isinstance(value, list) or not all(isinstance(x, str) and LANGUAGE_RE.match(x) for x in value):
             raise ConfigError(f'models.transcribe.{key}: list of language codes')
+
+    injection, moderation = models['injection'], models['moderation']
+    for name, section in (('injection', injection), ('moderation', moderation)):
+        _positive_int(section['overlap_chars'], f'models.{name}.overlap_chars', allow_zero=True)
+        if section['overlap_chars'] >= section['window_chars']:
+            raise ConfigError(f'models.{name}: overlap_chars must be below window_chars')
+    if (isinstance(injection['threshold'], bool) or not isinstance(injection['threshold'], (int, float))
+            or not 0 <= injection['threshold'] <= 1):
+        raise ConfigError('models.injection.threshold: 0 to 1')
+    categories = moderation['categories']
+    if (not isinstance(categories, list) or not categories
+            or any(c not in MODERATION_ALL_CATEGORIES for c in categories)):
+        raise ConfigError(f'models.moderation.categories: non-empty subset of {", ".join(MODERATION_ALL_CATEGORIES)}')
+    thresholds = moderation['thresholds']
+    if not isinstance(thresholds, dict) or any(
+            (key != 'unsafe' and key not in MODERATION_ALL_CATEGORIES) or isinstance(value, bool)
+            or not isinstance(value, (int, float)) or not 0 <= value <= 1 for key, value in thresholds.items()):
+        raise ConfigError('models.moderation.thresholds: object of "unsafe" or category names to numbers from 0 to 1')
 
     for name in MODEL_NAMES:
         section = models[name]
@@ -318,6 +373,10 @@ def body_limit(config, endpoint):
         audio = audio_byte_limits(config)[1]
         prompt = config['models']['transcribe']['max_prompt_chars'] * 6
         return max(config['max_body_bytes'], audio * 4 // 3 + 4 + prompt + 64 * 1024)
+    if endpoint in ('injection', 'moderation'):
+        section = config['models'][endpoint]
+        # Up to 3 bytes per character in UTF-8 (French accents are 2).
+        return max(config['max_body_bytes'], section['max_batch'] * section['max_chars'] * 3 + 64 * 1024)
     return config['max_body_bytes']
 
 
@@ -422,9 +481,23 @@ def validate_transcribe(data, config):
     return pcm, language, prompt.strip(), vad
 
 
+def validate_texts(endpoint):
+    """Validator of the endpoints that classify a list of texts."""
+    def validate(data, config):
+        section = config['models'][endpoint]
+        texts = _object(data).get('texts')
+        if not isinstance(texts, list) or not 1 <= len(texts) <= section['max_batch']:
+            raise InvalidInput(f'texts: list of 1 to {section["max_batch"]}')
+        if not all(_text(t) and len(t) <= section['max_chars'] for t in texts):
+            raise InvalidInput(f'texts: 1 to {section["max_chars"]} characters each')
+        return texts
+    return validate
+
+
 VALIDATORS = {
     'embed': validate_embed, 'rerank': validate_rerank, 'nli': validate_nli,
     'entities': validate_entities, 'transcribe': validate_transcribe,
+    'injection': validate_texts('injection'), 'moderation': validate_texts('moderation'),
 }
 
 
@@ -456,6 +529,30 @@ def chunks(text, size):
         result.append((start, text[start:end]))
         start = end
     return result
+
+
+def windows(text, size, overlap):
+    """Overlapping pieces of `text`, each of at most `size` characters. A short text is one
+    piece. The overlap keeps an instruction that straddles a cut whole in one of them."""
+    if len(text) <= size:
+        return [text]
+    step = size - overlap
+    pieces, start = [], 0
+    while True:
+        pieces.append(text[start:start + size])
+        if start + size >= len(text):
+            return pieces
+        start += step
+
+
+def _window_all(texts, section):
+    """All windows of all texts, flat, and for each text the slice [first, end) of its windows."""
+    flat, spans = [], []
+    for text in texts:
+        pieces = windows(text, section['window_chars'], section['overlap_chars'])
+        spans.append((len(flat), len(flat) + len(pieces)))
+        flat.extend(pieces)
+    return flat, spans
 
 
 # ─── Endpoint logic (backend-agnostic) ─────────────────────────────────────
@@ -525,14 +622,54 @@ def run_transcribe(backend, entry, config):
     }
 
 
+def run_injection(backend, texts, config):
+    section = config['models']['injection']
+    flat, spans = _window_all(texts, section)
+    scores = [float(x) for x in backend.score(flat)]
+    if len(scores) != len(flat):
+        raise RuntimeError('backend returned inconsistent scores')
+    results = []
+    for first, end in spans:
+        score = max(scores[first:end])
+        results.append({'score': round(score, 4),
+                        'verdict': 'injection' if score >= section['threshold'] else 'safe'})
+    return {'results': results, 'threshold': section['threshold'], 'model': section['id']}
+
+
+def run_moderation(backend, texts, config):
+    section = config['models']['moderation']
+    flat, spans = _window_all(texts, section)
+    rows = backend.classify(flat)
+    if len(rows) != len(flat):
+        raise RuntimeError('backend returned inconsistent results')
+    thresholds = dict(getattr(backend, 'thresholds', None) or {})
+    thresholds.update(section['thresholds'])
+    unsafe_limit = thresholds.get('unsafe', 0.5)
+    results = []
+    for first, end in spans:
+        pieces = rows[first:end]
+        # Highest score over the windows, for the overall score and for each category.
+        unsafe = max(float(r['unsafe']) for r in pieces)
+        scores = {c: max(float(r[c]) for r in pieces) for c in section['categories']}
+        flagged = unsafe >= unsafe_limit
+        # Category scores only mean something for a text that is flagged as a whole.
+        names = [c for c in section['categories'] if flagged and scores[c] >= thresholds.get(c, 0.5)]
+        results.append({'flagged': flagged, 'unsafe': round(unsafe, 4),
+                        'categories': {c: round(v, 4) for c, v in scores.items()},
+                        'flagged_categories': names})
+    return {'results': results, 'model': section['id']}
+
+
 RUNNERS = {
     'embed': run_embed, 'rerank': run_rerank, 'nli': run_nli,
     'entities': run_entities, 'transcribe': run_transcribe,
+    'injection': run_injection, 'moderation': run_moderation,
 }
 
 COUNTERS = {
     'embed': len, 'rerank': lambda e: len(e[1]), 'nli': len,
     'entities': lambda e: len(e[0]), 'transcribe': lambda e: len(e[0]),
+    'injection': len, 'moderation': len,
 }
 
 
@@ -659,6 +796,8 @@ WARMUPS = {
     'entities': lambda b, c: b.predict(['Hello Mary.'], c['models']['entities']['default_labels'],
                                        c['models']['entities']['threshold']),
     'transcribe': lambda b, c: b.transcribe(bytes(SAMPLE_RATE * 2), None, '', False),
+    'injection': lambda b, c: b.score(['warm up']),
+    'moderation': lambda b, c: b.classify(['warm up']),
 }
 
 
@@ -818,7 +957,8 @@ class Handler(BaseHTTPRequestHandler):
             models = self.server.models.health()
             body = {'status': 'ok', 'version': VERSION, 'models': models}
             if self.server.config['legacy_routes']:
-                body['modeles'] = {LEGACY_HEALTH_NAMES[n]: s['loaded'] for n, s in models.items()}
+                body['modeles'] = {LEGACY_HEALTH_NAMES[n]: s['loaded'] for n, s in models.items()
+                                   if n in LEGACY_HEALTH_NAMES}
             self._json(200, body)
         elif path in ROUTES or (self.server.config['legacy_routes'] and path in LEGACY_ROUTES):
             self._error(405, 'method_not_allowed', 'POST expected', close=True)

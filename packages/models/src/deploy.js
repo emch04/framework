@@ -25,7 +25,7 @@ function serverPaths() {
 }
 
 const COMPONENTS = ['onnx', 'entities', 'transcribe'];
-const MODELS = ['embed', 'rerank', 'nli', 'entities', 'transcribe'];
+const MODELS = ['embed', 'rerank', 'nli', 'entities', 'transcribe', 'injection', 'moderation'];
 const ENV_NAME = /^[A-Z_][A-Z0-9_]*$/;
 const SECRET_ENV = /^MODELS_TOKEN$/;
 const OFFLINE_ENV = { HF_HUB_OFFLINE: '1', TRANSFORMERS_OFFLINE: '1' };

@@ -28,7 +28,7 @@ test('missing or invalid policy: the governor does not exist', async () => {
 });
 
 test('an unreachable governor store makes the governor unavailable', async () => {
-  const broken = { putProposal() {}, getProposal() {}, transitionProposal() {}, listProposals() {}, appendAudit() {}, listAudit() {}, reserveSpend() {}, setControl() {}, async getControl() { throw new Error('connection refused'); } };
+  const broken = { putProposal() {}, getProposal() {}, transitionProposal() {}, listProposals() {}, appendAudit() {}, listAudit() {}, reserveSpend() {}, setControl() {}, getObject() {}, createObject() {}, updateObject() {}, listObjects() {}, putVersion() {}, getVersion() {}, listVersions() {}, putFinding() {}, listFindings() {}, async getControl() { throw new Error('connection refused'); } };
   await assert.rejects(assertGovernorReady(createGovernor(policy(), { store: broken })), { code: 'governor_unavailable' });
   assert.throws(() => createGovernor(policy(), { store: {} }), { code: 'governor_unavailable' });
 });

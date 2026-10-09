@@ -19,7 +19,7 @@ The package has three entries:
 
 | Entry | Phase | What it gives |
 |---|---|---|
-| `@astratra/conscience/governor` | P0 | Deterministic governor: constitution, permissions, budgets, isolation, kill switch, human approval, audit journal. Imports Node built-ins only: no language model, no AI package (a test walks its import graph). |
+| `@astratra/conscience/governor` | P0, P5 | Deterministic governor: constitution, permissions, budgets, isolation, kill switch, human approval, audit journal; and (P5) approval matrix, reversible versioned changes with progressive rollout, rollback, morning report. Imports Node built-ins only: no language model, no AI package (a test walks its import graph). |
 | `@astratra/conscience` | P1 | Decisions, predictions, outcomes with revisions, masked corrections, lessons with evidence, self-model, temporal memory, lineage, erasure, retention, memory guard. |
 | `@astratra/conscience/autoconscience` | P2+ | Types of the reflective engine. `runReflection()` checks the governor, then refuses: it is not available before P2. |
 
@@ -117,8 +117,8 @@ refused (`proposal_conflict`).
 `approveProposal(id, { approver, organisationId })` and `declineProposal(...)`
 accept a human identity supplied by your application only
 (`{ kind: 'human', id }`); a model, the engine, an unlisted person or the
-proposer is refused. Approval records a decision; it does not apply the change
-(versioned rollout and rollback come in P5).
+proposer is refused. Approval records a decision; it never applies the change
+by itself (see Approvals and Reversible changes below).
 
 ### Budgets, isolation, kill switch, audit
 
@@ -132,8 +132,117 @@ proposer is refused. Approval records a decision; it does not apply the change
 - `halt({ by, reason, organisationId? })` stops reflective operations, globally
   or for one organisation; any actor may pull it. `resume(...)` needs a human.
 - Every decision of the governor (evaluate, approve, decline, spend, halt,
-  resume) is written to the audit journal before it is returned:
+  resume, register, stage, deploy, promote, rollback, finding) is written to the audit journal before it is returned:
   `listAudit({ organisationId })`.
+
+### Approvals (matrix, double approval, expiry)
+
+Approval is decided by the policy, not by whoever proposes:
+
+```js
+createGovernor({
+  budgets: { /* ... */ },
+  approvers: ['admin-1', 'admin-2', 'rev-1'],
+  approvals: {
+    roles: { 'admin-1': ['owner'], 'admin-2': ['owner', 'reviewer'], 'rev-1': ['reviewer'] },
+    matrix: { instructions: { roles: ['owner', 'reviewer'] }, routing: { roles: ['owner'], approvals: 2 } },
+    floors: { routing: 'high' },   // minimum risk of a kind (default "medium")
+    doubleApprovalFrom: 'high',    // from this risk, two distinct people
+    distinctRoles: false,          // true: the two must hold different roles
+    expiresInMs: 7 * 24 * 3600e3,  // validity of an approval
+    declineReasons: ['too_costly'] // added to the register
+  }
+});
+```
+
+- The risk of a proposal is the higher of the floor of its kind and the `risk`
+  it declares (`low`, `medium`, `high`, `critical`): a proposer can raise the
+  bar, never lower it. `proposal.requiredApprovals` says how many people are
+  needed (1, or 2 from `doubleApprovalFrom`, or more by the matrix).
+- `approveProposal(id, { approver, organisationId, role? })` records one
+  approval. The proposal stays `pending_approval` until it holds enough valid
+  approvals from distinct people whose roles the matrix allows; the same
+  person cannot approve twice; nobody approves their own proposal.
+- An approval expires after `expiresInMs`. An expired partial approval no
+  longer counts; an approved proposal nobody staged in time becomes `expired`
+  (`expireApprovals({ organisationId })` sweeps them) and must be proposed again.
+- `declineProposal(id, { approver, organisationId, reasonCode })` needs a code
+  of the register (`DECLINE_REASONS`: `insufficient_evidence`, `risk_too_high`,
+  `not_needed`, `wrong_scope`, `poor_tests`, `no_rollback_plan`,
+  `conflicts_with_policy`, `bad_timing`, `duplicate`, `other`, plus the codes
+  of the policy). Free text goes in `note` and is never interpreted.
+- `listRejectionSignals({ organisationId, since?, origin?, reasonCode? })`
+  returns every refusal, by a person (`origin: 'human'`) or by code
+  (`'governor'`), as a record of codes for the evaluation and experiment phases.
+- Invariant: nothing is applied because a model approved it. Approval needs a
+  human identity; staging re-reads the stored approvals and refuses anything
+  else (a record forced to `approved`, a model approval, a changed content, a
+  protected scope, an expired approval). `verifyApprovalInvariant({ organisationId })`
+  audits the store for such cases.
+
+### Reversible changes
+
+Objects a proposal may change (instructions, thresholds, tool descriptions,
+routing rules) are versioned. The audit journal keeps who, what, when and the
+version before and after.
+
+```js
+await governor.registerObject({ organisationId, kind: 'instructions', id: 'reminders', content: { text: '...' }, by: { kind: 'human', id: 'admin-1' } }); // v1, stable
+const proposal = await governor.evaluatePolicy({ organisationId, target: { kind: 'instructions', id: 'reminders', version: 'v1' }, change: { text: '...' }, proposedBy: engine });
+await governor.approveProposal(proposal.id, { approver: human, organisationId });
+await governor.stageChange(proposal.id, { organisationId, by: engine });   // candidate v2, exposure 0 %
+await governor.deployChange({ organisationId, kind: 'instructions', id: 'reminders', percentage: 10, by: human });
+const { versionId, content } = await governor.resolveVersion({ organisationId, kind: 'instructions', id: 'reminders', targetingKey: userId, attributes: { cohort: 'beta' } });
+await governor.deployChange({ /* ... */ percentage: 100, by: human });
+await governor.promoteChange({ /* ... */ by: human });                      // v2 becomes stable
+await governor.rollbackChange({ /* ... */ by: anyActor, reason: 'metrics fell' }); // back to v1, exactly
+```
+
+- `stageChange` creates a candidate only from a proposal a human approved, and
+  re-checks everything at that moment: fingerprint, protected scopes,
+  allowlist, organisation, approvals (human, distinct, roles, count, expiry)
+  and that the proposal targets the current stable version (`stale_base`).
+  One candidate per object. Staging the same proposal twice is one candidate.
+- Exposure grows by decision of a human (`deployChange`, `promoteChange`):
+  `percentage` (0 to 100) and/or `cohorts`. Cohorts say who is eligible, the
+  percentage which share of them. Buckets use the hashing of
+  `@astratra/flags` (`rolloutBucket` is identical to its `bucket`), so a user
+  stays in or out consistently, and growing never removes anyone. Promotion
+  needs 100 % of everyone.
+- To let a real flag service decide, pass `flags` to `createGovernor`: any
+  object with `resolveBoolean(key, fallback, context)`, such as an
+  `@astratra/flags` provider. This package does not import it.
+  `exportFlagRules({ organisationId })` gives the rules to load in its
+  `createMemorySource`. A failing flag service serves the stable version.
+- `rollbackChange` works at any time, for any identified actor, even while
+  halted: it discards the candidate, or restores the version that was stable
+  before the last promotion (the same record, not a copy). It is journaled.
+- Kill switch: `halt()` also brings every candidate of its scope (global, or
+  one organisation) back to its stable version and returns what it reverted.
+  While halted, `resolveVersion` serves stable and nothing can be staged,
+  deployed or promoted. `resume()` does not bring a candidate back.
+- `listVersions`, `getObject`, `listObjects` and `getChangeHistory` read the state.
+
+### Morning review
+
+`recordFinding({ organisationId, code, severity, subject, ... })` receives the
+findings of a reflection run (codes and numbers, no sentences).
+`morningReport({ organisationId, since, until? })` returns plain data for an
+interface to display, the same data for the same store and period:
+
+| Field | Content |
+|---|---|
+| `findings` | Findings received in the period, counted by severity |
+| `pendingProposals` | Waiting for approval: risk, approvals required and valid, allowed roles, tests, rollback plan |
+| `approvedAwaitingStage` | Approved, not staged: expiry, `valid`, `expired` |
+| `rollouts` | Candidates in deployment: stable and candidate versions, percentage, cohorts |
+| `rejections` | Recent refusals as signals with coded reasons |
+| `rollbacks` | Recent rollbacks and emergency reverts |
+| `counts` | Totals for a header |
+
+The report copies no free text of the proposer, only ids, codes, numbers and the
+`tests` and rollback plan objects it supplied. Everything is read inside one
+organisation.
 
 ### Bootstrap check
 
@@ -223,7 +332,7 @@ uses parameters only; the table prefix is a checked identifier.
 
 ```js
 postgresConscienceSchema({ prefix: 'astratra_conscience' }) // table <prefix>_records
-postgresGovernorSchema({ prefix: 'astratra_governor' })     // <prefix>_proposals, _audit, _spend, _controls
+postgresGovernorSchema({ prefix: 'astratra_governor' })     // <prefix>_proposals, _audit, _spend, _controls, _objects, _versions, _findings
 ```
 
 ### Writing your own store (MongoDB, ...)
@@ -241,8 +350,10 @@ A conscience store has five methods on immutable envelopes
 
 `matchesFilter(envelope, filter)` gives the exact filter semantics. The
 governor store interface (`GovernorStore` in the types) needs an atomic
-`reserveSpend` (a transaction) and a compare-and-set `transitionProposal`
-(`findOneAndUpdate` on `status`).
+`reserveSpend` (a transaction), a compare-and-set `transitionProposal`
+(`findOneAndUpdate` on `status`, and on the number of approvals when a `guard`
+is given), a compare-and-set `updateObject` on `revision`, and insert-once
+`createObject`, `putVersion` and `putFinding`.
 
 ## Autoconscience (`/autoconscience`)
 
@@ -260,8 +371,9 @@ Planned next, each behind the governor:
   cycle quality, classification of feedback.
 - P3, experiments: time-frozen replay that refuses future data, sandbox,
   protected test set, drift monitoring, abstention, lessons turned into tests.
-- P4, shadow mode in a sandbox. P5, versioned rollout, morning review,
-  rollback. P6, guarded transfer between agents.
+- P4, shadow mode in a sandbox. P6, guarded transfer between agents.
+
+P5 (advanced governance) is in the governor entry: see above.
 
 ## Tests
 
@@ -275,7 +387,10 @@ each test creates its own tables and drops them.
 
 ## Limits
 
-- No language model, no evaluation and no automatic change in this version.
+- No language model, no evaluation and no automatic change in this version:
+  every change needs a human, and the governor never applies a change to your
+  application by itself. It versions the objects and tells you which version to
+  serve (`resolveVersion`); you read that version where you use the object.
 - The governor recognises protected scopes by names and keys, not by reading
   text: a proposal must describe its target honestly, and anything ambiguous
   is rejected rather than allowed.

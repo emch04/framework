@@ -1,5 +1,6 @@
 'use strict';
 const { GovernorError, deepFreeze, isNonEmptyString, copy } = require('./util');
+const { validateApprovals } = require('./approvals');
 
 /** What reflection may never change, whatever the justification. */
 const PROTECTED_SCOPES = Object.freeze(['permissions', 'budgets', 'security', 'privacy', 'constitution', 'approvals', 'isolation', 'governor']);
@@ -91,9 +92,11 @@ function validatePolicy(policy) {
 
   if (policy.halted !== undefined && typeof policy.halted !== 'boolean') fail('halted must be a boolean.');
 
+  const kinds = [...new Set(modifiable)];
   return deepFreeze({
-    version, budgets, constitution, permissions: { modifiable: [...new Set(modifiable)] },
-    automaticChanges, isolation, approvers: approvers && [...new Set(approvers)], halted: policy.halted === true
+    version, budgets, constitution, permissions: { modifiable: kinds },
+    automaticChanges, isolation, approvers: approvers && [...new Set(approvers)], halted: policy.halted === true,
+    approvals: validateApprovals(policy.approvals, MODIFIABLE_KINDS.filter((kind) => kinds.includes(kind)))
   });
 }
 

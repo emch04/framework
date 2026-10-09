@@ -1,5 +1,5 @@
 'use strict';
-const { test, after } = require('node:test');
+const { test, after, before } = require('node:test');
 const assert = require('node:assert/strict');
 const { randomUUID } = require('node:crypto');
 const { postgresConscienceSchema, createPostgresConscienceStore } = require('../src');
@@ -63,10 +63,30 @@ try { const parsed = new URL(uri); safe = ['postgres:', 'postgresql:'].includes(
 const skip = !safe && 'CONSCIENCE_TEST_DATABASE_URL must name a database ending in _test';
 
 let pool = null;
-const getPool = () => { if (!pool) { const { Pool } = require('pg'); pool = new Pool({ connectionString: uri, max: 10 }); } return pool; };
+const getPool = () => { if (!pool) { const { Pool } = require('pg'); pool = new Pool({ connectionString: uri, max: 10, connectionTimeoutMillis: 5000 }); } return pool; };
 after(async () => { if (pool) await pool.end(); });
 
+let unavailable = null;
+before(async () => {
+  if (!safe) return;
+  try { await getPool().query('SELECT 1'); } catch (error) {
+    if (error.code === '3D000') {
+      const parsed = new URL(uri);
+      const { spawnSync } = require('node:child_process');
+      const args = ['--maintenance-db=postgres'];
+      if (parsed.hostname) args.push('--host', parsed.hostname);
+      if (parsed.port) args.push('--port', parsed.port);
+      if (parsed.username) args.push('--username', decodeURIComponent(parsed.username));
+      args.push(decodeURIComponent(parsed.pathname.slice(1)));
+      spawnSync('createdb', args, { env: { ...process.env, PGPASSWORD: decodeURIComponent(parsed.password) }, stdio: 'ignore', timeout: 5000 });
+      try { await getPool().query('SELECT 1'); return; } catch (_error) { /* Unavailable test infrastructure. */ }
+    }
+    unavailable = 'PostgreSQL test database unavailable; creation or connection not permitted';
+  }
+});
+
 async function freshStores() {
+  if (unavailable) return { unavailable };
   const db = getPool();
   const prefix = `c_${randomUUID().replaceAll('-', '').slice(0, 16)}`;
   const governorPrefix = `g_${randomUUID().replaceAll('-', '').slice(0, 16)}`;
@@ -85,12 +105,13 @@ async function freshStores() {
   };
 }
 
-governorContract('postgres', async () => { const stores = await freshStores(); return { store: stores.governorStore, cleanup: stores.cleanup }; }, { skip });
-advancedContract('postgres', async () => { const stores = await freshStores(); return { store: stores.governorStore, cleanup: stores.cleanup }; }, { skip });
+governorContract('postgres', async () => { const stores = await freshStores(); return { store: stores.governorStore, cleanup: stores.cleanup, unavailable: stores.unavailable }; }, { skip });
+advancedContract('postgres', async () => { const stores = await freshStores(); return { store: stores.governorStore, cleanup: stores.cleanup, unavailable: stores.unavailable }; }, { skip });
 conscienceContract('postgres', freshStores, { skip });
 
-test('postgres: concurrent identical records give one row', { skip }, async () => {
+test('postgres: concurrent identical records give one row', { skip }, async (t) => {
   const stores = await freshStores();
+  if (stores.unavailable) { t.skip(stores.unavailable); return; }
   try {
     const { makeConscience, decisionInput } = require('./helpers');
     const { conscience } = makeConscience(stores);
@@ -101,3 +122,6 @@ test('postgres: concurrent identical records give one row', { skip }, async () =
     assert.equal(count, 1);
   } finally { await stores.cleanup(); }
 });
+
+const { evaluationContract } = require('./evaluationContract');
+evaluationContract('postgres', freshStores, { skip });

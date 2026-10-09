@@ -14,7 +14,11 @@ export type DateInput = string | number | Date;
 export interface Scope { organisationId: string; userId?: string | null }
 export interface Provenance { kind: ProvenanceKind; id: string }
 
+export interface ToolTrace { callId: string; tool: string; provider?: string | null; status: OutcomeStatus; empty?: boolean; durationMs: number; labels?: string[] }
+export interface Justification { claims?: string[] }
+
 export interface DecisionInput extends Scope {
+  domain?: string; justification?: Justification; toolTrace?: ToolTrace[];
   /** Stable id; derived from the content when absent (the same decision twice is one row). */
   id?: string;
   agentId: string;
@@ -38,6 +42,7 @@ export interface DecisionInput extends Scope {
 }
 
 export interface DecisionRecord {
+  domain: string; justification: Justification; toolTrace: ToolTrace[];
   id: string; organisationId: string; userId: string | null; agentId: string; objective: string;
   context: { at: string; summary: string | null; data: unknown };
   action: { name: string; kind: string | null; input: unknown };
@@ -49,15 +54,17 @@ export interface DecisionRecord {
   decidedAt: string; recordedAt: string; subjectErased?: boolean;
 }
 
-export interface PredictionInput extends Scope { id?: string; decisionId: string; statement: string; probability: number; resolvesBy: DateInput; madeAt?: DateInput }
-export interface PredictionRecord { id: string; organisationId: string; userId: string | null; agentId: string; decisionId: string; statement: string; probability: number; resolvesBy: string; madeAt: string; recordedAt: string }
+export interface PredictionInput extends Scope { domain?: string; sensor?: string; id?: string; decisionId: string; statement: string; probability: number; resolvesBy: DateInput; madeAt?: DateInput }
+export interface PredictionRecord { domain: string; sensor: string | null; id: string; organisationId: string; userId: string | null; agentId: string; decisionId: string; statement: string; probability: number; resolvesBy: string; madeAt: string; recordedAt: string }
 
 export interface OutcomeInput extends Scope {
+  predictionId?: string;
   id?: string; decisionId: string; status: OutcomeStatus; observation?: string; sensor: string; sources?: string[];
   /** 0 (certain) to 1 (no idea). */
   uncertainty?: number; confounders?: string[]; provenance: Provenance; observedAt: DateInput;
 }
 export interface OutcomeRecord {
+  predictionId: string | null;
   id: string; organisationId: string; userId: string | null; agentId: string; decisionId: string; status: OutcomeStatus;
   observation: string | null; sensor: string; sources: string[]; uncertainty: number | null; confounders: string[];
   provenance: Provenance; observedAt: string; recordedAt: string;
@@ -70,28 +77,30 @@ export interface CorrectionInput extends Scope {
   id?: string; decisionId: string;
   /** What the agent proposed and the final version. Masked, then only the difference is kept. */
   proposed: string; final: string;
-  class: CorrectionClass; authorRole: string; correctedAt: DateInput;
+  class?: CorrectionClass; tags?: Array<'fact_changed' | 'wording_changed' | 'goal_changed' | 'opinion_changed'>; authorRole: string; correctedAt: DateInput;
 }
 export interface MaskedDelta { removed: string; added: string; removedWords: number; addedWords: number; totalWordsBefore: number; totalWordsAfter: number; unchanged: boolean }
 export interface CorrectionRecord { id: string; organisationId: string; userId: string | null; agentId: string; decisionId: string; class: CorrectionClass; authorRole: string; correctedAt: string; delta: MaskedDelta; recordedAt: string }
 
 export interface Evidence { kind: EvidenceKind; ref: string; note?: string | null }
 export interface LessonInput extends Scope {
+  domain?: string; subject?: string | null; stance?: 'supports' | 'opposes' | null; factual?: boolean; minimumSample?: number;
   /** Same lessonId = a new revision of the same lesson. */
   lessonId?: string; agentId?: string; summary: string; evidence?: Evidence[]; evidenceDegree?: EvidenceDegree;
-  /** Forced to 'hypothesis' when there is no evidence. */
+  /** Computed from evidence and independent sample size; open conflicts force to_reassess. */
   status?: LessonStatus;
   validFrom?: DateInput; validUntil?: DateInput; contradictions?: string[]; supersedes?: string[];
   consent?: unknown; retention?: unknown; scenarioRef?: string;
 }
 export interface MemoryLesson {
+  domain: string; subject: string | null; stance: 'supports' | 'opposes' | null; factual: boolean; minimumSample: number; sampleSize: number; factualEligible: boolean;
   id: string; revisionId: string; previousRevision: string | null; contentFingerprint: string;
   organisationId: string; userId: string | null; agentId: string | null; summary: string;
   evidence: Array<{ kind: EvidenceKind; ref: string; note: string | null }>; evidenceDegree: EvidenceDegree; status: LessonStatus;
   validFrom: string | null; validUntil: string | null; contradictions: string[]; supersedes: string[];
   consent: unknown; retention: unknown; scenarioRef: string | null; statusForced: boolean; recordedAt: string;
 }
-export interface LessonVersion extends MemoryLesson { revision: number; current: boolean; supersededAt: string | null }
+export interface LessonVersion extends MemoryLesson { storedStatus?: LessonStatus; revision: number; current: boolean; supersededAt: string | null }
 
 export interface SelfModelInput extends Scope {
   agentId: string;
@@ -162,6 +171,8 @@ export interface ConscienceStore {
 export type Masker = ((text: string) => string | Promise<string>) | { redactString(text: string): string } | { mask(text: string): string | Promise<string> };
 
 export interface ConscienceOptions {
+  /** Minimum independent known outcomes/factual corrections for verification; default 30. */
+  minimumSample?: number;
   /** Required: built by createGovernor() of @astratra/conscience/governor. */
   governor: Governor;
   /** Required: applied to every free text before storage. Should be deterministic. */
@@ -192,6 +203,7 @@ export interface Conscience {
   /** Reflective write: requires a ready governor. */
   recordLesson(input: LessonInput): Promise<{ lesson: MemoryLesson; created: boolean; statusForced: boolean }>;
   /** Reflective write: requires a ready governor. */
+  resolveLessonConflict(input: Scope & { winnerId: string; loserId: string; evidence: Evidence[] }): Promise<{ winner: MemoryLesson; loser: MemoryLesson }>;
   updateSelfModel(input: SelfModelInput): Promise<{ snapshot: SelfModelSnapshot; created: boolean }>;
   getDecision(scope: Scope, id: string): Promise<DecisionRecord | null>;
   getOutcomes(scope: Scope & { asOf?: DateInput }, decisionId: string): Promise<OutcomeVersion[]>;

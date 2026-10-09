@@ -1,5 +1,7 @@
 'use strict';
 const { ConscienceError } = require('./errors');
+const { classifyCorrection } = require('./autoconscience/signals');
+const { minimum, number } = require('./autoconscience/statistics');
 const { isNonEmptyString, copy } = require('./governor/util');
 
 const KINDS = Object.freeze(['decision', 'prediction', 'outcome', 'correction', 'lesson', 'self_model']);
@@ -55,6 +57,20 @@ function provenanceOf(value, field) {
   return { kind: oneOf(value.kind, PROVENANCE_KINDS, `${field}.kind`), id: text(value.id, `${field}.id`, { max: 500 }) };
 }
 
+function tracesOf(value = []) {
+  if (!Array.isArray(value)) invalid('toolTrace must be an array.');
+  const ids = new Set();
+  return value.map((trace) => {
+    const callId = text(trace.callId, 'toolTrace.callId', { max: 500 });
+    if (ids.has(callId)) invalid('Duplicate tool trace callId.');
+    ids.add(callId);
+    if (trace.empty != null && typeof trace.empty !== 'boolean') invalid('toolTrace.empty must be boolean.');
+    return { callId, tool: text(trace.tool, 'toolTrace.tool', { max: 500 }), provider: text(trace.provider, 'toolTrace.provider', { required: false, max: 200 }),
+      status: oneOf(trace.status, OUTCOME_STATUSES, 'toolTrace.status'), empty: trace.empty ?? false,
+      durationMs: number(trace.durationMs, 'toolTrace.durationMs'), labels: strings(trace.labels, 'toolTrace.labels') };
+  });
+}
+
 function decision(input) {
   const scope = scopeOf(input);
   const context = input.context;
@@ -73,6 +89,9 @@ function decision(input) {
   return {
     ...scope,
     agentId: text(input.agentId, 'agentId', { max: 200 }),
+    domain: text(input.domain ?? 'general', 'domain', { max: 200 }),
+    justification: { claims: strings(input.justification?.claims, 'justification.claims') },
+    toolTrace: tracesOf(input.toolTrace),
     objective: text(input.objective, 'objective'),
     context: { at, summary: text(context.summary, 'context.summary', { required: false }), data: copy(context.data) ?? null },
     action: { name: text(action.name, 'action.name', { max: 500 }), kind: action.kind ?? null, input: copy(action.input) ?? null },
@@ -93,6 +112,8 @@ function prediction(input) {
     ...scopeOf(input),
     decisionId: text(input.decisionId, 'decisionId', { max: 500 }),
     statement: text(input.statement, 'statement'),
+    domain: text(input.domain, 'domain', { required: false, max: 200 }),
+    sensor: text(input.sensor, 'sensor', { required: false, max: 200 }),
     probability: unit(input.probability, 'probability'),
     resolvesBy: date(input.resolvesBy, 'resolvesBy'),
     madeAt: date(input.madeAt, 'madeAt', { required: false })
@@ -105,6 +126,7 @@ function outcome(input) {
   return {
     ...scopeOf(input),
     decisionId: text(input.decisionId, 'decisionId', { max: 500 }),
+    predictionId: text(input.predictionId, 'predictionId', { required: false, max: 500 }),
     status: oneOf(input.status, OUTCOME_STATUSES, 'status'),
     observation: text(input.observation, 'observation', { required: false }),
     sensor: text(input.sensor, 'sensor', { max: 200 }),
@@ -122,13 +144,14 @@ function correction(input) {
     decisionId: text(input.decisionId, 'decisionId', { max: 500 }),
     proposed: text(input.proposed, 'proposed', { max: 100000 }),
     final: text(input.final, 'final', { max: 100000 }),
-    class: oneOf(input.class, CORRECTION_CLASSES, 'class'),
+    class: classifyCorrection(input),
     authorRole: text(input.authorRole, 'authorRole', { max: 200 }),
     correctedAt: date(input.correctedAt, 'correctedAt')
   };
 }
 
 function lesson(input) {
+  if (input.factual != null && typeof input.factual !== 'boolean') invalid('factual must be boolean.');
   const evidence = input.evidence ?? [];
   if (!Array.isArray(evidence)) invalid('evidence must be an array.');
   const status = input.status ?? 'hypothesis';
@@ -141,6 +164,11 @@ function lesson(input) {
     lessonId: input.lessonId == null ? null : text(input.lessonId, 'lessonId', { max: 500 }),
     agentId: input.agentId == null ? null : text(input.agentId, 'agentId', { max: 200 }),
     summary: text(input.summary, 'summary'),
+    domain: text(input.domain ?? 'general', 'domain', { max: 200 }),
+    subject: text(input.subject, 'subject', { required: false, max: 500 }),
+    stance: input.stance == null ? null : oneOf(input.stance, ['supports', 'opposes'], 'stance'),
+    factual: input.factual !== false,
+    minimumSample: minimum(input.minimumSample),
     evidence: evidence.map((item, index) => {
       if (!item || typeof item !== 'object') invalid(`evidence[${index}] must be { kind, ref, note? }.`);
       return { kind: oneOf(item.kind, EVIDENCE_KINDS, `evidence[${index}].kind`), ref: text(item.ref, `evidence[${index}].ref`, { max: 2000 }), note: text(item.note, `evidence[${index}].note`, { required: false }) };

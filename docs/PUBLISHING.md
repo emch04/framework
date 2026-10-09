@@ -125,7 +125,8 @@ bash scripts/publish-all.sh --dry-run
 
 Puis publier :
 
-```bash
+
+
 bash scripts/publish-all.sh
 ```
 

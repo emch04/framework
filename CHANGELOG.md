@@ -3,6 +3,11 @@
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Chaque package Astratra est versionné indépendamment.
 
+## 2026-10-09 — `@astratra/centrale` 1.0.3 (sécurité)
+
+### Corrigé
+- Masquage : les règles des jetons (JWT, `Bearer`/`Basic`, clés à préfixe) avaient des répétitions sans borne ; une suite piégée comme « eyJ-eyJ-… » restait quadratique (environ 28 ms par texte de 10 000 caractères). Chaque segment est maintenant borné. Le test de non-régression couvre ces nouveaux cas.
+
 ## 2026-10-09 — `@astratra/centrale` 1.0.2 (sécurité)
 
 ### Corrigé

@@ -2,9 +2,12 @@
 const crypto = require('node:crypto');
 const { GovernorError, fingerprintOf, copy, isNonEmptyString } = require('./util');
 const { validatePolicy, protectedRulesTouched } = require('./policy');
+const { RISK_LEVELS, assess, actingRole, liveApprovals } = require('./approvals');
+const { createChanges } = require('./changes');
+const { createReview } = require('./review');
 const { createMemoryGovernorStore } = require('./stores');
 
-const STATUSES = Object.freeze(['rejected', 'pending_approval', 'approved', 'declined']);
+const STATUSES = Object.freeze(['rejected', 'pending_approval', 'approved', 'declined', 'expired']);
 const PROPOSER_KINDS = Object.freeze(['engine', 'model', 'human', 'system']);
 const REASONS = Object.freeze({
   HALTED: 'governor_halted',
@@ -30,7 +33,8 @@ const actorOf = (actor) => (actor && typeof actor === 'object' ? { kind: String(
 function createGovernor(policy, options = {}) {
   const rules = validatePolicy(policy);
   const store = options.store ?? createMemoryGovernorStore();
-  for (const method of ['putProposal', 'getProposal', 'transitionProposal', 'listProposals', 'appendAudit', 'listAudit', 'reserveSpend', 'getControl', 'setControl']) {
+  for (const method of ['putProposal', 'getProposal', 'transitionProposal', 'listProposals', 'appendAudit', 'listAudit', 'reserveSpend', 'getControl', 'setControl',
+    'getObject', 'createObject', 'updateObject', 'listObjects', 'putVersion', 'getVersion', 'listVersions', 'putFinding', 'listFindings']) {
     if (typeof store[method] !== 'function') throw new GovernorError('governor_unavailable', `Governor store is missing ${method}().`);
   }
   const now = options.now ?? Date.now;
@@ -73,7 +77,7 @@ function createGovernor(policy, options = {}) {
       justification: input.justification ?? null, scopes: Array.isArray(input.scopes) ? input.scopes.map(String) : [],
       organisationIds: Array.isArray(input.organisationIds) ? input.organisationIds.map(String) : [],
       proposedBy: actorOf(input.proposedBy), owner: input.owner ?? null, tests: copy(input.tests) ?? null,
-      replay: copy(input.replay) ?? null, rollback: copy(input.rollback) ?? null
+      replay: copy(input.replay) ?? null, rollback: copy(input.rollback) ?? null, risk: input.risk ?? null
     };
     const fingerprint = fingerprintOf(content);
     return { id: isNonEmptyString(input.id) ? input.id : `proposal_${fingerprint.slice(0, 32)}`, ...content, fingerprint };
@@ -85,7 +89,8 @@ function createGovernor(policy, options = {}) {
     if (halted) reasons.push(REASONS.HALTED);
     const target = proposal.target;
     if (!target || !isNonEmptyString(target.kind) || !isNonEmptyString(target.id) || proposal.change === null
-      || !proposal.proposedBy || !PROPOSER_KINDS.includes(proposal.proposedBy.kind) || !proposal.proposedBy.id) reasons.push(REASONS.INVALID);
+      || !proposal.proposedBy || !PROPOSER_KINDS.includes(proposal.proposedBy.kind) || !proposal.proposedBy.id
+      || (proposal.risk !== null && !RISK_LEVELS.includes(proposal.risk))) reasons.push(REASONS.INVALID);
     const orgs = new Set([proposal.organisationId, ...proposal.organisationIds, ...(target?.organisationId ? [target.organisationId] : [])]);
     if (orgs.size > 1) reasons.push(REASONS.CROSS_ORGANISATION);
     touched = protectedRulesTouched(rules, proposal);
@@ -105,7 +110,11 @@ function createGovernor(policy, options = {}) {
     const halted = (await haltState(proposal.organisationId)).halted;
     const verdict = judge(proposal, halted);
     const at = iso();
-    const record = { ...proposal, ...verdict, policyVersion: rules.version, createdAt: at, decidedAt: verdict.status === 'rejected' ? at : null, approver: null, note: null };
+    const assessment = assess(rules, proposal);
+    const record = {
+      ...proposal, ...verdict, risk: assessment.risk, declaredRisk: proposal.risk, requiredApprovals: assessment.requiredApprovals, approvals: [], declineReason: null,
+      policyVersion: rules.version, createdAt: at, decidedAt: verdict.status === 'rejected' ? at : null, approver: null, note: null
+    };
     const { record: stored, created } = await store.putProposal(record);
     if (!created) {
       if (stored.fingerprint !== proposal.fingerprint) throw new GovernorError('proposal_conflict', 'A different proposal already uses this id.');
@@ -124,21 +133,62 @@ function createGovernor(policy, options = {}) {
     return who;
   }
 
-  async function decide(id, { approver, organisationId, note } = {}, status) {
+  async function decide(id, { approver, organisationId, note, role, reasonCode } = {}, status) {
     const who = requireHuman(approver);
     if (!isNonEmptyString(organisationId)) throw new GovernorError('organisation_required', 'A decision needs its organisationId.');
-    const proposal = await store.getProposal(organisationId, id);
-    if (!proposal) throw new GovernorError('not_found', 'Proposal not found.');
-    if (proposal.status !== 'pending_approval') throw new GovernorError('not_pending', `Proposal is ${proposal.status}, not pending approval.`);
-    if (status === 'approved') {
+    if (status === 'declined' && !rules.approvals.declineReasons.includes(reasonCode)) {
+      throw new GovernorError('decline_reason_required', `Say why with a code from the register: ${rules.approvals.declineReasons.join(', ')}.`);
+    }
+    const text = note == null ? null : String(note).slice(0, 2000);
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const proposal = await store.getProposal(organisationId, id);
+      if (!proposal) throw new GovernorError('not_found', 'Proposal not found.');
+      if (proposal.status !== 'pending_approval') throw new GovernorError('not_pending', `Proposal is ${proposal.status}, not pending approval.`);
+      const guard = { approvals: (proposal.approvals ?? []).length };
+      if (status === 'declined') {
+        const updated = await store.transitionProposal(organisationId, id, 'pending_approval', { status, approver: who, decidedAt: iso(), note: text, declineReason: reasonCode }, guard);
+        if (!updated) continue;
+        await audit({ action: 'decline', organisationId, proposalId: id, decision: status, reasons: [reasonCode], reasonCode, actor: who });
+        return updated;
+      }
       if (proposal.proposedBy?.kind === 'human' && proposal.proposedBy.id === who.id) throw new GovernorError('self_approval', 'A person cannot approve their own proposal.');
       if ((await haltState(organisationId)).halted) throw new GovernorError(REASONS.HALTED, 'The governor is halted.');
       if (protectedRulesTouched(rules, proposal).length) throw new GovernorError(REASONS.PROTECTED, 'The proposal touches a protected scope.');
+      const assessment = assess(rules, proposal);
+      const acting = actingRole(rules, assessment, who, role);
+      const atMs = now();
+      const prior = liveApprovals(proposal, atMs);
+      if (prior.some((a) => a.approver.id === who.id)) throw new GovernorError('already_approved', 'This person already approved this proposal.');
+      const entry = { approver: who, role: acting, at: iso(), expiresAt: new Date(atMs + rules.approvals.expiresInMs).toISOString(), note: text };
+      const approvals = [...prior, entry];
+      const complete = approvals.length >= assessment.requiredApprovals && (!assessment.distinctRoles || new Set(approvals.map((a) => a.role)).size >= 2);
+      const patch = complete
+        ? { status: 'approved', approver: who, decidedAt: iso(), note: text, approvals, risk: assessment.risk, requiredApprovals: assessment.requiredApprovals }
+        : { status: 'pending_approval', approvals, risk: assessment.risk, requiredApprovals: assessment.requiredApprovals };
+      const updated = await store.transitionProposal(organisationId, id, 'pending_approval', patch, guard);
+      if (!updated) continue;
+      if (prior.length < (proposal.approvals ?? []).length) await audit({ action: 'approval_expired', organisationId, proposalId: id, decision: 'dropped', reasons: ['approval_expired'], count: (proposal.approvals ?? []).length - prior.length });
+      await audit({
+        action: 'approve', organisationId, proposalId: id, decision: complete ? 'approved' : 'partial', actor: who, role: acting, risk: assessment.risk,
+        approvalsRecorded: approvals.length, approvalsRequired: assessment.requiredApprovals, expiresAt: entry.expiresAt
+      });
+      return updated;
     }
-    const updated = await store.transitionProposal(organisationId, id, 'pending_approval', { status, approver: who, decidedAt: iso(), note: note == null ? null : String(note).slice(0, 2000) });
-    if (!updated) throw new GovernorError('not_pending', 'Proposal is no longer pending approval.');
-    await audit({ action: status === 'approved' ? 'approve' : 'decline', organisationId, proposalId: id, decision: status, actor: who });
-    return updated;
+    throw new GovernorError('not_pending', 'Proposal is no longer pending approval.');
+  }
+
+  /** Approved proposals whose approvals ran out before anyone staged them become "expired". */
+  async function expireApprovals({ organisationId, by } = {}) {
+    const org = assertSingleOrganisation(organisationId);
+    const expired = [];
+    for (const proposal of await store.listProposals({ organisationId: org, status: 'approved', limit: 1000 })) {
+      if (proposal.staged || liveApprovals(proposal, now()).length >= assess(rules, proposal).requiredApprovals) continue;
+      const updated = await store.transitionProposal(org, proposal.id, 'approved', { status: 'expired', decidedAt: iso() });
+      if (!updated) continue;
+      expired.push(proposal.id);
+      await audit({ action: 'expire', organisationId: org, proposalId: proposal.id, decision: 'expired', reasons: ['approval_expired'], actor: actorOf(by) });
+    }
+    return expired;
   }
 
   async function authorizeSpend(input = {}) {
@@ -166,7 +216,10 @@ function createGovernor(policy, options = {}) {
     const value = { halted, by: who, reason: reason == null ? null : String(reason).slice(0, 2000), at: iso() };
     await store.setControl(`halt:${scope}`, value);
     await audit({ action: halted ? 'halt' : 'resume', organisationId: scope === GLOBAL ? null : scope, decision: halted ? 'halted' : 'running', actor: who });
-    return value;
+    if (!halted) return value;
+    /* The emergency stop also brings every candidate back to its stable version. */
+    const { reverted, failures } = await changes.revertAllCandidates({ organisationId: scope === GLOBAL ? null : scope, by: who, reason: value.reason });
+    return { ...value, reverted, failures };
   }
 
   async function assertReady({ organisationId } = {}) {
@@ -177,6 +230,9 @@ function createGovernor(policy, options = {}) {
     if (state.halted) throw new GovernorError(REASONS.HALTED, 'The governor kill switch is on: reflective operations are stopped.');
     return true;
   }
+
+  const changes = createChanges({ rules, store, now, iso, audit, haltState, assertSingleOrganisation, normalizeProposal, flags: options.flags ?? null });
+  const review = createReview({ rules, store, now, iso, audit, haltState, assertSingleOrganisation });
 
   const governor = Object.freeze({
     getPolicy: () => copy(rules),
@@ -191,7 +247,24 @@ function createGovernor(policy, options = {}) {
     halt: (options) => setHalt(true, options),
     resume: (options) => setHalt(false, options),
     isHalted: async (organisationId) => (await haltState(organisationId)).halted,
-    assertReady
+    assertReady,
+    expireApprovals,
+    registerObject: changes.registerObject,
+    stageChange: (proposalId, input) => changes.stageChange(proposalId, input),
+    deployChange: changes.deployChange,
+    promoteChange: changes.promoteChange,
+    rollbackChange: changes.rollbackChange,
+    resolveVersion: changes.resolveVersion,
+    getObject: changes.getObject,
+    listObjects: changes.listObjects,
+    listVersions: changes.listVersions,
+    getChangeHistory: changes.getChangeHistory,
+    exportFlagRules: changes.exportFlagRules,
+    recordFinding: review.recordFinding,
+    listFindings: review.listFindings,
+    listRejectionSignals: review.listRejectionSignals,
+    morningReport: review.morningReport,
+    verifyApprovalInvariant: review.verifyApprovalInvariant
   });
   genuine.add(governor);
   return governor;

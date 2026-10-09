@@ -8,9 +8,13 @@ const { PROTECTED_SCOPES, MODIFIABLE_KINDS, AUTOMATIC_CHANGES, DEFAULT_CONSTITUT
 const { createMemoryGovernorStore } = require('./stores');
 const { postgresGovernorSchema, createPostgresGovernorStore } = require('./postgres');
 const { GovernorError } = require('./util');
+const { RISK_LEVELS, DECLINE_REASONS } = require('./approvals');
+const { SEVERITIES, REPORT_SCHEMA } = require('./review');
+const { bucket } = require('./rollout');
 
 module.exports = {
   createGovernor, assertGovernorReady, isGovernor, validatePolicy, scopesOf, protectedRulesTouched,
   createMemoryGovernorStore, createPostgresGovernorStore, postgresGovernorSchema, GovernorError,
-  PROPOSAL_STATUSES: STATUSES, REASONS, PROTECTED_SCOPES, MODIFIABLE_KINDS, AUTOMATIC_CHANGES, DEFAULT_CONSTITUTION
+  PROPOSAL_STATUSES: STATUSES, REASONS, PROTECTED_SCOPES, MODIFIABLE_KINDS, AUTOMATIC_CHANGES, DEFAULT_CONSTITUTION,
+  RISK_LEVELS, DECLINE_REASONS, FINDING_SEVERITIES: SEVERITIES, MORNING_REPORT_SCHEMA: REPORT_SCHEMA, rolloutBucket: bucket
 };

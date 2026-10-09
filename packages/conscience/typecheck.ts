@@ -1,7 +1,7 @@
 import { createConscience, createMemoryConscienceStore, createPostgresConscienceStore, postgresConscienceSchema, frameRecordsForModel, ConscienceError } from './src';
 import type { DecisionRecord, ConscienceStore } from './src';
 import { createGovernor, createPostgresGovernorStore, postgresGovernorSchema, assertGovernorReady, GovernorError } from './src/governor';
-import type { ChangeProposal } from './src/governor';
+import type { ChangeProposal, MorningReport, RollbackResult, RejectionSignal } from './src/governor';
 import { runReflection } from './src/autoconscience';
 import type { ReflectionRun, CalibrationPoint } from './src/autoconscience';
 
@@ -19,6 +19,16 @@ async function exercise() {
   await conscience.attachOutcome({ organisationId: 'org', decisionId: kept.id, status: 'unknown', sensor: 'feedback', provenance: { kind: 'feedback', id: 'thumbs' }, observedAt: new Date() });
   const proposal: ChangeProposal = await governor.evaluatePolicy({ organisationId: 'org', target: { kind: 'instructions', id: 'main' }, change: { text: 'x' }, proposedBy: { kind: 'engine', id: 'e' } });
   await governor.approveProposal(proposal.id, { approver: { kind: 'human', id: 'admin' }, organisationId: 'org' });
+  const base = { organisationId: 'org', kind: 'instructions', id: 'main' } as const;
+  await governor.registerObject({ ...base, content: { text: 'x' }, by: { kind: 'system', id: 'boot' } });
+  const staged = await governor.stageChange(proposal.id, { organisationId: 'org', by: { kind: 'engine', id: 'e' } });
+  await governor.deployChange({ ...base, percentage: 10, cohorts: ['beta'], by: { kind: 'human', id: 'admin' } });
+  const seen = await governor.resolveVersion({ ...base, targetingKey: 'user', attributes: { cohort: 'beta' } });
+  const back: RollbackResult = await governor.rollbackChange({ ...base, by: { kind: 'system', id: 'monitor' }, reason: 'drift' });
+  await governor.declineProposal(proposal.id, { approver: { kind: 'human', id: 'admin' }, organisationId: 'org', reasonCode: 'poor_tests' });
+  const report: MorningReport = await governor.morningReport({ organisationId: 'org', since: new Date() });
+  const signals: RejectionSignal[] = await governor.listRejectionSignals({ organisationId: 'org', origin: 'human' });
+  void [staged.version.versionId, seen.source, back.mode, report.counts.pending, signals.length, report.rollouts[0]?.percentage];
   const lineage = await conscience.getLineage({ organisationId: 'org' }, kept.id);
   void frameRecordsForModel(lineage?.lessons ?? []);
   void (await conscience.eraseSubject({ organisationId: 'org', userId: 'u' })).removed.decisions;

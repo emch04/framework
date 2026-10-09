@@ -74,7 +74,7 @@ function governorContract(label, makeStore, options = {}) {
     assert.equal(approved.status, 'approved');
     assert.deepEqual(approved.approver, human('admin-1'));
     await assert.rejects(governor.approveProposal('p', { approver: human('admin-2'), organisationId: 'org-a' }), { code: 'not_pending' });
-    const declined = await governor.declineProposal('mine', { approver: human('admin-1'), organisationId: 'org-a', note: 'No.' });
+    const declined = await governor.declineProposal('mine', { approver: human('admin-1'), organisationId: 'org-a', note: 'No.', reasonCode: 'not_needed' });
     assert.equal(declined.status, 'declined');
     const audit = await governor.listAudit({ organisationId: 'org-a' });
     assert.deepEqual(audit.map((entry) => entry.action).sort(), ['approve', 'decline', 'evaluate', 'evaluate']);

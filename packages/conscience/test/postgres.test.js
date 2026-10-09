@@ -6,6 +6,7 @@ const { postgresConscienceSchema, createPostgresConscienceStore } = require('../
 const { postgresGovernorSchema, createPostgresGovernorStore } = require('../src/governor');
 const { governorContract } = require('./governorContract');
 const { conscienceContract } = require('./conscienceContract');
+const { advancedContract } = require('./advancedContract');
 
 /* ---- without a database: identifiers are checked, values travel as parameters ---- */
 
@@ -43,8 +44,15 @@ test('everything a caller controls is a SQL parameter, never part of the SQL tex
   await governorStore.listAudit({ organisationId: hostile, proposalId: hostile });
   await governorStore.getControl(hostile);
   await governorStore.setControl(hostile, { v: hostile });
+  await governorStore.getObject(hostile, hostile, hostile);
+  await governorStore.listObjects({ organisationId: hostile, kind: hostile, hasCandidate: true });
+  await governorStore.listVersions({ organisationId: hostile, kind: hostile, id: hostile });
+  await governorStore.listFindings({ organisationId: hostile, since: hostile });
+  await governorStore.listProposals({ organisationId: hostile, statuses: [hostile], since: hostile });
+  await governorStore.listAudit({ organisationId: hostile, actions: [hostile], since: hostile, objectKind: hostile, objectId: hostile });
+  await governorStore.transitionProposal(hostile, hostile, hostile, { status: hostile }, { approvals: 1 });
   for (const call of [...db.calls, ...governorDb.calls]) assert.doesNotMatch(call.sql, /DROP TABLE users/);
-  assert.ok(db.calls.length >= 6 && governorDb.calls.length >= 5);
+  assert.ok(db.calls.length >= 6 && governorDb.calls.length >= 12);
 });
 
 /* ---- real PostgreSQL: CONSCIENCE_TEST_DATABASE_URL must name a database ending in _test ---- */
@@ -72,12 +80,13 @@ async function freshStores() {
     governorStore: createPostgresGovernorStore(db, { prefix: governorPrefix }),
     async cleanup() {
       await db.query(`DROP TABLE IF EXISTS "${prefix}_records"`);
-      for (const table of ['proposals', 'audit', 'spend', 'controls']) await db.query(`DROP TABLE IF EXISTS "${governorPrefix}_${table}"`);
+      for (const table of ['proposals', 'audit', 'spend', 'controls', 'objects', 'versions', 'findings']) await db.query(`DROP TABLE IF EXISTS "${governorPrefix}_${table}"`);
     }
   };
 }
 
 governorContract('postgres', async () => { const stores = await freshStores(); return { store: stores.governorStore, cleanup: stores.cleanup }; }, { skip });
+advancedContract('postgres', async () => { const stores = await freshStores(); return { store: stores.governorStore, cleanup: stores.cleanup }; }, { skip });
 conscienceContract('postgres', freshStores, { skip });
 
 test('postgres: concurrent identical records give one row', { skip }, async () => {

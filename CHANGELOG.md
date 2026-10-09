@@ -3,6 +3,15 @@
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Chaque package Astratra est versionné indépendamment.
 
+## 2026-10-09 — retours 👍/👎 : `@astratra/native-ui` 1.1.0, `@astratra/saas-kit-ui` 1.1.0 (et `@astratra/agent` 1.0.0)
+
+### Added
+- `@astratra/agent` (not yet published, stays 1.0.0), subpath `@astratra/agent/feedback` and main entry: user feedback on runs. Model with one feedback per person and run (give, modify, withdraw), fixed extensible reasons, bounded comment; memory and PostgreSQL stores with an exported schema; optional Express router (`createFeedbackRouter`) where the application supplies identity and run ownership (404 otherwise); `feedbackDigest` (bounded, masked summary of recent dislikes); `exportScenarioCandidates` (anonymous candidates for `evaluateAgent`, mandatory masker) and `toAgentScenarios`; statistics by agent, mode, reason and period.
+- `@astratra/agent`: option `feedback` of `createAgent` adds the person's digest to the system prompt at the start of a task (`userId` / `tenantId` in the task input, kept in `task.feedbackDigest`); events `run` and `final` expose `runId`. Backward compatible. Optional peer `express`.
+- `@astratra/native-ui` 1.1.0: `FeedbackBar` (React Native / Expo), glass thumbs, reason sheet with optional comment, accessibility, optional haptics (`expo-haptics`, optional peer), English and French default labels overridable by the app, pure rules exported from `@astratra/native-ui/logic`.
+- `@astratra/saas-kit-ui` 1.1.0: the same `FeedbackBar` for React on the web, with its pure rules.
+- `create-astratra-app` 1.9.0: generated dashboards ask for `@astratra/saas-kit-ui` ^1.1.0.
+
 ## 2026-10-09 — `@astratra/agent` 1.0.0, `@astratra/testkit` 1.1.0
 
 ### Added

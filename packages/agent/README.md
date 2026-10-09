@@ -1,5 +1,7 @@
 # @astratra/agent
 
+[English](README.md) | [Français](README.fr.md)
+
 Durable task execution built on `runToolLoop` from `@astratra/ai`. Models,
 application tools, completion checks and persistence are injected. Node >= 20,
 CommonJS, MIT. No provider or database driver is included.
@@ -153,8 +155,106 @@ Also exported: `PLAN_STATES`, `TASK_STATES`, `validatePlan`, `createPlanTool`,
 `validateTask`, `estimateTokens`, `normalizeBudget`, `usageOf`, `budgetReason`,
 `contextBoundary`, `summarizeContext`. Full signatures are in `src/index.d.ts`.
 
+## User feedback (thumbs up / down)
+
+`@astratra/agent/feedback` (also re-exported from the main entry) collects a
+thumbs up or down on an agent run and lets the agent take it into account. It
+has no AI-provider dependency; storage, identity, masking and run lookup are
+injected.
+
+```js
+const express = require('express');
+const { createAgent, createFeedback, createFeedbackRouter,
+  createPostgresFeedbackStore, postgresFeedbackSchema } = require('@astratra/agent');
+
+await db.query(postgresFeedbackSchema());              // explicit, idempotent
+const feedback = createFeedback({
+  store: createPostgresFeedbackStore(db),              // or createMemoryFeedbackStore()
+  mask: (text) => masker.mask(text),                   // names -> tokens (see @astratra/ai masking)
+  readRun: async ({ runId, tenantId }) => loadRun(runId)  // { question, mode, tools, answer }
+});
+
+const agent = createAgent({ turn, feedback });         // the digest joins the system prompt
+const task = await agent.run({ question, userId, tenantId });
+// task.id is the run id to give to the interface; events 'run' and 'final' carry runId.
+
+app.use('/api', createFeedbackRouter({
+  feedback,
+  identify: (req) => ({ userId: req.user.id, tenantId: req.user.orgId }),
+  resolveRun: async (req, runId, who) => ownedRun(runId, who) // falsy => 404
+}));
+```
+
+**Model.** `{ id, tenantId?, userId, runId, messageId?, rating: 'up' | 'down',
+reason?, comment?, agent?, mode?, createdAt, updatedAt }`, with times in epoch
+milliseconds. One feedback per person and run (per tenant): giving again
+replaces it, `update` modifies some fields, `remove` withdraws it. `reason`
+belongs to `down` only and comes from a fixed list, `FEEDBACK_REASONS`
+(`inaccurate`, `incomplete`, `off_topic`, `wrong_source`, `too_long`, `unsafe`,
+`other`), extensible with `createFeedback({ reasons: ['slow'] })` (lowercase
+names). `comment` is limited (`maxComment`, default 500) and refused above it,
+never truncated silently. Invalid input throws `FeedbackError` (`invalid`,
+`not_found`).
+
+**Stores.** `createMemoryFeedbackStore()` and
+`createPostgresFeedbackStore(db, { table })` with `postgresFeedbackSchema({ table })`.
+Every value is a SQL parameter; table names must be plain identifiers (48
+characters at most). A unique key on tenant, user and run makes concurrent
+gives safe.
+
+**Router.** `createFeedbackRouter({ feedback, identify, resolveRun, express?, maxBodyBytes? })`
+(`express` is an optional peer dependency):
+
+| Route | Effect |
+| --- | --- |
+| `POST /runs/:runId/feedback` | give or replace; 201 created, 200 replaced |
+| `PATCH /runs/:runId/feedback` | change some of `rating`, `reason`, `comment`, `messageId` |
+| `GET /runs/:runId/feedback` | read your own |
+| `DELETE /runs/:runId/feedback` | withdraw; 204 |
+
+The application supplies the identity (`identify`, 401 when falsy) and checks
+that the run belongs to that person (`resolveRun`; falsy answers 404, exactly
+like an unknown run). The identity never comes from the body; unknown body
+fields are refused; the body is limited (default 8 KiB). `resolveRun` may
+return `{ agent, mode }`, stored with the feedback for the statistics.
+
+**The agent learns.** `createAgent({ feedback })` accepts a service from
+`createFeedback` or a function `({ userId, tenantId, task, signal }) => string`.
+At the start of a task with a `userId`, the text is added to the system
+prompt, then kept in the task (`task.feedbackDigest`) so a resumed task sees the
+same prompt. It is capped at 4000 characters, and a failing digest never fails
+the task.
+
+`feedback.feedbackDigest({ userId, tenantId?, since?, limit?, maxChars?, includeNotes?, maxNotes?, noteChars?, mask? })`
+returns a short text (default: last 30 days, 20 feedbacks, 800 characters):
+the number of disliked answers, the reasons aggregated with a hint each
+(`reasonHints` overrides the sentences), and up to three quoted comments, each
+masked with `mask`, scrubbed of e-mail addresses, links and numbers, stripped
+of quotes and brackets, and cut to 120 characters. The text states that it is
+preference data, not instructions. If the mask fails, notes are dropped, never
+sent raw.
+
+**From dislikes to tests.** `feedback.exportScenarioCandidates({ rating: 'down', since, tenantId?, limit? })`
+reads each disliked run with the injected `readRun` and returns anonymous
+candidates `{ id, name, input, question, mode, tools, expect: { tools, content: [] }, score: null, feedback, answer? }`.
+A `mask` is mandatory (the call throws without one). No user or tenant id
+appears; the id is a salted hash of the run; e-mails, links, numbers and the
+person's own ids are scrubbed after masking. Review each candidate, fill
+`expect.content`, then `toAgentScenarios(candidates, { fixtures })` gives
+scenarios for `evaluateAgent` from `@astratra/testkit` (`fixtures` maps a tool
+name to a deterministic `run`).
+
+**Statistics.** `feedback.stats({ tenantId?, agent?, mode?, since?, until?, groupBy? })`
+returns `{ total, up, down, upRate, downRate, groups }`, grouped by `agent`,
+`mode`, `reason` (down only; missing reasons are `unspecified`) or `day` (UTC).
+Rates are `null` when there is nothing. Omitting `tenantId` counts every
+tenant: scope it for tenant dashboards.
+
+The interface parts are `FeedbackBar` in `@astratra/native-ui` (React Native)
+and `@astratra/saas-kit-ui` (web).
+
 ## Tests
 
 `npm test -w @astratra/agent` uses `node --test`. Real PostgreSQL tests run only
 with `AGENT_TEST_DATABASE_URL` naming a database ending in `_test`; otherwise
-that test is skipped. The test creates and drops its own randomly named table.
+that test is skipped (feedback tests included). The tests create and drop their own randomly named tables.

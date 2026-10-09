@@ -115,6 +115,16 @@ function Image(props) {
   return h('img', attrs);
 }
 
+/* A text field: onChangeText receives the typed value. */
+function TextInput(props) {
+  const attrs = hostProps('TextInput', props);
+  attrs.placeholder = props.placeholder;
+  attrs.value = props.value ?? '';
+  attrs.maxLength = props.maxLength;
+  attrs.onChange = (event) => props.onChangeText && props.onChangeText(event.target.value);
+  return h('input', attrs);
+}
+
 const BaseScrollView = host('ScrollView');
 function ScrollView(props) {
   React.useImperativeHandle(props.ref, () => ({
@@ -171,6 +181,7 @@ function reactNative() {
     View,
     Text,
     Pressable: host('Pressable'),
+    TextInput,
     ScrollView,
     Image,
     Modal,

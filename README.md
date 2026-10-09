@@ -98,7 +98,7 @@ package is in [CHANGELOG.md](CHANGELOG.md).
 | Package | Version | What it does |
 |---|---|---|
 | [`@astratra/ai`](packages/ai/README.md) | 1.7.0 | Multi-provider AI routing with quotas and fallback, tool registry, agent loop, risk levels with confirmation, local llama.cpp provider |
-| [`@astratra/agent`](packages/agent/README.md) | 1.0.0 | Durable tasks, budgets, plans, completion checks, context summaries and consumption tracking |
+| [`@astratra/agent`](packages/agent/README.md) | 1.0.0 | Durable tasks, budgets, plans, completion checks, context summaries, consumption tracking, and user feedback (👍/👎) the agent learns from |
 | [`@astratra/models`](packages/models/README.md) | 1.0.0 | Local CPU model service (embeddings, reranking, NLI, entities, speech-to-text) and its Node client; price catalogue and cost calculation |
 | [`@astratra/memory`](packages/memory/README.md) | 2.0.0 | Per-person memories for an assistant: hybrid recall, duplicate merging, undoable corrections, PostgreSQL store |
 | [`@astratra/rag`](packages/rag/README.md) | 1.0.0 | Document retrieval: chunking, injected embeddings, hybrid search, source verification, document reading through an optional service |
@@ -130,12 +130,12 @@ package is in [CHANGELOG.md](CHANGELOG.md).
 | [`@astratra/saas-kit`](packages/saas-kit/README.md) | 1.6.1 | Backend starter: `createSaasApp()` assembles users, authentication, settings, notifications and dashboard routes |
 | [`@astratra/store-mongo`](packages/store-mongo/README.md) | 1.1.0 | MongoDB (Mongoose) persistence adapters for the SaaS stores |
 | [`@astratra/store-postgres`](packages/store-postgres/README.md) | 1.1.0 | PostgreSQL (`pg`) persistence adapters for the SaaS stores |
-| [`@astratra/saas-kit-ui`](packages/saas-kit-ui/README.md) | 1.0.1 | React dashboard for `@astratra/saas-kit` |
+| [`@astratra/saas-kit-ui`](packages/saas-kit-ui/README.md) | 1.1.0 | React dashboard for `@astratra/saas-kit`, 👍/👎 feedback bar |
 | [`@astratra/react`](packages/react/README.md) | 1.0.0 | Bare React primitives for sessions, permissions and API calls, without an imposed dashboard |
 | [`@astratra/client`](packages/client/README.md) | 1.1.0 | Framework-agnostic client plumbing: refresh on 401, route guard, password rules, offline queue |
 | [`@astratra/prerender`](packages/prerender/README.md) | 1.0.0 | SEO prerendering for Vite and React sites: one HTML file per route, sitemap from the same list |
 | [`@astratra/native`](packages/native/README.md) | 1.0.0 | Mobile plumbing: keychain session, biometric gate, push registration, payment return |
-| [`@astratra/native-ui`](packages/native-ui/README.md) | 1.0.0 | UI kit for React Native and Expo, with pure logic testable in Node |
+| [`@astratra/native-ui`](packages/native-ui/README.md) | 1.1.0 | UI kit for React Native and Expo, with pure logic testable in Node, 👍/👎 feedback bar |
 | [`@astratra/app-version`](packages/app-version/README.md) | 1.0.0 | Announcements of new mobile builds: public version route, one announcement per version |
 | [`create-astratra-app`](packages/create-astratra-app/README.md) | 1.8.0 | Project generator: full stack, API only, or Expo app, with optional building blocks |
 

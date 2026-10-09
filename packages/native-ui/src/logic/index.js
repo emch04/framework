@@ -13,5 +13,6 @@ module.exports = {
   ...require('./markdown'),
   ...require('./tableColumns'),
   ...require('./anchorQuestion'),
-  ...require('./picture')
+  ...require('./picture'),
+  ...require('./feedbackBar')
 };

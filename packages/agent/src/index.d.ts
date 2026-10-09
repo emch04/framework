@@ -1,3 +1,4 @@
+export * from './feedback';
 import type { NativeTool, NativeToolCall, ToolMessage } from '@astratra/ai';
 export type PlanState = 'todo' | 'in_progress' | 'done' | 'abandoned';
 export interface PlanStep { id: string; text: string; state: PlanState }
@@ -11,6 +12,7 @@ export interface Task {
   steps: Array<{ key: string; call: NativeToolCall; result: ToolMessage }>;
   pending: { step: number; calls: NativeToolCall[]; results: Array<ToolMessage | null>; preparations?: Array<ToolMessage | null> } | null;
   verificationRetries: number; verified: boolean; createdAt: number; updatedAt: number;
+  userId?: string; tenantId?: string; feedbackDigest?: string;
   confirmation?: { key: string; call: NativeToolCall; prepared?: unknown }; text?: string; error?: string; stopReason?: string;
 }
 export interface TaskStore {
@@ -33,9 +35,10 @@ export interface AgentOptions {
   verificationInstruction?: string; maxVerificationRetries?: number;
   contextSummary?: ContextSummaryOptions; summarize?(input: SummaryInput): Promise<string> | string;
   summaryInstruction?: string; finalInstruction?: string; finalMs?: number; toolTimeoutMs?: number;
+  feedback?: { feedbackDigest(input: { userId: string; tenantId?: string }): Promise<string> | string } | ((input: { userId?: string; tenantId?: string; task: Task; signal: AbortSignal }) => Promise<string> | string);
   leaseMs?: number; now?(): number; onEvent?(event: { type: string; taskId: string; [key: string]: unknown }): void | Promise<void>;
 }
-export interface TaskInput { id?: string; question: string; messages?: Message[] }
+export interface TaskInput { id?: string; question: string; messages?: Message[]; userId?: string; tenantId?: string }
 export interface ExecutionOptions { signal?: AbortSignal; confirmation?: { key: string; approved: boolean } }
 export interface Agent { store: TaskStore; create(input: TaskInput): Promise<Task>; resume(id: string, options?: ExecutionOptions): Promise<Task>; run(input: TaskInput, options?: ExecutionOptions): Promise<Task> }
 export function createAgent(options: AgentOptions): Agent;

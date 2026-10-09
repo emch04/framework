@@ -96,3 +96,123 @@ h3 {
     transition-duration: 1ms !important;
   }
 }
+
+/* FeedbackBar: thumbs up / down under an AI answer. */
+.astratra-feedback {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.astratra-feedback__thumb {
+  width: 32px;
+  height: 32px;
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid var(--line, #2e3a31);
+  border-radius: 999px;
+  background: transparent;
+  cursor: pointer;
+  opacity: 0.7;
+  transition: opacity 120ms, background 120ms;
+}
+
+.astratra-feedback__thumb:hover:not(:disabled),
+.astratra-feedback__thumb:focus-visible {
+  opacity: 1;
+  background: var(--panel-raised, #1a231d);
+}
+
+.astratra-feedback__thumb[aria-pressed="true"] {
+  opacity: 1;
+  border-color: var(--lime, #d9ff66);
+  background: var(--panel-raised, #1a231d);
+}
+
+.astratra-feedback__thumb:disabled {
+  cursor: default;
+  opacity: 0.4;
+}
+
+.astratra-feedback__sheet {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  z-index: 10;
+  width: min(360px, 90vw);
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--line-bright, #46584c);
+  border-radius: 12px;
+  background: var(--panel, #141b17);
+  color: var(--cream, #f4f1e6);
+}
+
+.astratra-feedback__title {
+  margin: 0;
+  font-weight: 600;
+}
+
+.astratra-feedback__reasons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.astratra-feedback__chip {
+  padding: 5px 10px;
+  border: 1px solid var(--line, #2e3a31);
+  border-radius: 999px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.astratra-feedback__chip[aria-checked="true"] {
+  border-color: var(--lime, #d9ff66);
+  background: var(--panel-raised, #1a231d);
+}
+
+.astratra-feedback__comment {
+  display: grid;
+  gap: 4px;
+}
+
+.astratra-feedback__label,
+.astratra-feedback__counter {
+  font-size: 0.8em;
+  color: var(--muted, #7c8a7a);
+}
+
+.astratra-feedback__counter {
+  text-align: right;
+}
+
+.astratra-feedback__comment textarea {
+  resize: vertical;
+  padding: 8px;
+  border: 1px solid var(--line, #2e3a31);
+  border-radius: 8px;
+  background: var(--bg, #0d1310);
+}
+
+.astratra-feedback__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.astratra-feedback__cancel,
+.astratra-feedback__send {
+  padding: 6px 14px;
+  border: 1px solid var(--line, #2e3a31);
+  border-radius: 8px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.astratra-feedback__send {
+  border-color: var(--lime, #d9ff66);
+  color: var(--lime, #d9ff66);
+}

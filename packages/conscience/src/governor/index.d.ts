@@ -383,3 +383,11 @@ export function parseRemoteSettings(raw: unknown): RemoteSettings;
 export function remotePolicy(localPolicy: GovernorPolicyInput, settings: RemoteSettings | null, options?: { costPerCycle?: number }): GovernorPolicyInput;
 export const REMOTE_SETTINGS_SCHEMA: 'conscience-settings/1';
 export const DECISION_RESULTS: readonly ['applied', 'already_applied', 'refused', 'failed'];
+
+/** Native driver objects; pass connection.db and connection.getClient() with mongoose. */
+export interface MongoDatabase { collection(name: string): any; client?: MongoSessionClient }
+export interface MongoSessionClient { startSession(): any }
+export interface MongoStoreOptions { prefix?: string; client?: MongoSessionClient }
+/** Requires a replica set or sharded cluster for atomic spending. */
+export function createMongoGovernorStore(db: MongoDatabase, options?: MongoStoreOptions): GovernorStore;
+export function mongoGovernorIndexes(db: MongoDatabase, options?: { prefix?: string }): Promise<void>;

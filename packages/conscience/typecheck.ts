@@ -137,3 +137,13 @@ async function remoteTypes() {
   void remote.applyDecisions(ruler, [{ id: 'd', proposalId: 'p', decision: 'apply', approver: { kind: 'human', id: 'a' } }]);
 }
 void remoteTypes;
+
+import { createMongoConscienceStore, mongoConscienceIndexes } from './src';
+import { createMongoGovernorStore, mongoGovernorIndexes } from './src/governor';
+import type { Db, MongoClient } from 'mongodb';
+function exerciseMongo(db: Db, client: MongoClient) {
+  const memory: ConscienceStore = createMongoConscienceStore(db, { prefix: 'memory' });
+  const control = createMongoGovernorStore(db, { prefix: 'governor', client });
+  return { memory, control, migrations: Promise.all([mongoConscienceIndexes(db), mongoGovernorIndexes(db)]) };
+}
+void exerciseMongo;

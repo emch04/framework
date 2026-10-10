@@ -18,6 +18,12 @@ Chaque package Astratra est versionné indépendamment.
 - `native-ui` : `react-native-svg` (>= 15) devient une dépendance facultative ; sans elle, un simple triangle, jamais un émoji.
 - Tests : aucun émoji rendu, pouce choisi plein, pouce en bas retourné, icônes de l'app respectées.
 
+## 2026-10-10 — `@astratra/centrale` 1.3.0 : client de la passerelle des clés
+
+### Ajouté
+- Entrée `/passerelle` : `lirePasserelle(env)` (`CENTRALE_ADRESSE`, `CENTRALE_PASSERELLE_JETON`, jeton `clj_pas_…` vérifié, HTTPS hors boucle locale), `modeleDiscussion(p)` (modèle `auto` au format OpenAI, à mettre en tête du relais d'une IA), `plongements`, `rechercher`, `voix`, et `passerelleDabord` (la passerelle d'abord, les clés directes seulement en cas de panne).
+- `PasserelleIndisponible` (injoignable, délai, 5xx, 429, 401/403, 503) et `RequetePasserelleRefusee` (400, 413, sans repli) ; tests.
+
 ## 2026-10-10 — `@astratra/centrale` 1.2.0 : surveillance renforcée
 
 ### Ajouté

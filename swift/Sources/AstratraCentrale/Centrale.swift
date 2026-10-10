@@ -266,11 +266,33 @@ public final class Centrale: @unchecked Sendable {
                 ajouter(.erreur(id: f.id, horodatage: f.horodatage, niveau: .fatal, exception: f.exception, filAriane: nil, etiquettes: nil))
             }
         }
+        // Un signal fatal (erreur Swift, accès mémoire…) noté au moment même : un plantage, même sans exception.
+        if fatale == nil, let numero = Plantages.lireSignal(dossier: dossier) {
+            let exception = Exception(type: "Plantage", message: Plantages.nom(numero), pile: [])
+            let f = Fatale(id: UUID().uuidString.lowercased(), horodatage: horodatage(), exception: exception, sessionId: nil)
+            ajouter(.erreur(id: f.id, horodatage: f.horodatage, niveau: .fatal, exception: f.exception, filAriane: nil, etiquettes: nil))
+            fatale = f
+        }
+        let auPremierPlan = Plantages.etaitAuPremierPlan(dossier: dossier)
         if let donnees = try? Data(contentsOf: fichierSession), let ouverte = try? JSONDecoder().decode(SessionEnCours.self, from: donnees) {
             try? FileManager.default.removeItem(at: fichierSession)
-            let etat: EtatSession = fatale?.sessionId == ouverte.id ? .plantage : .anormal
+            let plantee = fatale != nil && (fatale?.sessionId == nil || fatale?.sessionId == ouverte.id)
+            let etat: EtatSession = plantee ? .plantage : .anormal
             ajouter(.session(id: ouverte.id, horodatage: horodatage(), etat: etat, dureeMs: nil))
+            // Fermée pendant l'usage sans plantage noté (mémoire, chien de garde, arrêt forcé) : signalée aussi comme
+            // un problème, pas seulement comme une session anormale.
+            if !plantee, auPremierPlan {
+                let exception = Exception(type: "FermetureInattendue", message: "L'app s'est fermée au premier plan sans se terminer normalement.", pile: [])
+                ajouter(.erreur(id: UUID().uuidString.lowercased(), horodatage: horodatage(), niveau: .fatal, exception: exception, filAriane: nil, etiquettes: nil))
+            }
         }
+    }
+
+    /// Un plantage connu après coup (rapport d'Apple) : envoyé tout de suite comme une erreur fatale.
+    func garderEtEnvoyerFatale(type: String, message: String, pile: [Cadre]) {
+        guard actif else { return }
+        let exception = Exception(type: String(type.prefix(200)), message: Masquage.texte(String(message.prefix(4000)), noms: config.noms), pile: pile)
+        ajouter(.erreur(id: UUID().uuidString.lowercased(), horodatage: horodatage(), niveau: .fatal, exception: exception, filAriane: nil, etiquettes: nil))
     }
 
     // MARK: - File d'attente

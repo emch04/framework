@@ -153,3 +153,41 @@ struct PanneEssai: LocalizedError {
     #expect(Masquage.texte("password=hunter2") == "password=[masque]")
     #expect(Masquage.texte("Bonjour Léa", noms: ["Léa"]) == "Bonjour [nom]")
 }
+
+@Test func unSignalFatalNoteDevientUnPlantageAuLancementSuivant() async throws {
+    let dossier = FileManager.default.temporaryDirectory.appendingPathComponent("centrale-essai-\(UUID().uuidString)")
+    defer { try? FileManager.default.removeItem(at: dossier) }
+    let premier = Centrale.demarrer(config(dossier: dossier), transport: FauxTransport().transport, minuterie: false)
+    premier.session(.debut)
+    // Ce que le gestionnaire de signal écrit au moment du plantage (erreur fatale Swift : SIGTRAP).
+    try "\(SIGTRAP)\n".write(to: Plantages.fichierSignal(dossier), atomically: true, encoding: .utf8)
+
+    let faux = FauxTransport()
+    let second = Centrale.demarrer(config(dossier: dossier), transport: faux.transport, minuterie: false)
+    await second.vider()
+    let types = faux.evenements.map { "\($0["type"] ?? "")/\($0["niveau"] ?? $0["etat"] ?? "")" }
+    #expect(types == ["erreur/fatal", "session/plantage"])
+    let exception = String(describing: faux.evenements.first?["exception"] ?? "")
+    #expect(exception.contains("SIGTRAP"))
+}
+
+@Test func uneFermetureAuPremierPlanSansPlantageEstSignaleeMaisPasEnArrierePlan() async throws {
+    let dossier = FileManager.default.temporaryDirectory.appendingPathComponent("centrale-essai-\(UUID().uuidString)")
+    defer { try? FileManager.default.removeItem(at: dossier) }
+    // Au premier plan, la session ouverte ne s'est jamais fermée : une fermeture inattendue.
+    let premier = Centrale.demarrer(config(dossier: dossier), transport: FauxTransport().transport, minuterie: false)
+    premier.session(.debut)
+    Plantages.noterPremierPlan(true, dossier: dossier)
+    let faux = FauxTransport()
+    let second = Centrale.demarrer(config(dossier: dossier), transport: faux.transport, minuterie: false)
+    await second.vider()
+    #expect(faux.evenements.map { "\($0["type"] ?? "")/\($0["niveau"] ?? $0["etat"] ?? "")" } == ["session/anormal", "erreur/fatal"])
+
+    // En arrière-plan (le système peut tuer l'app sans raison de s'alarmer) : la session seulement, aucune erreur.
+    second.session(.debut)
+    Plantages.noterPremierPlan(false, dossier: dossier)
+    let faux3 = FauxTransport()
+    let troisieme = Centrale.demarrer(config(dossier: dossier), transport: faux3.transport, minuterie: false)
+    await troisieme.vider()
+    #expect(faux3.evenements.map { "\($0["type"] ?? "")/\($0["niveau"] ?? $0["etat"] ?? "")" } == ["session/anormal"])
+}

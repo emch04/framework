@@ -103,18 +103,45 @@ export async function plongements(p: Passerelle, textes: string[], options: { di
   return data.map((d) => d.embedding as number[]);
 }
 
-export interface ResultatRecherche { position: number; titre: string; url: string; extrait: string }
+export interface ResultatRecherche {
+  position: number; titre: string; url: string; extrait: string;
+  /** La date de parution, quand Google la donne (« 2 sept. 2026 »). */
+  date?: string;
+  /** Les titres des sous-liens du résultat. */
+  liens?: string[];
+}
 
-/** Une recherche web (Serper, puis SerpApi en repli), résultats normalisés. */
+/** Une recherche récente : Google limité à la dernière heure, au jour, à la semaine, au mois ou à l'an. */
+export type PeriodeRecherche = 'heure' | 'jour' | 'semaine' | 'mois' | 'an';
+
+export interface ReponseRecherche {
+  fournisseur: string;
+  resultats: ResultatRecherche[];
+  /** L'encadré de réponse de Google, s'il y en a un. */
+  encadre?: { reponse: string; titre: string; url: string | null };
+  /** La fiche de Google (Knowledge Graph), s'il y en a une. */
+  fiche?: { titre: string; description: string; site: string | null };
+  periode?: PeriodeRecherche;
+}
+
+/** Une recherche web (Serper, puis SerpApi en repli), résultats normalisés ; `periode` la limite aux résultats récents. */
 export async function rechercher(
   p: Passerelle,
-  demande: { requete: string; nombre?: number; langue?: string; pays?: string },
+  demande: { requete: string; nombre?: number; langue?: string; pays?: string; periode?: PeriodeRecherche },
   options: { signal?: AbortSignal } = {}
-): Promise<{ fournisseur: string; resultats: ResultatRecherche[] }> {
-  const reponse = await appeler(p, '/v1/passerelle/recherche', { requete: demande.requete, nombre: demande.nombre ?? 10, langue: demande.langue, pays: demande.pays }, options.signal);
-  const json = (await reponse.json()) as { fournisseur?: unknown; resultats?: unknown };
+): Promise<ReponseRecherche> {
+  const reponse = await appeler(p, '/v1/passerelle/recherche', {
+    requete: demande.requete, nombre: demande.nombre ?? 10, langue: demande.langue, pays: demande.pays, periode: demande.periode
+  }, options.signal);
+  const json = (await reponse.json()) as Partial<ReponseRecherche>;
   if (!Array.isArray(json?.resultats)) throw new PasserelleIndisponible(reponse.status, 'réponse inattendue');
-  return { fournisseur: String(json.fournisseur ?? ''), resultats: json.resultats as ResultatRecherche[] };
+  return {
+    fournisseur: String(json.fournisseur ?? ''),
+    resultats: json.resultats,
+    ...(json.encadre ? { encadre: json.encadre } : {}),
+    ...(json.fiche ? { fiche: json.fiche } : {}),
+    ...(json.periode ? { periode: json.periode } : {})
+  };
 }
 
 /** Une voix d'IA (Gemini) : l'audio (WAV par défaut, ou PCM) avec sa fréquence et ses canaux. */

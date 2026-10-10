@@ -21,7 +21,7 @@ test('envoi : adresse, en-têtes, enveloppe conforme au contrat', async () => {
   assert.equal(r.entetes['Content-Type'], 'application/json');
   const envoi = t.envois()[0];
   assert.equal(envoi.version, 1);
-  assert.deepEqual(envoi.sdk, { nom: '@astratra/centrale', version: '1.3.0' });
+  assert.deepEqual(envoi.sdk, { nom: '@astratra/centrale', version: '1.4.0' });
   assert.equal(envoi.contexte.environnement, 'developpement');
   assert.equal(envoi.contexte.version, '1.2.3');
   assert.equal(envoi.contexte.plateforme, 'serveur');

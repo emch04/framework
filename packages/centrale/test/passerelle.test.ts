@@ -33,19 +33,21 @@ test('lirePasserelle : jeton bien formé et adresse HTTPS, sinon rien de branch�
 test('plongements, recherche et voix : jeton porteur, formats lus', async () => {
   const { f, appels } = fauxFetch([
     () => json(200, { data: [{ index: 1, embedding: [0, 1] }, { index: 0, embedding: [1, 0] }] }),
-    () => json(200, { fournisseur: 'serper', resultats: [{ position: 1, titre: 'T', url: 'https://x.fr', extrait: 'E' }] }),
+    () => json(200, { fournisseur: 'serper', periode: 'an', encadre: { reponse: 'R', titre: 'A', url: null }, fiche: { titre: 'F', description: 'D', site: null },
+      resultats: [{ position: 1, titre: 'T', url: 'https://x.fr', extrait: 'E', date: '2 sept. 2026', liens: ['L'] }] }),
     () => new Response(new Uint8Array([82, 73, 70, 70]), { status: 200, headers: { 'Content-Type': 'audio/wav', 'X-Audio-Rate': '24000', 'X-Audio-Channels': '1' } })
   ]);
   const p = lirePasserelle({ CENTRALE_ADRESSE: 'https://c.fr', CENTRALE_PASSERELLE_JETON: JETON }, { fetch: f })!;
   assert.deepEqual(await plongements(p, ['a', 'b'], { dimensions: 768 }), [[1, 0], [0, 1]], 'remis dans l’ordre des textes');
-  const r = await rechercher(p, { requete: 'météo Paris', nombre: 3, langue: 'fr' });
+  const r = await rechercher(p, { requete: 'météo Paris', nombre: 3, langue: 'fr', periode: 'an' });
   assert.equal(r.resultats[0].url, 'https://x.fr');
+  assert.deepEqual([r.resultats[0].date, r.resultats[0].liens, r.encadre?.reponse, r.fiche?.description, r.periode], ['2 sept. 2026', ['L'], 'R', 'D', 'an']);
   const v = await voix(p, { texte: 'Bonjour', langue: 'fr' });
   assert.deepEqual([v.audio.length, v.type, v.frequence, v.canaux], [4, 'audio/wav', 24000, 1]);
   assert.deepEqual(appels.map((a) => a.url), ['https://c.fr/v1/passerelle/ia/embeddings', 'https://c.fr/v1/passerelle/recherche', 'https://c.fr/v1/passerelle/voix']);
   assert.ok(appels.every((a) => (a.init.headers as Record<string, string>).Authorization === `Bearer ${JETON}`));
   assert.deepEqual(appels[0].corps, { model: 'auto', input: ['a', 'b'], dimensions: 768 });
-  assert.deepEqual(appels[1].corps, { requete: 'météo Paris', nombre: 3, langue: 'fr' });
+  assert.deepEqual(appels[1].corps, { requete: 'météo Paris', nombre: 3, langue: 'fr', periode: 'an' });
 });
 
 test('pannes : 5xx, 429, 503, jeton refusé et réseau coupé => indisponible ; 400 et 413 => refusée', async () => {

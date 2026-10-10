@@ -18,6 +18,11 @@ Chaque package Astratra est versionné indépendamment.
 - `native-ui` : `react-native-svg` (>= 15) devient une dépendance facultative ; sans elle, un simple triangle, jamais un émoji.
 - Tests : aucun émoji rendu, pouce choisi plein, pouce en bas retourné, icônes de l'app respectées.
 
+## 2026-10-10 — `@astratra/centrale` 1.4.0 : recherche récente par la passerelle
+
+### Ajouté
+- `rechercher` : option `periode` (`heure`, `jour`, `semaine`, `mois`, `an`) pour des résultats récents ; la réponse porte l'encadré de réponse (`encadre`) et la fiche (`fiche`) de Google, et chaque résultat sa `date` et ses sous-liens (`liens`) quand Google les donne. Types `PeriodeRecherche`, `ReponseRecherche` ; tests.
+
 ## 2026-10-10 — `@astratra/centrale` 1.3.0 : client de la passerelle des clés
 
 ### Ajouté

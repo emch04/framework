@@ -3,5 +3,6 @@ module.exports = {
   ...require('./cache'),
   ...require('./retry'),
   ...require('./jobLock'),
-  ...require('./timerRegistry')
+  ...require('./timerRegistry'),
+  ...require('./keepAliveFetch')
 };

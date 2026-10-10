@@ -3,6 +3,11 @@
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Chaque package Astratra est versionné indépendamment.
 
+## 2026-10-10 — `@astratra/resilience` 1.1.0 : connexions gardées ouvertes
+
+### Ajouté
+- `createKeepAliveFetch` : un fetch (undici) dont les connexions restent ouvertes 4 min (réglable) au lieu des 4 s de Node, pour qu'un appel espacé ne refasse pas la poignée de main TLS ; une demande partie sur une connexion fermée par l'autre côté est refaite une fois (jamais un corps en flux ni une demande annulée) ; `close()`. `isStaleConnection`. Dépendance : `undici`. Tests (même connexion après 5 s, relance unique).
+
 ## 2026-10-10 — `@astratra/agent` 1.1.0 : montrer une réponse pendant qu'elle s'écrit
 
 ### Ajouté

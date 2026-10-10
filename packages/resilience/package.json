@@ -1,7 +1,7 @@
 {
   "name": "@astratra/resilience",
-  "version": "1.0.0",
-  "description": "Circuit breaker with a single half-open probe, a TTL cache that degrades instead of failing, retry with jitter, a cluster-wide job lock and a background timer registry.",
+  "version": "1.1.0",
+  "description": "Circuit breaker with a single half-open probe, a TTL cache that degrades instead of failing, retry with jitter, a cluster-wide job lock and a background timer registry, and a fetch that keeps its connections open.",
   "engines": {
     "node": ">=20"
   },
@@ -27,7 +27,8 @@
     "resilience",
     "job-lock",
     "cluster",
-    "timers"
+    "timers",
+    "keep-alive"
   ],
   "license": "MIT",
   "publishConfig": {
@@ -35,5 +36,8 @@
   },
   "devDependencies": {
     "jest": "30.4.2"
+  },
+  "dependencies": {
+    "undici": "^7.30.0"
   }
 }

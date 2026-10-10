@@ -72,7 +72,21 @@ function useReducedMotion() {
   return typeof hook === 'function' ? Boolean(hook()) : false;
 }
 
+/**
+ * react-native-svg is an optional peer: it draws the icons (the feedback thumbs). Without it, those
+ * components fall back to a plain shape, never to an emoji.
+ */
+let Svg = null;
+try {
+  const svg = require('react-native-svg');
+  const Racine = svg.Svg || interop(svg);
+  if (Racine && svg.Path) Svg = { Svg: Racine, Path: svg.Path };
+} catch {
+  Svg = null;
+}
+
 module.exports = {
+  Svg,
   React,
   RN,
   h,

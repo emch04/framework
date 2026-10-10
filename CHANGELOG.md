@@ -3,6 +3,13 @@
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Chaque package Astratra est versionné indépendamment.
 
+## 2026-10-10 — `@astratra/native-ui` 1.2.0 et `@astratra/saas-kit-ui` 1.3.0 : pouces dessinés
+
+### Modifié
+- `FeedbackBar` (mobile et web) : les pouces sont des icônes vectorielles, plus jamais des émojis (👍/👎 changeaient d'aspect selon le système). Un même contour sur une grille de 24, retourné pour le pouce en bas, plein une fois choisi ; couleur du texte, puis blanc (mobile) ou `--lime` (web) quand il est choisi. `icons` remplace toujours ce dessin.
+- `native-ui` : `react-native-svg` (>= 15) devient une dépendance facultative ; sans elle, un simple triangle, jamais un émoji.
+- Tests : aucun émoji rendu, pouce choisi plein, pouce en bas retourné, icônes de l'app respectées.
+
 ## 2026-10-10 — `AstratraCentrale` 1.0.0 (Swift, nouveau paquet)
 
 ### Ajouté

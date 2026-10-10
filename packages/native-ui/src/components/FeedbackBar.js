@@ -9,7 +9,7 @@
  * Words come from the app (`labels`, `locale`); the haptic tick is optional
  * (expo-haptics when installed, or the function the app passes).
  */
-const { React, h, RN, useScheme } = require('./runtime');
+const { React, h, RN, Svg, useScheme } = require('./runtime');
 const { GlassButton } = require('./GlassButton');
 const { usePaleCardColors } = require('./PaleCard');
 const {
@@ -23,6 +23,33 @@ const {
 } = require('../logic/feedbackBar');
 
 const DEFAULT_ACCENT = '#3b6cf0';
+
+/**
+ * The thumbs are drawn, never emoji (an emoji changes with the system and looks out of place in a
+ * product). One outline on a 24 grid; down is the same hand turned upside down; filled once chosen.
+ * Without react-native-svg: a plain triangle, still not an emoji.
+ */
+const THUMB_PATH = 'M7 21H4.5A1.5 1.5 0 0 1 3 19.5v-8A1.5 1.5 0 0 1 4.5 10H7M7 21V10l4.2-6.3A1.6 1.6 0 0 1 14 4.6V9h5a2 2 0 0 1 2 2.4l-1.5 7.9A2 2 0 0 1 17.5 21H7';
+
+function thumbIcon(rating, { color, filled, size }) {
+  const side = Math.round(size * 0.5);
+  if (!Svg) {
+    return h(RN.Text, { style: { color, fontSize: Math.round(size * 0.36) } }, rating === 'down' ? '\u25BC' : '\u25B2');
+  }
+  return h(
+    Svg.Svg,
+    { width: side, height: side, viewBox: '0 0 24 24' },
+    h(Svg.Path, {
+      d: THUMB_PATH,
+      stroke: color,
+      strokeWidth: 1.8,
+      strokeLinecap: 'round',
+      strokeLinejoin: 'round',
+      fill: filled ? color : 'none',
+      transform: rating === 'down' ? 'matrix(1 0 0 -1 0 24)' : undefined
+    })
+  );
+}
 
 /* expo-haptics is an optional peer: absent, the bar is silent. */
 let cachedHaptics;
@@ -99,7 +126,7 @@ function FeedbackBar({
     if (onSubmit) onSubmit(payload);
   };
 
-  const thumb = (rating, glyph) => {
+  const thumb = (rating) => {
     const state = feedbackButtonState({ value, rating, labels: words, disabled });
     return h(
       GlassButton,
@@ -114,7 +141,7 @@ function FeedbackBar({
         testID: testID ? `${testID}-${rating}` : undefined,
         onPress: () => press(rating)
       },
-      icons && icons[rating] ? icons[rating] : h(RN.Text, { style: { fontSize: Math.round(size * 0.46) } }, glyph)
+      icons && icons[rating] ? icons[rating] : thumbIcon(rating, { color: state.selected ? '#ffffff' : textColor, filled: state.selected, size })
     );
   };
 
@@ -141,8 +168,8 @@ function FeedbackBar({
   return h(
     RN.View,
     { testID, accessibilityRole: 'toolbar', accessibilityLabel: words.group, style: [{ flexDirection: 'row', alignItems: 'center', gap: 8 }, style] },
-    thumb('up', '\u{1F44D}'),
-    thumb('down', '\u{1F44E}'),
+    thumb('up'),
+    thumb('down'),
     h(
       RN.Modal,
       { visible: asking, transparent: true, animationType: 'slide', onRequestClose: close },

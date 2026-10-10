@@ -35,6 +35,16 @@ test('payload: reason only with down and only if listed, comment trimmed and cut
   assert.deepEqual(feedbackReasonOptions({ reasons: ['a', 'too_long'], labels: resolveFeedbackLabels(), selected: 'a' }).map((o) => [o.id, o.label, o.selected]), [['a', 'a', true], ['too_long', 'Too long', false]]);
 });
 
+test('thumbs are drawn icons, never emoji; the chosen one is filled', () => {
+  const html = renderToStaticMarkup(h(FeedbackBar, { value: 'up' }));
+  assert.ok(!/\u{1F44D}|\u{1F44E}/u.test(html), 'no emoji thumb');
+  assert.equal((html.match(/<svg/g) || []).length, 2);
+  assert.match(html, /aria-pressed="true"[^]*?<path[^>]*fill="currentColor"/);
+  assert.match(html, /matrix\(1 0 0 -1 0 24\)/, 'down is the hand turned over');
+  const own = renderToStaticMarkup(h(FeedbackBar, { icons: { up: h('i', null, 'U'), down: h('i', null, 'D') } }));
+  assert.ok(own.includes('<i>U</i>') && !own.includes('<svg'), 'the app can still pass its own icons');
+});
+
 test('markup: a labelled group of two pressable buttons, state exposed', () => {
   const html = renderToStaticMarkup(h(FeedbackBar, { value: 'up' }));
   assert.match(html, /role="group"[^>]*aria-label="Rate this answer"|aria-label="Rate this answer"[^>]*role="group"/);

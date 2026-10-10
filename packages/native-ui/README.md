@@ -490,7 +490,7 @@ Aucun texte, aucune icône, aucun chargement en dur : tout vient des props.
 
 # Les retours
 
-## FeedbackBar : 👍 / 👎 sous une réponse
+## FeedbackBar : pouces sous une réponse
 
 Deux boutons en verre discrets sous la réponse d'une IA. Le pouce haut part
 tout de suite ; le pouce bas ouvre une feuille (raison, commentaire facultatif)
@@ -521,6 +521,7 @@ import { FeedbackBar } from '@astratra/native-ui';
 - **Haptique** : `expo-haptics` (pair facultatif) donne un léger tic ; `haptics={false}`
   le coupe, `haptics={() => …}` le remplace. Sans le module, la barre est muette.
 - **Style** : `accent`, `size`, `scheme`, `pageBackground`, `ink`, `icons`
+- **Pouces dessinés, jamais d'émojis** : contour vectoriel (`react-native-svg`, dépendance facultative), plein une fois choisi ; sans `react-native-svg`, un simple triangle. `icons` (`{ up, down }`) remplace ce dessin par ceux de l'app.
   (nœuds à la place des émojis).
 - **Règles pures** (entrée `@astratra/native-ui/logic`, testées en Node) :
   `FEEDBACK_REASONS`, `FEEDBACK_LABELS`, `resolveFeedbackLabels`,

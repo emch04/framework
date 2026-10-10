@@ -114,8 +114,17 @@ h3 {
   border-radius: 999px;
   background: transparent;
   cursor: pointer;
+  color: var(--text, currentColor);
   opacity: 0.7;
   transition: opacity 120ms, background 120ms;
+}
+
+.astratra-feedback__icon {
+  display: block;
+}
+
+.astratra-feedback__thumb[aria-pressed="true"] .astratra-feedback__icon {
+  color: var(--lime, #d9ff66);
 }
 
 .astratra-feedback__thumb:hover:not(:disabled),

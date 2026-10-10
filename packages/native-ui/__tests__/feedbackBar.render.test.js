@@ -6,6 +6,12 @@ jest.mock('react-native-reanimated', () => require('../test/rn').reanimated(), {
 jest.mock('expo-glass-effect', () => require('../test/rn').glassEffect(), { virtual: true });
 jest.mock('expo-blur', () => require('../test/rn').blur(), { virtual: true });
 jest.mock('expo-linear-gradient', () => require('../test/rn').linearGradient(), { virtual: true });
+/* react-native-svg rendered as DOM svg/path, props readable. */
+jest.mock('react-native-svg', () => {
+  const R = require('react');
+  const el = (tag) => ({ children, ...props }) => R.createElement(tag, { 'data-props': JSON.stringify(props) }, children);
+  return { Svg: el('svg'), Path: el('path') };
+}, { virtual: true });
 const mockTicks = [];
 jest.mock('expo-haptics', () => ({ selectionAsync: () => { mockTicks.push('selection'); return Promise.resolve(); } }), { virtual: true });
 
@@ -23,6 +29,16 @@ afterEach(() => {
 });
 
 describe('FeedbackBar', () => {
+  test('thumbs are drawn icons, never emoji; the chosen one is filled', () => {
+    const { container } = render(h(ui.FeedbackBar, { value: 'up' }));
+    expect(/\u{1F44D}|\u{1F44E}/u.test(container.textContent)).toBe(false);
+    const paths = [...container.querySelectorAll('path')].map((p) => JSON.parse(p.getAttribute('data-props')));
+    expect(paths).toHaveLength(2);
+    expect(paths[0].fill).not.toBe('none');
+    expect(paths[1].fill).toBe('none');
+    expect(paths[1].transform).toBe('matrix(1 0 0 -1 0 24)');
+  });
+
   test('two buttons with the app\'s words; the chosen one is marked', () => {
     const { getByLabelText } = render(h(ui.FeedbackBar, { value: 'up' }));
     expect(getByLabelText('Good answer').getAttribute('aria-selected')).toBe('true');

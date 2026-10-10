@@ -8,7 +8,24 @@ import {
   resolveFeedbackLabels
 } from '../lib/feedbackBar.js';
 
-const THUMBS = { up: '\u{1F44D}', down: '\u{1F44E}' };
+/**
+ * The thumbs are drawn, never emoji (an emoji changes with the system and looks out of place in a
+ * product). One outline on a 24 grid; down is the same hand turned upside down. Filled once chosen.
+ */
+export const THUMB_PATH = 'M7 21H4.5A1.5 1.5 0 0 1 3 19.5v-8A1.5 1.5 0 0 1 4.5 10H7M7 21V10l4.2-6.3A1.6 1.6 0 0 1 14 4.6V9h5a2 2 0 0 1 2 2.4l-1.5 7.9A2 2 0 0 1 17.5 21H7';
+
+function thumbIcon(rating, filled) {
+  return h('svg', {
+    'aria-hidden': 'true', focusable: 'false', viewBox: '0 0 24 24', width: 18, height: 18,
+    className: 'astratra-feedback__icon', fill: 'none', stroke: 'currentColor',
+    strokeWidth: 1.8, strokeLinecap: 'round', strokeLinejoin: 'round'
+  }, h('path', {
+    d: THUMB_PATH,
+    fill: filled ? 'currentColor' : 'none',
+    fillOpacity: filled ? 0.9 : undefined,
+    transform: rating === 'down' ? 'matrix(1 0 0 -1 0 24)' : undefined
+  }));
+}
 
 /**
  * Thumbs up / thumbs down under an AI answer. Controlled: the app keeps
@@ -45,7 +62,7 @@ export default function FeedbackBar({
   const thumb = (rating) => h('button', {
     key: rating, type: 'button', disabled, 'aria-pressed': value === rating, 'aria-label': words[rating], title: words[rating],
     className: 'astratra-feedback__thumb', 'data-rating': rating, onClick: () => press(rating)
-  }, icons?.[rating] ?? h('span', { 'aria-hidden': 'true' }, THUMBS[rating]));
+  }, icons?.[rating] ?? thumbIcon(rating, value === rating));
 
   const options = feedbackReasonOptions({ reasons, labels: words, selected: reason });
   return h('div', { id, role: 'group', 'aria-label': words.group, className: ['astratra-feedback', className].filter(Boolean).join(' '), style },

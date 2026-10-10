@@ -897,3 +897,54 @@ export const TRUSTED_DEVICE_SECRET_PATTERN: RegExp;
 
 export const DEFAULT_PERMISSIONS_POLICY: 'geolocation=(), camera=(), microphone=(), payment=()';
 export const DEFAULT_CSRF_COOKIE_NAME: 'astratra_csrf';
+
+/* ────────────────────────── Jetons d'identité (OpenID Connect) ────────────────────────── */
+
+export type IdTokenErrorCode = 'malformed' | 'unknown_key' | 'keys_unavailable' | 'expired' | 'invalid' | 'nonce_mismatch';
+export const ID_TOKEN_ERROR_CODES: IdTokenErrorCode[];
+
+export class IdTokenError extends Error {
+  name: 'IdTokenError';
+  code: IdTokenErrorCode;
+  /** 503 quand les clés du fournisseur sont injoignables, 401 sinon. */
+  statusCode: 401 | 503;
+  constructor(code: IdTokenErrorCode, message?: string);
+}
+
+export interface IdTokenProfile {
+  /** Le `sub` : le seul lien durable entre un compte et le fournisseur. */
+  subject: string;
+  /** En minuscules, ou null. */
+  email: string | null;
+  /** Vrai seulement si le fournisseur affirme avoir vérifié l'adresse. */
+  emailVerified: boolean;
+  /** Adresse relais d'Apple (« Masquer mon adresse »). */
+  relayEmail: boolean;
+  /** Le client pour lequel le jeton a été émis. */
+  audience: string;
+  claims: Record<string, unknown>;
+}
+
+export interface IdTokenVerifierOptions {
+  jwksUrl: string;
+  issuers: string[];
+  audiences: string[];
+  fetch?: (url: string, init?: { signal?: AbortSignal }) => Promise<{ ok: boolean; status?: number; json(): Promise<unknown> }>;
+  now?: () => number;
+  cacheMs?: number;
+  minRefreshMs?: number;
+  timeoutMs?: number;
+  clockToleranceSec?: number;
+}
+
+export type IdTokenVerifier = (idToken: string, expected?: { nonce?: string | string[] | null }) => Promise<IdTokenProfile>;
+
+export function createIdTokenVerifier(options: IdTokenVerifierOptions): IdTokenVerifier;
+export function createGoogleIdTokenVerifier(options: Omit<IdTokenVerifierOptions, 'jwksUrl' | 'issuers'>): IdTokenVerifier;
+export function createAppleIdTokenVerifier(options: Omit<IdTokenVerifierOptions, 'jwksUrl' | 'issuers'>): IdTokenVerifier;
+/** SHA-256 en hexadécimal, comme Apple place le nonce dans le jeton. */
+export function hashNonce(rawNonce: string): string;
+export const GOOGLE_JWKS_URL: string;
+export const GOOGLE_ISSUERS: string[];
+export const APPLE_JWKS_URL: string;
+export const APPLE_ISSUERS: string[];

@@ -390,3 +390,41 @@ test('a registration without its identifiers is refused', async () => {
 
   assert.equal(response.status, 400);
 });
+
+/* ─────────────────────────── issueSession ─────────────────────────── */
+
+test('issueSession opens the same session as /auth/login, refresh chain included', async () => {
+  let fromContext = null;
+  const users = createMemoryUsersStore();
+  const app = appWith({
+    usersStore: users,
+    refreshTokens: { enabled: true },
+    extendRoutes: (routes, context) => {
+      fromContext = context.issueSession;
+      /* A product's own way in (an ID token, an invitation) proves the identity, then hands over. */
+      routes.post('/external', async (req, res) => {
+        const user = await users.findByEmail('owner@example.test');
+        res.json(await context.issueSession(res, user));
+      });
+    }
+  });
+
+  assert.equal(typeof fromContext, 'function');
+  assert.equal(app.issueSession, fromContext);
+  const external = await request(app, 'POST', '/external', { body: {} });
+  assert.equal(external.status, 200);
+  assert.equal(typeof external.body.token, 'string');
+  assert.match(external.body.refreshToken, /^[0-9a-f]{64}$/);
+  assert.equal(external.body.user.password, undefined);
+  assert.match(String(external.headers['set-cookie']), /HttpOnly/i);
+
+  const me = await request(app, 'GET', '/auth/me', { token: external.body.token });
+  assert.equal(me.status, 200);
+  const refreshed = await request(app, 'POST', '/auth/refresh', { body: { refreshToken: external.body.refreshToken } });
+  assert.equal(refreshed.status, 200);
+});
+
+test('issueSession refuses an account without an id', async () => {
+  const app = appWith();
+  await assert.rejects(() => app.issueSession(null, {}), /requires an account/);
+});

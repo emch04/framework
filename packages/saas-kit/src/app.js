@@ -212,11 +212,15 @@ function createSaasApp(options = {}) {
       || Boolean(userLoginSkip && userLoginSkip(req, res))
   });
 
-  app.use('/auth', loginLimiter, createAuthRoutes({
+  const authRoutes = createAuthRoutes({
     ...normalized,
     authMiddleware,
     csrfMiddleware
-  }));
+  });
+  app.use('/auth', loginLimiter, authRoutes);
+  /* Opens the same session as /auth/login for an identity the product proved
+     itself (Google, Apple, an invitation): one issuer, never a second one. */
+  const issueSession = authRoutes.issueSession;
 
   app.use('/users', authMiddleware, csrfMiddleware, createUsersRoutes({
     usersStore: normalized.usersStore,
@@ -242,6 +246,7 @@ function createSaasApp(options = {}) {
   app.authMiddleware = authMiddleware;
   app.csrfMiddleware = csrfMiddleware;
   app.authorizeAdmin = authorizeAdmin;
+  app.issueSession = issueSession;
 
   // createSaasApp() already terminates its own middleware stack with a
   // catch-all 404 + error handler below. Any route registered on `app`
@@ -258,7 +263,7 @@ function createSaasApp(options = {}) {
   //     }
   //   });
   if (typeof normalized.extendRoutes === 'function') {
-    normalized.extendRoutes(app, { authMiddleware, csrfMiddleware, authorizeAdmin, authorizeRoles });
+    normalized.extendRoutes(app, { authMiddleware, csrfMiddleware, authorizeAdmin, authorizeRoles, issueSession });
   }
 
   app.use(notFoundMiddleware);

@@ -20,5 +20,6 @@ module.exports = {
   ...require('./auditChain'),
   ...require('./privateFileLinks'),
   ...require('./loginDevices'),
-  ...require('./trustedDevices')
+  ...require('./trustedDevices'),
+  ...require('./idTokens')
 };

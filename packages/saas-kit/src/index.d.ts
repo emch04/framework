@@ -79,14 +79,30 @@ export interface SaasApp {
   csrfMiddleware: RequestHandler;
   /** authorizeRoles(...options.roles.adminRoles) — the exact admin-role guard used internally. */
   authorizeAdmin: RequestHandler;
+  /** Opens the same session as /auth/login for an account the product proved itself. */
+  issueSession: IssueSession;
   [key: string]: unknown;
 }
+
+/** The body /auth/login answers with. */
+export interface IssuedSession {
+  token: string;
+  user: Record<string, unknown>;
+  refreshToken?: string;
+}
+
+/**
+ * Opens a session (access token, session cookie when `res` is given, refresh
+ * chain when enabled) for an account whose identity is already proven.
+ */
+export type IssueSession = (res: unknown, user: { id: unknown; [key: string]: unknown }) => Promise<IssuedSession>;
 
 export interface ExtendRoutesContext {
   authMiddleware: RequestHandler;
   csrfMiddleware: RequestHandler;
   authorizeAdmin: RequestHandler;
   authorizeRoles: (...roles: string[]) => RequestHandler;
+  issueSession: IssueSession;
 }
 
 export interface CreateSaasAppOptions {

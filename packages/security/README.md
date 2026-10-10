@@ -820,6 +820,50 @@ déconnexion. Garde le secret d'appareil sous sa propre clé (non effacée par
 `clear()`), et fonde l'offre « se connecter avec Face ID » sur la présence de ce
 secret et sur `gate.read().supported`, pas sur `enabled`.
 
+## Se connecter avec Google ou Apple (jetons d'identité)
+
+L'app obtient un **jeton d'identité** OpenID Connect (Sign in with Apple,
+Google Sign-In) et l'envoie au serveur, qui seul décide : il vérifie la
+signature avec les clés publiées par le fournisseur (JWKS), l'émetteur,
+l'audience (tes identifiants de client) et l'expiration. Aucune dépendance
+JOSE : Node lit les JWK, `jsonwebtoken` vérifie.
+
+```js
+const { createGoogleIdTokenVerifier, createAppleIdTokenVerifier, hashNonce, IdTokenError } = require('@astratra/security');
+
+const google = createGoogleIdTokenVerifier({ audiences: [IOS_CLIENT_ID, WEB_CLIENT_ID] });
+const apple = createAppleIdTokenVerifier({ audiences: ['com.example.app', 'com.example.web'] });
+
+try {
+  // Apple : l'app a demandé la connexion avec SHA-256(nonceBrut) ; le jeton porte cette empreinte.
+  const profile = await apple(req.body.idToken, { nonce: hashNonce(nonceBrutGardeParLeServeur) });
+  // { subject, email, emailVerified, relayEmail, audience, claims }
+} catch (error) {
+  if (error instanceof IdTokenError) return res.status(error.statusCode).json({ code: error.code });
+  throw error;
+}
+```
+
+Ce qui est garanti, et testé :
+
+- **RS256 seulement** : `none` et HS256 sont refusés avant toute lecture.
+- **Rotation bornée** : un `kid` inconnu recharge les clés une fois, jamais
+  plus d'une fois par `minRefreshMs` (60 s) ; les vérifications simultanées
+  partagent le chargement ; un fournisseur muet donne `keys_unavailable` (503).
+- **Nonce** : s'il est donné, il doit être exactement celui du jeton
+  (comparaison à temps constant).
+- **L'adresse n'est pas une preuve** : `emailVerified` n'est vrai que si le
+  fournisseur l'affirme (`email_verified`, booléen ou texte chez Apple), et
+  l'adresse relais d'Apple est signalée par `relayEmail`. Lie un compte au
+  fournisseur par `subject` (le `sub`), jamais par l'adresse.
+- Les codes d'erreur sont stables : `malformed`, `unknown_key`,
+  `keys_unavailable`, `expired`, `invalid`, `nonce_mismatch` ; le message ne
+  contient jamais le jeton.
+
+`createIdTokenVerifier({ jwksUrl, issuers, audiences })` sert tout autre
+fournisseur OpenID Connect ; `fetch` et `now` s'injectent pour les tests (faux
+JWKS signé localement, jamais le vrai réseau).
+
 ## Tests
 
 ```bash

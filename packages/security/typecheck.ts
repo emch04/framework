@@ -308,3 +308,22 @@ import { DEFAULT_PERMISSIONS_POLICY, DEFAULT_CSRF_COOKIE_NAME } from './src';
 const csrfName: 'astratra_csrf' = DEFAULT_CSRF_COOKIE_NAME;
 const permissions: string = DEFAULT_PERMISSIONS_POLICY;
 void csrfName; void permissions;
+
+/* ────────────────────────── Jetons d'identité ────────────────────────── */
+
+import { createAppleIdTokenVerifier, createGoogleIdTokenVerifier, createIdTokenVerifier, hashNonce, IdTokenError } from './src';
+import type { IdTokenProfile, IdTokenVerifier } from './src';
+
+async function exerciseIdTokens(): Promise<void> {
+  const google: IdTokenVerifier = createGoogleIdTokenVerifier({ audiences: ['client'] });
+  const apple: IdTokenVerifier = createAppleIdTokenVerifier({ audiences: ['com.example.app'], minRefreshMs: 60_000 });
+  const custom = createIdTokenVerifier({ jwksUrl: 'https://issuer.example/keys', issuers: ['https://issuer.example'], audiences: ['a'] });
+  try {
+    const profile: IdTokenProfile = await apple('jeton', { nonce: hashNonce('brut') });
+    void [profile.subject, profile.emailVerified, profile.relayEmail, profile.email, google, custom];
+  } catch (error) {
+    if (error instanceof IdTokenError) void [error.code, error.statusCode];
+  }
+}
+
+void exerciseIdTokens;

@@ -1,6 +1,6 @@
 {
   "name": "@astratra/centrale",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "description": "Paquet de collecte pour un tableau de bord de surveillance auto-hébergé : erreurs, vues, usages, sessions et appels d'IA, masqués à la source ; client des réglages, bilans et décisions de la conscience d'une IA. Sans aucune dépendance.",
   "type": "module",
   "exports": {

@@ -44,13 +44,25 @@ centrale.ia(fournisseur: "gemini", modele: "gemini-3.8-flash", dureeMs: 812,
 
 `Centrale.partagee` rend la dernière instance démarrée.
 
+## Ce qui est suivi par `suivreApplication()`
+
+- **Sessions** : début au lancement et au retour après 30 s, fin en arrière-plan prolongé ou à la fermeture ; une session restée ouverte devient « plantage » ou « anormale » au lancement suivant.
+- **Plantages** : exceptions Objective-C, signaux fatals (erreur Swift, accès mémoire, abandon) et rapports de plantage d'Apple (MetricKit) avec la pile du fil fautif.
+- **Fermetures sans plantage** : le dernier état de l'app est gardé sur le disque au fil de l'eau (les 50 dernières actions, la mémoire occupée, un blocage en cours). Au lancement suivant, une fermeture au premier plan (`FermetureInattendue`) ou pendant un blocage (`FermeturePendantBlocage`) part avec ce fil d'Ariane, l'écran, la mémoire au moment et la plus haute du lancement.
+- **App bloquée** : un gardien vérifie le fil principal toutes les 0,5 s ; une interface sans réponse plus de 2 s est signalée (`AppBloquee`, erreur au-delà de 5 s) avec sa durée.
+- **Appareil** : mémoire saturée (`MemoireSaturee`, au plus une fois par minute), surchauffe critique (`Surchauffe`), et dans le fil d'Ariane la température, l'économie d'énergie, le premier plan et l'arrière-plan.
+- **Rapports d'Apple** (MetricKit, livrés par le système) : blocages, excès de processeur ou d'écriture disque, lancements lents (iOS), avec la pile ; chaque jour, les fermetures comptées par raison (`rapport_apple`, et `FermeturesSysteme` quand le système a forcé la fermeture : mémoire, chien de garde, accès mémoire…).
+- Chaque erreur porte la mémoire occupée (`memoire_mo`) ; chaque écran entre dans le fil d'Ariane.
+- Hors mode strict, le contexte décrit l'appareil (`Appareil.decrire()` : modèle et mémoire, « iPhone17,2 · 8 Go »).
+
 ## Ce qui ne part jamais
 
 Le contenu des messages envoyés à une IA, le texte saisi, les identifiants réels dans les noms d'écran, le modèle d'appareil et l'utilisateur (en mode strict). L'appel d'IA n'a que des champs fixes : fournisseur, modèle, durée, jetons, résultat, outil.
 
 ## Limites
 
-- Les plantages Swift (`fatalError`, accès hors limites) ne passent pas par le gestionnaire d'exceptions : la session restée ouverte est signalée « anormale » au lancement suivant.
+- La pile d'un blocage n'est connue que par le rapport d'Apple (le gardien ne lit pas le fil principal).
+- Une app tuée en arrière-plan par le système (normal sur iPhone) n'est signalée que si un blocage était en cours.
 - Les noms de fonctions des piles ne sont pas symbolisés.
 
 ## Tests

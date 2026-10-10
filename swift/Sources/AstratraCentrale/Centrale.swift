@@ -11,7 +11,7 @@ public struct ConfigCentrale: Sendable {
     public var version: String?
     public var build: String?
     public var os: String?
-    /// Ignoré en mode strict.
+    /// Ignoré en mode strict. Hors mode strict et sans valeur : le modèle et la mémoire de l'appareil (`Appareil.decrire()`).
     public var appareil: String?
     public var langue: String?
     /// Mode strict (par défaut) : ni utilisateur, ni appareil précis.
@@ -60,7 +60,7 @@ public struct ConfigCentrale: Sendable {
 /// synchrones et rendent la main tout de suite ; l'envoi se fait en tâche de fond.
 public final class Centrale: @unchecked Sendable {
     public static let nomSDK = "astratra-centrale-swift"
-    public static let versionSDK = "1.0.0"
+    public static let versionSDK = "1.1.0"
 
     /// L'instance créée par le dernier `demarrer` (utile pour les erreurs captées loin de l'app).
     public static var partagee: Centrale? {
@@ -81,6 +81,8 @@ public final class Centrale: @unchecked Sendable {
     private var contexte: Contexte
     private var file: [(evenement: Evenement, contexte: Contexte)] = []
     private var miettes: [Miette] = []
+    /// Le dernier état gardé sur le disque (fil d'Ariane, mémoire, blocage) pour expliquer une fermeture au lancement suivant.
+    private var etatGarde = EtatGarde()
     private var debutSession: Date?
     private var erreursSession = 0
     private var echecs = 0
@@ -113,7 +115,8 @@ public final class Centrale: @unchecked Sendable {
         let propre: (String?) -> String? = { $0.flatMap { $0.isEmpty ? nil : Masquage.texte($0, noms: noms) } }
         contexte = Contexte(
             environnement: config.environnement, version: propre(config.version), build: propre(config.build),
-            plateforme: config.plateforme, os: propre(config.os), appareil: config.strict ? nil : propre(config.appareil),
+            plateforme: config.plateforme, os: propre(config.os),
+            appareil: config.strict ? nil : propre(config.appareil ?? Appareil.decrire()),
             langue: propre(config.langue), sessionId: nil)
     }
 
@@ -135,7 +138,10 @@ public final class Centrale: @unchecked Sendable {
 
     /// Un écran vu. `nom` est un gabarit (`/titre/:id`), jamais un nom avec un identifiant réel.
     public func vue(_ nom: String, dureeChargementMs: Int? = nil) {
-        guard actif, aleatoire() < config.echantillonnage.vues else { return }
+        guard actif else { return }
+        // Chaque écran entre dans le fil d'Ariane, même quand la vue n'est pas échantillonnée.
+        miette(.navigation, Masquage.gabarit(nom))
+        guard aleatoire() < config.echantillonnage.vues else { return }
         ajouter(.vue(horodatage: horodatage(), nom: Masquage.gabarit(nom), dureeChargementMs: dureeChargementMs.map { max(0, $0) }))
     }
 
@@ -185,10 +191,37 @@ public final class Centrale: @unchecked Sendable {
     public func miette(_ categorie: Miette.Categorie, _ message: String) {
         guard actif else { return }
         let m = Miette(horodatage: horodatage(), categorie: categorie, message: Masquage.texte(String(message.prefix(500)), noms: config.noms))
-        verrou.withLock {
+        let memoire = Vigilance.memoireMo()
+        let etat: EtatGarde = verrou.withLock {
             miettes.append(m)
             if miettes.count > Envoi.miettesMax { miettes.removeFirst(miettes.count - Envoi.miettesMax) }
+            etatGarde.miettes = miettes
+            etatGarde.memoireMo = memoire ?? etatGarde.memoireMo
+            if let memoire { etatGarde.memoireMaxMo = max(etatGarde.memoireMaxMo ?? 0, memoire) }
+            return etatGarde
         }
+        garder(etat)
+    }
+
+    /// Un problème repéré par le paquet lui-même (blocage, mémoire…), sans `Error` ni pile utile.
+    @discardableResult
+    func signaler(type: String, message: String, niveau: Niveau, etiquettes: [String: String]?) -> String? {
+        enregistrerErreur(type: type, message: message, pile: [], niveau: niveau, etiquettes: etiquettes)
+    }
+
+    /// Note sur le disque le début d'un blocage du fil principal (nil : terminé).
+    func noterBlocage(_ debut: Date?) {
+        let etat: EtatGarde = verrou.withLock {
+            etatGarde.blocageDepuis = debut
+            return etatGarde
+        }
+        garder(etat)
+    }
+
+    /// L'état part sur le disque en arrière-plan (jamais sur le fil de l'appelant).
+    private func garder(_ etat: EtatGarde) {
+        guard let dossier = config.dossier else { return }
+        Vigilance.file.async { Vigilance.ecrire(etat, dossier: dossier) }
     }
 
     /// Envoie tout ce qui peut l'être maintenant. Ne lève jamais.
@@ -258,19 +291,27 @@ public final class Centrale: @unchecked Sendable {
         guard actif, let dossier = config.dossier else { return }
         let fichierFatale = dossier.appendingPathComponent("fatale.json")
         let fichierSession = dossier.appendingPathComponent("session.json")
+        // Le dernier état du lancement précédent : ce que faisait l'app juste avant de s'arrêter.
+        let precedent = Vigilance.lire(dossier: dossier)
+        let filPrecedent = precedent.flatMap { $0.miettes.isEmpty ? nil : $0.miettes }
+        var detailsPrecedent: [String: String] = [:]
+        if let mo = precedent?.memoireMo { detailsPrecedent["memoire_mo"] = String(mo) }
+        if let mo = precedent?.memoireMaxMo { detailsPrecedent["memoire_max_mo"] = String(mo) }
+        if let ecran = precedent?.miettes.last(where: { $0.categorie == .navigation })?.message { detailsPrecedent["ecran"] = ecran }
+        let etiquettesPrecedent = detailsPrecedent.isEmpty ? nil : detailsPrecedent
         var fatale: Fatale?
         if let donnees = try? Data(contentsOf: fichierFatale) {
             fatale = try? JSONDecoder().decode(Fatale.self, from: donnees)
             try? FileManager.default.removeItem(at: fichierFatale)
             if let f = fatale {
-                ajouter(.erreur(id: f.id, horodatage: f.horodatage, niveau: .fatal, exception: f.exception, filAriane: nil, etiquettes: nil))
+                ajouter(.erreur(id: f.id, horodatage: f.horodatage, niveau: .fatal, exception: f.exception, filAriane: filPrecedent, etiquettes: etiquettesPrecedent))
             }
         }
         // Un signal fatal (erreur Swift, accès mémoire…) noté au moment même : un plantage, même sans exception.
         if fatale == nil, let numero = Plantages.lireSignal(dossier: dossier) {
             let exception = Exception(type: "Plantage", message: Plantages.nom(numero), pile: [])
             let f = Fatale(id: UUID().uuidString.lowercased(), horodatage: horodatage(), exception: exception, sessionId: nil)
-            ajouter(.erreur(id: f.id, horodatage: f.horodatage, niveau: .fatal, exception: f.exception, filAriane: nil, etiquettes: nil))
+            ajouter(.erreur(id: f.id, horodatage: f.horodatage, niveau: .fatal, exception: f.exception, filAriane: filPrecedent, etiquettes: etiquettesPrecedent))
             fatale = f
         }
         let auPremierPlan = Plantages.etaitAuPremierPlan(dossier: dossier)
@@ -281,18 +322,30 @@ public final class Centrale: @unchecked Sendable {
             ajouter(.session(id: ouverte.id, horodatage: horodatage(), etat: etat, dureeMs: nil))
             // Fermée pendant l'usage sans plantage noté (mémoire, chien de garde, arrêt forcé) : signalée aussi comme
             // un problème, pas seulement comme une session anormale.
-            if !plantee, auPremierPlan {
+            // Un blocage du fil principal en cours à la fermeture : le chien de garde du système l'a très
+            // probablement tuée (même en arrière-plan, ce n'est pas une fermeture normale).
+            if !plantee, let blocage = precedent?.blocageDepuis {
+                var etiquettes = detailsPrecedent
+                etiquettes["blocage_depuis"] = ISO8601DateFormatter().string(from: blocage)
+                let exception = Exception(type: "FermeturePendantBlocage", message: "L'app s'est fermée alors que son interface était bloquée (chien de garde du système probable).", pile: [])
+                ajouter(.erreur(id: UUID().uuidString.lowercased(), horodatage: horodatage(), niveau: .fatal, exception: exception, filAriane: filPrecedent, etiquettes: etiquettes))
+            } else if !plantee, auPremierPlan {
                 let exception = Exception(type: "FermetureInattendue", message: "L'app s'est fermée au premier plan sans se terminer normalement.", pile: [])
-                ajouter(.erreur(id: UUID().uuidString.lowercased(), horodatage: horodatage(), niveau: .fatal, exception: exception, filAriane: nil, etiquettes: nil))
+                ajouter(.erreur(id: UUID().uuidString.lowercased(), horodatage: horodatage(), niveau: .fatal, exception: exception, filAriane: filPrecedent, etiquettes: etiquettesPrecedent))
             }
         }
     }
 
     /// Un plantage connu après coup (rapport d'Apple) : envoyé tout de suite comme une erreur fatale.
     func garderEtEnvoyerFatale(type: String, message: String, pile: [Cadre]) {
+        garderEtEnvoyer(type: type, message: message, niveau: .fatal, pile: pile, etiquettes: nil)
+    }
+
+    /// Un rapport connu après coup (Apple), avec sa pile : envoyé tout de suite.
+    func garderEtEnvoyer(type: String, message: String, niveau: Niveau, pile: [Cadre], etiquettes: [String: String]?) {
         guard actif else { return }
         let exception = Exception(type: String(type.prefix(200)), message: Masquage.texte(String(message.prefix(4000)), noms: config.noms), pile: pile)
-        ajouter(.erreur(id: UUID().uuidString.lowercased(), horodatage: horodatage(), niveau: .fatal, exception: exception, filAriane: nil, etiquettes: nil))
+        ajouter(.erreur(id: UUID().uuidString.lowercased(), horodatage: horodatage(), niveau: niveau, exception: exception, filAriane: nil, etiquettes: etiquettes))
     }
 
     // MARK: - File d'attente
@@ -309,7 +362,10 @@ public final class Centrale: @unchecked Sendable {
             return miettes
         }
         let exception = Exception(type: String(type.prefix(200)), message: String(message.prefix(4000)), pile: pile)
-        let etiquettesBornees = etiquettes?.mapValues { String($0.prefix(200)) }
+        // La mémoire occupée au moment de l'erreur accompagne toujours le signalement.
+        var toutes = etiquettes ?? [:]
+        if toutes["memoire_mo"] == nil, let mo = Vigilance.memoireMo() { toutes["memoire_mo"] = String(mo) }
+        let etiquettesBornees: [String: String]? = toutes.isEmpty ? nil : toutes.mapValues { String($0.prefix(200)) }
         ajouter(.erreur(id: id, horodatage: horodatage(), niveau: niveau, exception: exception, filAriane: fil.isEmpty ? nil : fil, etiquettes: etiquettesBornees))
         return id
     }

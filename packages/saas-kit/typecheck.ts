@@ -63,6 +63,17 @@ const app = createSaasApp({
 
 app.use((_req: unknown, _res: unknown, next: () => void) => next());
 
+/* ───────────────── Une session ouverte par le produit (Google, Apple, invitation) ───────────────── */
+
+import type { IssueSession, IssuedSession } from './src';
+
+const issue: IssueSession = (app as unknown as { issueSession: IssueSession }).issueSession;
+async function exerciseIssueSession(): Promise<void> {
+  const session: IssuedSession = await issue(null, { id: 'user-owner', email: 'owner@example.test' });
+  void [session.token, session.user, session.refreshToken];
+}
+void exerciseIssueSession;
+
 /* ───────────────── Devices, resets and refresh ───────────────── */
 
 const devices: DevicesStore = createMemoryDevicesStore();

@@ -70,13 +70,15 @@ function createAuthRoutes(options) {
     }
   );
 
-  router.post('/login', validateMiddleware(loginValidation), asyncHandler(async (req, res) => {
-    const user = await usersStore.findByEmail(req.body.email);
-    const valid = user ? await verifyPassword(user, req.body.password) : false;
-    if (!user || !valid) {
-      throw new AppError('Invalid credentials.', 401);
-    }
-
+  /**
+   * Open a session for an account whose identity is already proven — by the
+   * password here, or by the product's own route (an ID token from Google or
+   * Apple, an invitation). One function, so that every way in yields exactly
+   * the same session: same access token, same cookie, same refresh chain.
+   * Returns the body the login route answers with.
+   */
+  async function issueSession(res, user) {
+    if (!user || user.id === undefined || user.id === null) throw new Error('issueSession requires an account with an id.');
     const publicUser = pickPublicUser(user, publicUserFields);
 
     /* A refresh token is issued only when the product asked for one. The web
@@ -90,13 +92,23 @@ function createAuthRoutes(options) {
     /* The family id travels in the access token so that signing out can revoke
        the refresh chain without the client having to hand it back. */
     const token = signAccessToken(publicUser, refresh ? { rfid: refresh.familyId } : {});
-    setSessionCookie(res, token, cookieOptions);
+    if (res) setSessionCookie(res, token, cookieOptions);
 
-    return apiResponse(res, 200, 'Login successful', {
+    return {
       token,
       user: publicUser,
       ...(refresh ? { refreshToken: refresh.token } : {})
-    });
+    };
+  }
+
+  router.post('/login', validateMiddleware(loginValidation), asyncHandler(async (req, res) => {
+    const user = await usersStore.findByEmail(req.body.email);
+    const valid = user ? await verifyPassword(user, req.body.password) : false;
+    if (!user || !valid) {
+      throw new AppError('Invalid credentials.', 401);
+    }
+
+    return apiResponse(res, 200, 'Login successful', await issueSession(res, user));
   }));
 
   if (refreshTokenService) {
@@ -253,6 +265,7 @@ function createAuthRoutes(options) {
     }));
   }
 
+  router.issueSession = issueSession;
   return router;
 }
 

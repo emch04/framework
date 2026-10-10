@@ -90,6 +90,30 @@ L'app retournée expose aussi directement `app.authMiddleware`,
 `app.csrfMiddleware` et `app.authorizeAdmin`, au cas où tu préfères les
 monter toi-même après coup plutôt que via `extendRoutes`.
 
+### Ouvrir une session depuis ta propre route (Google, Apple, invitation)
+
+Quand ta route a prouvé l'identité elle-même (jeton d'identité vérifié par
+`createGoogleIdTokenVerifier` de `@astratra/security`, invitation acceptée),
+`issueSession(res, compte)` ouvre **exactement** la session de `/auth/login` :
+même jeton d'accès, même cookie `HttpOnly`, même chaîne de renouvellement.
+Une seule fabrique, pour que les deux portes ne divergent jamais.
+
+```js
+createSaasApp({
+  // ...
+  extendRoutes: (app, { issueSession }) => {
+    app.post('/auth/external/google', async (req, res) => {
+      const profile = await google(req.body.idToken);
+      const account = await accounts.findBySubject('google', profile.subject);
+      if (!account) return res.status(403).json({ code: 'not_invited' });
+      res.json(await issueSession(res, account)); // { token, user, refreshToken? }
+    });
+  }
+});
+```
+
+Elle est aussi exposée en `app.issueSession`.
+
 ## CORS
 
 `options.cors` active le CORS pour toute l'app en un seul champ de

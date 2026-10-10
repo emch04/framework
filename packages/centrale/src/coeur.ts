@@ -19,7 +19,7 @@ import { lireRetryAfter, transportFetch } from './transport.ts';
 import type { Transport } from './transport.ts';
 
 export const NOM_SDK = '@astratra/centrale';
-export const VERSION_SDK = '1.2.0';
+export const VERSION_SDK = '1.3.0';
 
 /** Valeurs par défaut de la file et de l'envoi. */
 export const FILE_MAX = 500;

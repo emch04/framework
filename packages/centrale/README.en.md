@@ -69,6 +69,10 @@ Only `cle`, `adresse` and `environnement` are required.
 | `@astratra/centrale/ia` | `mesurerAppelIA({ fournisseur, modele, outil?, jetons?, estRepli? }, () => call())`. |
 | `@astratra/centrale/conscience` | `creerConscienceCentrale({ adresse, jeton })`: settings of an AI's conscience, morning report, human decisions (section below). |
 
+## Key gateway (`/passerelle`)
+
+An app only keeps a project token (`CENTRALE_PASSERELLE_JETON`, `clj_pas_…`) and the Centrale address (`CENTRALE_ADRESSE`): Centrale calls the providers with the keys of its vault and counts usage per project. `lirePasserelle(env)` reads them (null when not set); `modeleDiscussion(p)` gives an OpenAI-format model (`auto`) to put first in an AI's relay; `plongements`, `rechercher` and `voix` cover embeddings, web search and voice. A gateway outage throws `PasserelleIndisponible` and `passerelleDabord` then falls back to the direct keys; a request refused for itself (400, 413) throws `RequetePasserelleRefusee`, without fallback.
+
 ## Conscience of an AI (`/conscience`)
 
 The dashboard sets an AI's conscience (on, emergency stop, approvers, automatic reflection, cycles per day), receives its morning report and pending proposals, and records human decisions. It never applies anything: the AI reads its settings and the decisions, then submits them to its own governor. Authentication uses the project token (`Authorization: Bearer …`).

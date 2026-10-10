@@ -90,6 +90,19 @@ app.use(centrale.intergiciel());
 app.use(centrale.gestionnaireErreurs());
 ```
 
+## Passerelle des clés (`/passerelle`)
+
+Une app n'y garde qu'un jeton de projet (`CENTRALE_PASSERELLE_JETON`, `clj_pas_…`) et l'adresse de Centrale (`CENTRALE_ADRESSE`) : Centrale appelle les fournisseurs avec les clés de son coffre et compte la consommation par projet.
+
+```ts
+import { lirePasserelle, modeleDiscussion, passerelleDabord, plongements, rechercher, voix } from '@astratra/centrale/passerelle';
+const passerelle = lirePasserelle(process.env);          // null si non réglée : l'app garde ses clés directes
+const modele = passerelle && modeleDiscussion(passerelle); // { url, baseUrl, apiKey, model: 'auto' } au format OpenAI, à mettre en tête du relais
+const resultats = await passerelleDabord(passerelle, (p) => rechercher(p, { requete: 'météo Paris' }), () => rechercheDirecte());
+```
+
+Une panne de la passerelle (injoignable, 5xx, 429, 401/403, service non configuré) lève `PasserelleIndisponible` : `passerelleDabord` passe alors aux clés directes. Une requête refusée pour elle-même (400, 413) lève `RequetePasserelleRefusee`, sans repli.
+
 ## Conscience d'une IA (`/conscience`)
 
 Le tableau de bord règle la conscience d'une IA (allumée, arrêt d'urgence, approbateurs, réflexion automatique,

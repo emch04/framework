@@ -18,6 +18,16 @@ Chaque package Astratra est versionné indépendamment.
 - `native-ui` : `react-native-svg` (>= 15) devient une dépendance facultative ; sans elle, un simple triangle, jamais un émoji.
 - Tests : aucun émoji rendu, pouce choisi plein, pouce en bas retourné, icônes de l'app respectées.
 
+## 2026-10-10 — `AstratraCentrale` 1.1.0 (Swift) : surveillance renforcée
+
+### Ajouté
+- Dernier état gardé sur le disque au fil de l'eau (fil d'Ariane, mémoire occupée et la plus haute, blocage en cours) : une fermeture au premier plan (`FermetureInattendue`) ou pendant un blocage (`FermeturePendantBlocage`) part au lancement suivant avec ce fil d'Ariane, l'écran et la mémoire.
+- Gardien du fil principal : interface bloquée plus de 2 s signalée (`AppBloquee`, erreur au-delà de 5 s), début du blocage noté sur le disque tant qu'il dure.
+- Appareil : mémoire saturée (`MemoireSaturee`), surchauffe critique (`Surchauffe`) ; température, économie d'énergie, premier plan et arrière-plan dans le fil d'Ariane.
+- MetricKit : blocages, excès de processeur et d'écriture disque, lancements lents (iOS), avec la pile ; rapport quotidien des fermetures par raison (`rapport_apple`) et `FermeturesSysteme` pour les fermetures forcées.
+- Chaque erreur porte `memoire_mo` ; chaque écran entre dans le fil d'Ariane ; hors mode strict, `Appareil.decrire()` remplit le contexte (modèle et mémoire).
+- Tests.
+
 ## 2026-10-10 — `AstratraCentrale` 1.0.0 (Swift, nouveau paquet)
 
 ### Ajouté

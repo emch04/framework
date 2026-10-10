@@ -5,3 +5,5 @@ coverage
 dist
 .DS_Store
 dist
+.build
+.swiftpm

@@ -20,6 +20,13 @@ extension Centrale {
         guard actif else { return }
         session(.debut)
         Self.capterExceptions()
+        if let dossier = config.dossier {
+            Plantages.capterSignaux(dossier: dossier)
+            Plantages.noterPremierPlan(true, dossier: dossier)
+        }
+        #if canImport(MetricKit) && !os(watchOS) && !os(tvOS)
+        AbonneMetricKit.partage.abonner()
+        #endif
         let centre = NotificationCenter.default
         let suivi = SuiviApplication(centrale: self)
         #if canImport(UIKit) && !os(watchOS)
@@ -74,11 +81,13 @@ final class SuiviApplication {
 
     func arrierePlan() {
         depuis = Date()
+        Plantages.noterPremierPlan(false, dossier: centrale.config.dossier)
         let centrale = centrale
         Task { await centrale.vider() }
     }
 
     func premierPlan() {
+        Plantages.noterPremierPlan(true, dossier: centrale.config.dossier)
         guard let depuis else { return }
         self.depuis = nil
         if Date().timeIntervalSince(depuis) >= Centrale.finSessionApres {
@@ -88,6 +97,7 @@ final class SuiviApplication {
     }
 
     func fermeture() {
+        Plantages.noterPremierPlan(false, dossier: centrale.config.dossier)
         centrale.session(.ok)
         // Dernière chance d'envoyer : l'app a quelques secondes avant d'être arrêtée.
         let centrale = centrale

@@ -3,6 +3,15 @@
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Chaque package Astratra est versionné indépendamment.
 
+## 2026-10-10 — `AstratraCentrale` 1.0.0 (Swift, nouveau paquet)
+
+### Ajouté
+- Paquet Swift de collecte pour iOS 17 et macOS 14 (`Package.swift` à la racine, sources dans `swift/`), même format d'envoi que `@astratra/centrale` (version 1) : erreurs Swift avec leur pile, messages, écrans (gabarit), usages, sessions et appels d'IA (champs fixes, jamais de contenu).
+- File bornée (les usages sont jetés avant les erreurs), envoi par lots de même contexte sous 100 événements et 1 Mo, reprise avec recul sur 5xx, 408, 429 (`Retry-After`) et hors ligne, abandon sur les autres 4xx.
+- Masquage avant l'envoi (mêmes règles que `@astratra/centrale/masquage`), mode strict par défaut, désactivé sans clé ni adresse.
+- `suivreApplication()` : sessions (début, fin après 30 s en arrière-plan ou à la fermeture), vidage en arrière-plan, exceptions Objective-C gardées sur le disque et envoyées au lancement suivant avec la session « plantage » ; une session restée ouverte devient « anormale ».
+- Tests (faux transport) ; les corps produits ont été vérifiés contre la validation du backend.
+
 ## 2026-10-09 — `@astratra/ai` 1.9.0 : recherche Google intégrée de Gemini
 
 ### Ajouté

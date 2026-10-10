@@ -3,14 +3,18 @@
  * - erreurs (`error`) et promesses rejetées (`unhandledrejection`), sans remplacer `window.onerror` ;
  * - vues : première page avec son temps de chargement, puis pushState / replaceState / popstate, en gabarit ;
  * - sessions : début à l'ouverture, fin quand la page passe en arrière-plan ;
- * - envoi final par `navigator.sendBeacon` (adresse avec `?cle=`) quand la page est cachée.
- * Aucun cookie, aucun stockage local.
+ * - envoi final par `navigator.sendBeacon` (adresse avec `?cle=`) quand la page est cachée ;
+ * - surveillance renforcée (vigilance.ts) : requêtes `fetch`, `console.error`, page bloquée, et avec un `stockage`
+ *   (par exemple `localStorage`, un seul onglet à la fois) la mémoire d'un chargement à l'autre.
+ * Aucun cookie ; aucun stockage local sans `stockage`.
  */
 
 import { gabaritAdresse } from './masquage.ts';
 import { creerCentrale, definirCentraleParDefaut, NOM_SDK } from './coeur.ts';
 import type { Centrale, ConfigCentrale, ReglagesInternes } from './coeur.ts';
 import type { Transport } from './transport.ts';
+import { memoireLancement, suivreConsole, suivreRequetes, surveillerBlocages } from './vigilance.ts';
+import type { ConsoleSuivie, MemoireLancement, StockageCentrale } from './vigilance.ts';
 
 export * from './index.ts';
 
@@ -22,6 +26,18 @@ export interface ConfigNavigateur extends ConfigCentrale {
   gabarit?: (chemin: string) => string;
   /** Suivre les sessions (vrai par défaut). */
   sessions?: boolean;
+  /** Requêtes `fetch` suivies (vrai par défaut). */
+  requetes?: boolean;
+  /** `console.error` signalé, `console.warn` dans le fil d'Ariane (vrai par défaut). */
+  console?: boolean;
+  /** Page bloquée signalée (vrai par défaut). */
+  blocages?: boolean;
+  /**
+   * Où garder l'état d'un chargement à l'autre (par exemple `{ lire: (c) => localStorage.getItem(c), ecrire: (c, v) =>
+   * localStorage.setItem(c, v) }`) : un onglet fermé par plantage est alors signalé. Partagé entre onglets : à
+   * réserver aux apps ouvertes dans un seul onglet.
+   */
+  stockage?: StockageCentrale;
 }
 
 /** Ce que le paquet utilise du navigateur ; injectable pour les tests. */
@@ -32,6 +48,7 @@ export interface EnvironnementNavigateur {
   history: Pick<History, 'pushState' | 'replaceState'>;
   navigator?: { onLine?: boolean; language?: string; userAgent?: string; sendBeacon?: (url: string, corps?: BodyInit | null) => boolean };
   performance?: { getEntriesByType?: (type: string) => unknown[] };
+  console?: ConsoleSuivie;
 }
 
 export interface CentraleNavigateur extends Centrale {
@@ -86,6 +103,8 @@ export function demarrer(config: ConfigNavigateur, transport?: Transport, env: E
       centrale.arreter();
     }
   };
+  let memoire: MemoireLancement | undefined;
+  resultat.miette = (categorie, message, donnees) => { centrale.miette(categorie, message, donnees); memoire?.garder(); };
   if (!centrale.actif || !env) return resultat;
   definirCentraleParDefaut(resultat);
 
@@ -109,14 +128,21 @@ export function demarrer(config: ConfigNavigateur, transport?: Transport, env: E
       centrale.erreur(ev.reason, { etiquettes: { origine: 'unhandledrejection' } });
     });
 
+    // ——— Surveillance renforcée ———
+    if (config.requetes !== false) nettoyages.push(suivreRequetes(resultat, w as unknown as { fetch?: unknown }, { adresseCentrale: config.adresse, maintenant: reglages.maintenant }));
+    if (config.console !== false && env.console) nettoyages.push(suivreConsole(resultat, env.console, reglages.maintenant));
+    const gardien = config.blocages !== false ? surveillerBlocages(resultat, { minuterie: reglages.minuterie, maintenant: reglages.maintenant }) : undefined;
+    if (gardien) nettoyages.push(() => gardien.arreter());
+
     // ——— Vues ———
     let vueCourante = nommer(env.location.pathname);
     const changementDeVue = () => {
       const nom = nommer(env.location.pathname);
       if (nom === vueCourante) return;
-      centrale.miette('navigation', `${vueCourante} → ${nom}`);
+      resultat.miette('navigation', `${vueCourante} → ${nom}`);
       vueCourante = nom;
       centrale.vue(nom);
+      memoire?.garder({ ecran: nom });
     };
     for (const methode of ['pushState', 'replaceState'] as const) {
       const historique = env.history as unknown as Record<string, (...a: unknown[]) => unknown>;
@@ -148,15 +174,27 @@ export function demarrer(config: ConfigNavigateur, transport?: Transport, env: E
     const envoyerBalise = env.navigator?.sendBeacon?.bind(env.navigator);
     ecouter(d, 'visibilitychange', () => {
       if (d.visibilityState === 'hidden') {
+        // Page cachée : les minuteries ralentissent, le gardien se tait jusqu'au retour.
+        gardien?.pause();
         if (sessions && centrale.sessionCourante()) centrale.session('ok');
+        memoire?.garderMaintenant({ premierPlan: false });
         if (envoyerBalise) centrale.viderParBalise((url, corps) => envoyerBalise(url, corps), TAILLE_BALISE);
         else void centrale.vider();
-      } else if (d.visibilityState === 'visible' && sessions && !centrale.sessionCourante()) {
-        centrale.session('debut');
+      } else if (d.visibilityState === 'visible') {
+        gardien?.reprise();
+        if (sessions && !centrale.sessionCourante()) centrale.session('debut');
+        memoire?.garderMaintenant({ premierPlan: true });
       }
     });
     // De retour en ligne : on envoie ce qui attendait.
     ecouter(w, 'online', () => { void centrale.vider(); });
+    if (config.stockage) {
+      memoire = memoireLancement(resultat, config.stockage, { maintenant: reglages.maintenant });
+      memoire.garder({ ecran: vueCourante });
+      const m = memoire;
+      nettoyages.push(() => m.arreter());
+      void m.reprendre();
+    }
   } catch (err) {
     if (config.debug) console.warn('[centrale] branchement navigateur incomplet', err);
   }

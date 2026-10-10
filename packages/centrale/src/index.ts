@@ -13,6 +13,8 @@ export type { Transport, RequeteTransport, ReponseTransport } from './transport.
 export { analyserPile, estFichierApp } from './pile.ts';
 export { associerDebugIds, debugIdsParFichier, GLOBALE_DEBUG_IDS } from './debugIds.ts';
 export { sha256Hex } from './sha256.ts';
+export { gabaritRequete, memoireLancement, suivreConsole, suivreRequetes, surveillerBlocages, CLE_ETAT, SEUIL_BLOCAGE_MS, BLOCAGE_GRAVE_MS } from './vigilance.ts';
+export type { ConsoleSuivie, EtatLancement, Gardien, MemoireLancement, StockageCentrale } from './vigilance.ts';
 export type {
   Cadre, CadreSymbolise, Contexte, Envoi, Evenement, EvenementErreur, EvenementIA, EvenementSession, EvenementUsage, EvenementVue, Miette, Niveau
 } from './envoi.ts';

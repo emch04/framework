@@ -19,7 +19,7 @@ import { lireRetryAfter, transportFetch } from './transport.ts';
 import type { Transport } from './transport.ts';
 
 export const NOM_SDK = '@astratra/centrale';
-export const VERSION_SDK = '1.0.0';
+export const VERSION_SDK = '1.2.0';
 
 /** Valeurs par défaut de la file et de l'envoi. */
 export const FILE_MAX = 500;
@@ -88,6 +88,8 @@ export interface ExtraErreur {
   horodatage?: string | Date;
   /** Pile déjà lue (plantage natif), à la place de celle de l'erreur. */
   pile?: Cadre[];
+  /** Fil d'Ariane d'un lancement précédent (fermeture inattendue), à la place du fil courant. */
+  filAriane?: Miette[];
 }
 
 export type InfosIA = Omit<EvenementIA, 'type' | 'horodatage'>;
@@ -116,6 +118,10 @@ export interface Centrale {
   enAttente(): number;
   /** Identifiant de la session en cours, s'il y en a une. */
   sessionCourante(): string | undefined;
+  /** Copie du fil d'Ariane courant (pour le garder entre deux lancements). */
+  filAriane(): Miette[];
+  /** Clôt la session restée ouverte d'un lancement précédent (« anormal » ou « plantage »). */
+  sessionPrecedente(id: string, etat: 'anormal' | 'plantage'): void;
   readonly actif: boolean;
   readonly config: Readonly<ConfigCentrale>;
 }
@@ -169,6 +175,8 @@ function centraleInactive(config: ConfigCentrale): Centrale {
     vider: () => Promise.resolve(),
     enAttente: () => 0,
     sessionCourante: rien,
+    filAriane: () => [],
+    sessionPrecedente: rien,
     actif: false,
     config
   };
@@ -431,8 +439,8 @@ function creerCentraleActive(config: ConfigCentrale, transport: Transport, regla
       const debugIdCommun = associerDebugIds(pile, { racine: config.racine });
       if (extra.debugId) evenement.debugId = extra.debugId;
       else if (debugIdCommun) evenement.debugId = debugIdCommun;
-      const fil = filCourant();
-      if (fil.length) evenement.filAriane = fil.slice(-MIETTES_MAX);
+      const fil = extra.filAriane ?? filCourant();
+      if (fil.length) evenement.filAriane = fil.slice(-MIETTES_MAX).map((m) => ({ ...m }));
       const requete = extra.requete ?? portee?.requete;
       if (requete) evenement.requete = { ...requete, route: gabaritAdresse(String(requete.route ?? '')) };
       if (extra.empreinte?.length) evenement.empreinte = extra.empreinte.map(String);
@@ -555,7 +563,12 @@ function creerCentraleActive(config: ConfigCentrale, transport: Transport, regla
     }, undefined),
 
     enAttente: () => file.length,
-    sessionCourante: () => contexte.sessionId
+    sessionCourante: () => contexte.sessionId,
+    filAriane: () => filCourant().map((m) => ({ ...m })),
+    sessionPrecedente: sur('sessionPrecedente', (id: string, etat: 'anormal' | 'plantage') => {
+      if (!id || id === contexte.sessionId) return;
+      ajouter({ type: 'session', id: borner(String(id), 100), horodatage: horodatage(), etat: etat === 'plantage' ? 'plantage' : 'anormal' });
+    }, undefined)
   };
 
   planifier(intervalleMs);

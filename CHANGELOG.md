@@ -18,6 +18,15 @@ Chaque package Astratra est versionné indépendamment.
 - `native-ui` : `react-native-svg` (>= 15) devient une dépendance facultative ; sans elle, un simple triangle, jamais un émoji.
 - Tests : aucun émoji rendu, pouce choisi plein, pouce en bas retourné, icônes de l'app respectées.
 
+## 2026-10-10 — `@astratra/centrale` 1.2.0 : surveillance renforcée
+
+### Ajouté
+- Nouvelle entrée `/vigilance` (aussi exportée par la racine), branchée par défaut dans `/navigateur` et `/expo` : requêtes `fetch` dans le fil d'Ariane (gabarit, statut, durée) et signalées quand elles échouent (`RequeteSansReponse`, `RequeteEchouee`) ; `console.error` signalé, `console.warn` dans le fil d'Ariane ; gardien du fil principal (`AppBloquee`).
+- Expo : promesses rejetées sans `catch` (Hermes), alerte mémoire d'iOS (`MemoireSaturee`), premier plan, arrière-plan et lancement dans le fil d'Ariane ; option `stockage` pour garder l'état entre deux lancements : session restée ouverte close « anormale » ou « plantage », fermeture au premier plan signalée (`FermetureInattendue`) avec le fil d'Ariane et l'écran.
+- Navigateur : mêmes capteurs ; `stockage` facultatif (un seul onglet).
+- Cœur : `filAriane()`, `sessionPrecedente(id, etat)`, option `filAriane` des erreurs. `VERSION_SDK` passe à 1.2.0.
+- Options `requetes`, `console`, `blocages`, `promesses` (vraies par défaut) ; tests.
+
 ## 2026-10-10 — `AstratraCentrale` 1.1.0 (Swift) : surveillance renforcée
 
 ### Ajouté

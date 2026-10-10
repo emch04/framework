@@ -102,6 +102,12 @@ Errors are `ErreurConscience`: HTTP `statut` (or `null` when offline) and `code`
 - **Node**: uncaught exceptions (recorded as `fatal`, then Node's normal behaviour), unhandled rejections, Express requests (`X-Request-Id`, templated route, duration, status, breadcrumb), Express errors (status ≥ 500: `erreur`, otherwise `avertissement`), flush on exit (`beforeExit`, `SIGTERM`, `SIGINT`, 2 s at most).
 - **Browser**: `error` and `unhandledrejection` (without replacing `window.onerror`), templated SPA views, first page load time, sessions, final send with `navigator.sendBeacon` and `?cle=`.
 - **Expo**: `ErrorUtils.setGlobalHandler`, sessions tied to `AppState` (end after 30 s in the background), screens. `signalerPlantageNatif(report)` waits for the future native module.
+- **Reinforced monitoring** (browser and Expo, `/vigilance`, each part can be switched off):
+  - `fetch` requests in the breadcrumbs (template, status, duration); no response, 5xx, 408 and 429 reported (`RequeteSansReponse`, `RequeteEchouee`); sends to the Centrale and aborted requests are ignored (`requetes`);
+  - `console.error` reported (once per message every 10 s), `console.warn` in the breadcrumbs (`console`);
+  - main-thread watchdog: an interface frozen for more than 2 s is reported (`AppBloquee`, an error beyond 5 s), paused in the background (`blocages`);
+  - Expo: unhandled promise rejections (Hermes, `promesses`), iOS memory warning (`MemoireSaturee`, at most once a minute), foreground, background and launch in the breadcrumbs;
+  - with a `stockage`: breadcrumbs, screen and open session are kept as they change; on the next launch, a session left open is closed as `anormal` (or `plantage` after a fatal error), and a close while in the foreground is reported (`FermetureInattendue`, with breadcrumbs and screen). Browser: only for apps used in a single tab.
 - **AI**: provider, model, tool, duration, tokens, outcome (`ok`, `erreur`, `quota`, `repli`). **Never the content.**
 
 Sending: batches of at most 100 events (1 MiB at most), every 10 s or as soon as 50 events wait; queue of 500 events; progressive backoff (2 s, 4 s… capped at 5 min); `Retry-After` honoured on 429; silent drop on 400, 401, 413; offline, the queue waits.
@@ -112,7 +118,7 @@ If the build went through `centrale injecter` (package `@astratra/centrale-cli`)
 
 ## Privacy
 
-- No cookie, no local storage.
+- No cookie; no local storage without `stockage` (it only keeps the already masked breadcrumbs, the screen and the session id).
 - Masking **before any send**: e-mails, phone numbers, cards, IBAN, keys, tokens, passwords, and the given `noms`.
 - Addresses reduced to their template (`/student/123?token=x` becomes `/student/:id`).
 - User: only a salted SHA-256 fingerprint, never the raw id.
@@ -122,7 +128,7 @@ If the build went through `centrale injecter` (package `@astratra/centrale-cli`)
 ## What the package does not do
 
 - It hosts neither backend nor dashboard: it sends events to the address you give.
-- It captures neither the content of AI calls, nor cookies, nor local storage.
+- It captures neither the content of AI calls nor cookies.
 - Native crash reports (iOS, Android) are not captured yet.
 
 ## License

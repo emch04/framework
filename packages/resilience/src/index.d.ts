@@ -138,3 +138,19 @@ export function createTimerRegistry(options?: {
     clearTimeout?(timer: TimerHandle): void;
   };
 }): TimerRegistry;
+
+/**
+ * Un fetch (undici) qui garde ses connexions ouvertes `keepAliveMs` (4 min par défaut) au lieu des 4 s de Node : un
+ * appel espacé ne refait pas la poignée de main TLS. Une demande partie sur une connexion déjà fermée par l'autre côté
+ * est refaite une fois (jamais un corps en flux, jamais une demande annulée). `close()` libère les connexions.
+ */
+export function createKeepAliveFetch(options?: {
+  keepAliveMs?: number;
+  connections?: number;
+  /** Le module undici (tests) ; sinon require('undici'). */
+  undici?: unknown;
+  fetch?: (url: string | URL, init?: RequestInit & { dispatcher?: unknown }) => Promise<Response>;
+}): ((url: string | URL, init?: RequestInit) => Promise<Response>) & { close(): Promise<void> };
+
+/** Vrai pour une erreur réseau d'une connexion fermée par l'autre côté (UND_ERR_SOCKET, ECONNRESET…). */
+export function isStaleConnection(error: unknown): boolean;

@@ -190,3 +190,20 @@ qui redémarre n'hérite pas de l'extinction précédente.
 ```bash
 npm test --workspace @astratra/resilience
 ```
+
+## Garder les connexions ouvertes (`createKeepAliveFetch`)
+
+Node referme une connexion après 4 s sans activité : chaque appel espacé à un fournisseur (une voix d'IA lue, une
+question) refait la poignée de main TLS. `createKeepAliveFetch` les garde ouvertes (4 min par défaut) :
+
+```js
+const { createKeepAliveFetch } = require('@astratra/resilience');
+const fetchGarde = createKeepAliveFetch({ keepAliveMs: 240_000 });
+const reponse = await fetchGarde('https://generativelanguage.googleapis.com/…', { method: 'POST', body });
+// à l'arrêt du service :
+await fetchGarde.close();
+```
+
+Une demande partie sur une connexion que l'autre côté venait de fermer est refaite une fois, sur une connexion neuve
+(jamais un corps en flux, jamais une demande annulée). Aucun contenu n'est gardé. Rien n'est consommé chez le
+fournisseur tant qu'aucune demande ne part : seule la connexion réseau reste ouverte.

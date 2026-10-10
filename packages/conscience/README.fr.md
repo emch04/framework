@@ -925,6 +925,93 @@ supprimer avec la personne.
 (schéma : `postgresShadowSchema({ prefix })`, table `<prefix>_runs`). Même
 contrat, mêmes tests, toute valeur est un paramètre SQL.
 
+## Stockage MongoDB
+
+Installer le pilote comme dépendance facultative seulement pour MongoDB :
+
+```sh
+npm install mongodb
+```
+
+Les deux magasins reçoivent un `Db` du pilote officiel. Ils n'importent jamais
+le pilote et n'ouvrent aucune connexion. Avec mongoose, attendre la connexion,
+puis fournir `connection.db` et, pour le gouverneur, `connection.getClient()`
+dans l'option `client`. Le pilote est une peerDependency optionnelle
+(`^6.0.0 || ^7.0.0`) ; mongoose n'est pas une dépendance.
+
+```js
+const { MongoClient } = require('mongodb');
+const { createMongoGovernorStore, mongoGovernorIndexes, createGovernor } = require('@astratra/conscience/governor');
+const { createMongoConscienceStore, mongoConscienceIndexes, createConscience } = require('@astratra/conscience');
+
+const client = new MongoClient(process.env.DATABASE_URL);
+await client.connect();
+const db = client.db();
+await mongoGovernorIndexes(db, { prefix: 'app_governor' });
+await mongoConscienceIndexes(db, { prefix: 'app_memory' });
+const governor = createGovernor({
+  budgets: { perCycle: 1, perAgent: 5, perOrganisation: 20 }
+}, { store: createMongoGovernorStore(db, { prefix: 'app_governor', client }) });
+const conscience = createConscience({
+  governor, masker: (texte) => masquerDansApplication(texte),
+  store: createMongoConscienceStore(db, { prefix: 'app_memory' })
+});
+```
+
+Les fonctions d'index sont des migrations explicites et idempotentes, à appeler
+avant l'utilisation. Un préfixe contient lettres, chiffres et traits de
+soulignement, commence par une lettre ou un trait de soulignement, et ne dépasse
+pas 41 caractères. Valeurs par défaut : `astratra_governor` et
+`astratra_conscience`. Collections du gouverneur : suffixes `proposals`, `audit`,
+`spend`, `controls`, `objects`, `versions`, `findings`, `sequences`, `locks`.
+Mémoire des décisions : `records` et `sequences`.
+
+L'identité est encodée dans l'index unique `_id` : organisation et identifiant,
+avec type et version si nécessaire. Une insertion rend le contenu existant sans
+le modifier. Les approbations comparent atomiquement statut et nombre
+d'approbations ; les objets comparent leur révision. Les identifiants d'audit
+sont uniques, avec un compteur persistant pour l'ordre. Les records ont aussi
+un compteur pour départager les dates égales ; le remplacement conserve l'ordre.
+Filtres, rétention et `conscience.eraseSubject()` suivent le contrat PostgreSQL,
+avec isolation des organisations et invalidation des preuves. L'effacement
+porte sur la mémoire des décisions ; la conservation de l'audit du gouverneur
+reste une politique de l'application, comme avec PostgreSQL.
+
+**Les budgets atomiques nécessitent un replica set ou un cluster shardé**
+(MongoDB 4.2+, selon la compatibilité serveur du pilote). Chaque réservation
+modifie un verrou d'organisation dans une transaction avec lecture snapshot et
+écriture majority. Le pilote rejoue les transactions en conflit : deux dépenses
+concurrentes ne peuvent pas dépasser ensemble un plafond. Un serveur standalone
+fait échouer la dépense, sans repli non atomique. L'option `client`, si fournie,
+doit désigner le propriétaire de `db`. L'application ferme ses connexions ; le
+magasin ferme les sessions courtes qu'il crée pour réserver. Une opération
+complète du gouverneur n'est pas transactionnelle : état et audit restent des
+écritures séparées, comme dans l'implémentation PostgreSQL. Une erreur de base
+remonte sans autoriser de dépense. Les limites MongoDB de taille de document
+s'appliquent à chaque record.
+
+Les mêmes suites de contrat du gouverneur, des approbations et changements, des
+records et de leur évaluation tournent avec un faux client et MongoDB réel :
+
+```sh
+npm test -w @astratra/conscience
+MONGO_TEST_URL=mongodb://127.0.0.1:27017/conscience_test?replicaSet=rs0 npm test -w @astratra/conscience
+```
+
+Sans `MONGO_TEST_URL`, les tests réels sont sautés avec une raison. Avec une URL,
+la connexion et le replica set ou cluster shardé doivent fonctionner : une erreur
+fait échouer la suite. Chaque test crée un préfixe aléatoire et supprime seulement
+ses collections, jamais la base. Un replica set local de `mongodb-memory-server`
+peut fournir cette URL. Les magasins de vigilance et de mode ombre conservent
+leurs adaptateurs actuels : ces deux magasins MongoDB couvrent le gouverneur et
+les records des décisions.
+
+Vérification par mutations (trois régressions détectées puis restaurées) :
+
+```sh
+node packages/conscience/test/mongo-mutations.js
+```
+
 ## Tests
 
 ```sh

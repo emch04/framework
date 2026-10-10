@@ -13,7 +13,10 @@ const { SEVERITIES, REPORT_SCHEMA } = require('./review');
 const { bucket } = require('./rollout');
 const { createRemoteSettings, parseRemoteSettings, remotePolicy, REMOTE_SETTINGS_SCHEMA, DECISION_RESULTS } = require('./remote');
 
+const { createMongoGovernorStore, mongoGovernorIndexes } = require('./mongo');
+
 module.exports = {
+  createMongoGovernorStore, mongoGovernorIndexes,
   createGovernor, assertGovernorReady, isGovernor, validatePolicy, scopesOf, protectedRulesTouched,
   createMemoryGovernorStore, createPostgresGovernorStore, postgresGovernorSchema, GovernorError,
   PROPOSAL_STATUSES: STATUSES, REASONS, PROTECTED_SCOPES, MODIFIABLE_KINDS, AUTOMATIC_CHANGES, DEFAULT_CONSTITUTION,

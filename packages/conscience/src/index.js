@@ -13,7 +13,10 @@ const records = require('./records');
 const { assertGovernorReady, isGovernor } = require('./governor/governor');
 const { GovernorError } = require('./governor/util');
 
+const { createMongoConscienceStore, mongoConscienceIndexes } = require('./mongo');
+
 module.exports = {
+  createMongoConscienceStore, mongoConscienceIndexes,
   createConscience, createMemoryConscienceStore, createPostgresConscienceStore, postgresConscienceSchema,
   frameStoredText, frameRecordsForModel, wordDelta, matchesFilter,
   ConscienceError, GovernorError, assertGovernorReady, isGovernor,

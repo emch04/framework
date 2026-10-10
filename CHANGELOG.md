@@ -3,6 +3,14 @@
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Chaque package Astratra est versionné indépendamment.
 
+## 2026-10-10 — `@astratra/conscience` 1.2.0 : magasins MongoDB
+
+### Ajouté
+- `createMongoGovernorStore` : propositions idempotentes, comparaison atomique des approbations et révisions, objets versionnés, contrôles, constats et journal d'audit ordonné. Budgets réservés sous verrou d'organisation dans une transaction MongoDB (replica set ou cluster shardé obligatoire).
+- `createMongoConscienceStore` : records idempotents, filtres et ordre stable, remplacement et suppression pour rétention et effacement des personnes ; même contrat que PostgreSQL et la mémoire.
+- `mongoGovernorIndexes` et `mongoConscienceIndexes` : migrations explicites idempotentes avec préfixes de collections configurables. Pilote `mongodb` en peerDependency optionnelle, jamais importé par les magasins ; `Db` natif injectable, y compris depuis mongoose.
+- Types et documentation française et anglaise ; mêmes suites de contrat sur faux client et MongoDB réel optionnel via `MONGO_TEST_URL`, plus courses concurrentes entre connexions indépendantes.
+
 ## 2026-10-10 — `@astratra/native-ui` 1.2.0 et `@astratra/saas-kit-ui` 1.3.0 : pouces dessinés
 
 ### Modifié

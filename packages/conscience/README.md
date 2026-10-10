@@ -887,6 +887,90 @@ organisation is refused. Runs carry the `userId` of the request: register
 (schema: `postgresShadowSchema({ prefix })`, table `<prefix>_runs`). Same
 contract, same tests, every value a SQL parameter.
 
+## MongoDB storage
+
+Install the optional peer dependency only when using MongoDB:
+
+```sh
+npm install mongodb
+```
+
+Both stores accept a native driver `Db`. They never import the driver or open a
+connection themselves. With mongoose, wait for the connection, then pass
+`connection.db`; pass `connection.getClient()` as `client` for the governor.
+The driver is an optional peer (`^6.0.0 || ^7.0.0`), with no mandatory runtime
+installation and no mongoose dependency.
+
+```js
+const { MongoClient } = require('mongodb');
+const { createMongoGovernorStore, mongoGovernorIndexes, createGovernor } = require('@astratra/conscience/governor');
+const { createMongoConscienceStore, mongoConscienceIndexes, createConscience } = require('@astratra/conscience');
+
+const client = new MongoClient(process.env.DATABASE_URL);
+await client.connect();
+const db = client.db();
+await mongoGovernorIndexes(db, { prefix: 'app_governor' });
+await mongoConscienceIndexes(db, { prefix: 'app_memory' });
+const governor = createGovernor({
+  budgets: { perCycle: 1, perAgent: 5, perOrganisation: 20 }
+}, { store: createMongoGovernorStore(db, { prefix: 'app_governor', client }) });
+const conscience = createConscience({
+  governor, masker: (text) => maskInApplication(text),
+  store: createMongoConscienceStore(db, { prefix: 'app_memory' })
+});
+```
+
+The index functions are explicit, idempotent migrations; call them before using
+the stores. Prefixes accept letters, digits and underscores, begin with a
+letter or underscore, and contain at most 41 characters. Defaults are
+`astratra_governor` and `astratra_conscience`. Governor collections have suffixes
+`proposals`, `audit`, `spend`, `controls`, `objects`, `versions`, `findings`,
+`sequences`, `locks`; decision memory uses `records` and `sequences`.
+
+Identity is encoded in the unique `_id`: organisation plus record id (and kind
+or version where needed). Inserts return existing content unchanged; approval
+transitions compare status and approval count atomically, and object updates
+compare revision. Audit ids are unique and a persistent counter orders entries.
+Records use a persistent counter to order equal timestamps; replacement keeps
+that order. Filters, retention and `conscience.eraseSubject()` use the same
+contract as the PostgreSQL store, including organisation isolation and evidence
+invalidation. Erasure affects decision memory; governor audit retention remains
+application policy, as with PostgreSQL.
+
+**Atomic spending requires a replica set or sharded cluster** (MongoDB 4.2+,
+subject to the driver's server compatibility). Each reservation updates an
+organisation lock inside a snapshot transaction, with majority write concern.
+Conflicting transactions retry through the driver, preventing two concurrent
+reservations from exceeding a budget. A standalone server fails spending; there
+is no unsafe fallback. Pass the client owning `db` if supplying `client`.
+Connections and sessions are caller-owned except the short-lived reservation
+sessions, which the store closes. The stores do not make an entire governor
+operation transactional: state and audit writes remain separate, as in the
+PostgreSQL implementation. Database errors propagate; they never authorize a
+spend. MongoDB's normal document size limits apply to individual records.
+
+The shared governor, approval/change, conscience and evaluation contract suites
+run against a fake client and, optionally, real MongoDB:
+
+```sh
+npm test -w @astratra/conscience
+MONGO_TEST_URL=mongodb://127.0.0.1:27017/conscience_test?replicaSet=rs0 npm test -w @astratra/conscience
+```
+
+Without `MONGO_TEST_URL`, real MongoDB tests skip with a reason. A supplied URL
+must connect to a replica set or sharded cluster; connection or topology errors
+fail the suite. Tests create random collection prefixes and drop only their own
+collections, never the database. A local `mongodb-memory-server` replica set
+can supply the same URL. The vigilance and shadow stores retain their existing
+storage adapters; these two MongoDB stores cover the governor and decision
+records only.
+
+Mutation checks (three regressions, each detected, then restored):
+
+```sh
+node packages/conscience/test/mongo-mutations.js
+```
+
 ## Tests
 
 ```sh

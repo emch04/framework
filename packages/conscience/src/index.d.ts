@@ -242,3 +242,6 @@ export const EVIDENCE_DEGREES: readonly EvidenceDegree[];
 export const EVIDENCE_KINDS: readonly EvidenceKind[];
 export const PROVENANCE_KINDS: readonly ProvenanceKind[];
 export const ERASURE_MODES: readonly ['delete', 'anonymise'];
+
+export function createMongoConscienceStore(db: import('./governor').MongoDatabase, options?: { prefix?: string }): ConscienceStore;
+export function mongoConscienceIndexes(db: import('./governor').MongoDatabase, options?: { prefix?: string }): Promise<void>;

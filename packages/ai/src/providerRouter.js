@@ -114,7 +114,9 @@ function createProviderRouter(config = {}) {
       /* Masked at the moment it leaves: a provider that runs on this machine
          (`external: false`) gets the text as it is. */
       const outbound = masker && provider.external !== false;
-      const send = async () => provider.call(outbound ? await masker.maskAsync(prompt) : prompt, providerCtx, model);
+      /* Un texte masqué ne se montre pas en cours de route : `onText` ne part qu'aux fournisseurs non masqués. */
+      const callCtx = outbound && providerCtx.onText ? { ...providerCtx, onText: undefined } : providerCtx;
+      const send = async () => provider.call(outbound ? await masker.maskAsync(prompt) : prompt, callCtx, model);
 
       let raw;
       try {

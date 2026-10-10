@@ -29,7 +29,14 @@ export interface TaskStore {
   save(task: Task, owner: string): Promise<Task>; release(id: string, owner: string): Promise<void>;
 }
 export interface Budget { maxMs?: number; maxTurns?: number; maxTokens?: number; maxCost?: number }
-export interface TurnRequest { system: string; messages: Message[]; tools: Array<Record<string, unknown>>; signal: AbortSignal; phase: string }
+export interface TurnRequest {
+  system: string; messages: Message[]; tools: Array<Record<string, unknown>>; signal: AbortSignal; phase: string;
+  /**
+   * Avec des gardes : rend les vrais mots d'un texte du modèle (masqué). Pour montrer une réponse pendant qu'elle
+   * s'écrit (`onText` de @astratra/ai) ; la réponse finale, elle, passe toujours par la garde de sortie.
+   */
+  unmask?: (text: string) => string;
+}
 export interface TurnResponse { text?: string; toolCalls?: NativeToolCall[]; usage?: { inputTokens?: number; outputTokens?: number; prompt_tokens?: number; completion_tokens?: number; cost?: number } }
 export interface Verification { complete: boolean; feedback?: string }
 export interface SummaryInput { messages: Message[]; plan: PlanStep[]; signal: AbortSignal }

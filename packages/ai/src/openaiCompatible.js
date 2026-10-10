@@ -15,6 +15,7 @@ const { readRetryAfter } = require('./providerLimits');
  */
 
 const { providerResult, readToolArguments, readWrittenAnswer, readWrittenToolCalls, toolCallOf, withoutThinking } = require('./modelAnswers');
+const { readServerEvents, textReporter } = require('./streamedAnswer');
 
 function toTranscript(messages) {
   return (Array.isArray(messages) ? messages : []).map((message) => {
@@ -55,7 +56,9 @@ function toTranscript(messages) {
  * Ask one model.
  * @param {{ url: string, key: string, model: string, extra?: object }} target
  * @param {{ system?: string, messages: object[], tools?: object[], maxTokens?: number, temperature?: number }} request
- * @param {{ fetch: Function, signal?: AbortSignal, timeoutMs?: number }} io
+ * @param {{ fetch: Function, signal?: AbortSignal, timeoutMs?: number, onText?: Function }} io
+ *   `onText` : la réponse est demandée en flux (`stream`) et `onText(texte)` reçoit le texte montrable
+ *   entier à chaque avancée ; la valeur rendue est la même que sans flux.
  * @returns {Promise<{ status: number, text?: string|null, toolCalls?: object[], cut?: boolean }>}
  *   A non-2xx answer resolves `{ status }` — nothing is thrown for it.
  */
@@ -66,6 +69,7 @@ async function askChatModel(target, request, io = {}) {
   const Signal = globalThis.AbortSignal;
   const timeout = Signal.timeout(timeoutMs);
   const signal = io.signal && typeof Signal.any === 'function' ? Signal.any([io.signal, timeout]) : (io.signal || timeout);
+  const report = textReporter(io.onText);
   const messages = [
     ...(request.system ? [{ role: 'system', content: request.system }] : []),
     ...toTranscript(request.messages)
@@ -79,7 +83,8 @@ async function askChatModel(target, request, io = {}) {
       temperature: request.temperature === undefined ? 0.4 : request.temperature,
       max_tokens: request.maxTokens || 1200,
       ...(request.tools && request.tools.length ? { tools: request.tools.map((tool) => ({ type: 'function', function: tool })) } : {}),
-      ...extra
+      ...extra,
+      ...(report ? { stream: true } : {})
     }),
     signal
   });
@@ -87,7 +92,8 @@ async function askChatModel(target, request, io = {}) {
     const retryAfterMs = readRetryAfter(response);
     return { status: response.status, ...(retryAfterMs === null ? {} : { retryAfterMs }) };
   }
-  const answer = await response.json();
+  const contentType = (response.headers && typeof response.headers.get === 'function' && response.headers.get('content-type')) || '';
+  const answer = report && contentType.includes('text/event-stream') ? await readChatStream(response, report) : await response.json();
   const choice = (answer && answer.choices && answer.choices[0]) || {};
   const message = choice.message || {};
   if (Array.isArray(message.tool_calls) && message.tool_calls.length) {
@@ -101,6 +107,32 @@ async function askChatModel(target, request, io = {}) {
   const written = readWrittenAnswer(text, Boolean(request.tools && request.tools.length));
   if (written) return { status: response.status, ...written };
   return { status: response.status, text, cut: choice.finish_reason === 'length' };
+}
+
+/* Une réponse en flux, rassemblée dans la forme d'une réponse entière (message, appels d'outils, fin). */
+async function readChatStream(response, report) {
+  let content = '';
+  let finish = null;
+  const calls = [];
+  await readServerEvents(response, (event) => {
+    const choice = event && Array.isArray(event.choices) ? event.choices[0] : null;
+    if (!choice) return;
+    if (choice.finish_reason) finish = choice.finish_reason;
+    const delta = choice.delta || {};
+    if (typeof delta.content === 'string' && delta.content) {
+      content += delta.content;
+      report(content);
+    }
+    for (const part of Array.isArray(delta.tool_calls) ? delta.tool_calls : []) {
+      const index = Number.isInteger(part.index) ? part.index : calls.length;
+      const call = calls[index] || (calls[index] = { id: '', function: { name: '', arguments: '' } });
+      if (part.id) call.id = part.id;
+      if (part.function && part.function.name) call.function.name += part.function.name;
+      if (part.function && typeof part.function.arguments === 'string') call.function.arguments += part.function.arguments;
+    }
+  });
+  const toolCalls = calls.filter(Boolean).map((call, index) => ({ ...call, id: call.id || `call_${index}` }));
+  return { choices: [{ message: { content, ...(toolCalls.length ? { tool_calls: toolCalls } : {}) }, finish_reason: finish }] };
 }
 
 /**
@@ -152,7 +184,7 @@ function createOpenAICompatibleProvider(options = {}) {
       const answer = await askChatModel(
         { url, key, model: model.id, extra: { ...(options.extra || {}), ...(model.extra || {}) } },
         { maxTokens: model.maxTokens, ...toRequest(prompt, ctx) },
-        { fetch: typeof ctx.fetch === 'function' ? ctx.fetch : options.fetch, signal: ctx.signal, timeoutMs: ctx.timeoutMs || options.timeoutMs }
+        { fetch: typeof ctx.fetch === 'function' ? ctx.fetch : options.fetch, signal: ctx.signal, timeoutMs: ctx.timeoutMs || options.timeoutMs, onText: ctx.onText }
       );
       return providerResult(options.id, answer, options.detailed);
     }

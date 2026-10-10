@@ -150,6 +150,12 @@ modèle ; les arguments sont sinon transmis comme le modèle les a écrits.
 Pour les tests : `createMockGuards` et `createFakeModels` de
 `@astratra/ai/guards/testing`.
 
+### Montrer la réponse pendant qu'elle s'écrit
+
+Avec des gardes, `turn` reçoit `unmask(texte)` : il rend les vrais mots d'un texte du modèle (masqué). Avec `onText`
+de `@astratra/ai` (1.10.0), on montre ainsi la réponse en flux, sans ses repères (`#PERSON_0001`). La réponse finale
+passe toujours par la garde de sortie (fuites, modération) ; ce qui part au modèle reste masqué.
+
 ## Tests
 
 `npm test -w @astratra/agent`. Les tests PostgreSQL réels ne tournent qu'avec

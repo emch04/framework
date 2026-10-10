@@ -605,8 +605,22 @@ export type FetchLike = (url: string, init: { method: string; headers: Record<st
 export function askChatModel(
   target: { url: string; key: string; model: string; extra?: Record<string, unknown> },
   request: { system?: string; messages: ChatMessage[]; tools?: Array<Record<string, unknown>>; maxTokens?: number; temperature?: number },
-  io: { fetch: FetchLike; signal?: AbortSignal; timeoutMs?: number }
+  io: { fetch: FetchLike; signal?: AbortSignal; timeoutMs?: number; onText?: (shown: string) => void }
 ): Promise<{ status: number; text?: string | null; toolCalls?: ChatToolCall[]; cut?: boolean; retryAfterMs?: number }>;
+
+/* ─────────────────── Réponse en flux ─────────────────── */
+
+/**
+ * `onText` (sur `io`, ou sur le contexte de `route()` : `{ onText }`) demande la réponse en flux et reçoit
+ * le texte montrable ENTIER à chaque avancée : sans réflexion (think), sans balise coupée, et vide quand le
+ * modèle écrit un appel d'outil dans son texte. Au modèle suivant du routeur, il repart de zéro. La valeur
+ * rendue est la même que sans flux. Jamais passé à un fournisseur masqué (le texte serait masqué).
+ */
+export function visibleSoFar(raw: string): string;
+/** Les événements `data:` d'un corps text/event-stream, un objet JSON chacun. */
+export function readServerEvents(response: { body?: unknown; text?: () => Promise<string> }, onEvent: (event: any) => void): Promise<void>;
+/** Un onText qui ne prévient que quand le texte montré change, et ne lève jamais. */
+export function textReporter(onText?: (shown: string) => void): ((raw: string) => void) | null;
 
 export function readToolArguments(raw: unknown): { args: Record<string, unknown> | null; invalid: boolean; reason?: 'not_json' | 'not_object'; detail?: string };
 
@@ -685,7 +699,7 @@ export function createOpenAICompatibleProvider(options: ChatProviderOptions & {
 export function askGeminiModel(
   model: string,
   request: ChatRequest,
-  io: { key: string; fetch: FetchLike; signal?: AbortSignal; timeoutMs?: number; endpoint?: string; noSystemInstruction?: (model: string) => boolean; extra?: Record<string, unknown> }
+  io: { key: string; fetch: FetchLike; signal?: AbortSignal; timeoutMs?: number; endpoint?: string; noSystemInstruction?: (model: string) => boolean; extra?: Record<string, unknown>; onText?: (shown: string) => void }
 ): Promise<{ status: number; text?: string | null; toolCalls?: ChatToolCall[]; cut?: boolean; retryAfterMs?: number; grounding?: GeminiGrounding & { functionsDropped: boolean } }>;
 
 /** Les sources d'une réponse generateContent (ou d'un de ses candidats), nettoyées et bornées. Ne lève jamais. */

@@ -177,6 +177,22 @@ appel — et n'est jamais une réponse à montrer. Des arguments illisibles gard
 l'appel, marqué `invalid` avec `invalidReason` (`not_json`, `not_object`), et
 repartent en `{}` au tour suivant.
 
+### La réponse petit à petit (`onText`)
+
+Passé dans le contexte de `route()` (`router.route(requete, options, { onText })`) ou dans `io` d'`askChatModel` /
+`askGeminiModel`, `onText` demande la réponse en flux (`stream: true` au format OpenAI, `streamGenerateContent` chez
+Gemini) et reçoit le texte montrable **entier** à chaque avancée :
+
+- jamais la réflexion (balises think, parties `thought` de Gemini), jamais une balise coupée en deux ;
+- rien quand le modèle écrit un appel d'outil dans son texte ou commence par du JSON ;
+- au modèle suivant du routeur, le texte repart de zéro et remplace le précédent ;
+- la valeur rendue (texte, appels d'outils, `cut`, sources) est la même que sans flux ;
+- jamais passé à un fournisseur masqué : un texte masqué ne se montre pas en cours de route.
+
+```js
+await router.route(requete, { accepts }, { onText: (texte) => ecrireBrouillon(texte) });
+```
+
 ### La recherche Google intégrée de Gemini
 
 `googleSearch` sur une requête active l'outil de recherche de Gemini

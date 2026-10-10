@@ -16,6 +16,7 @@ module.exports = {
   ...require('./openaiCompatible'),
   ...require('./llamaCpp'),
   ...require('./gemini'),
+  ...require('./streamedAnswer'),
   ...require('./nativeTools'),
   ...require('./eventStream'),
   ...require('./webSearch'),

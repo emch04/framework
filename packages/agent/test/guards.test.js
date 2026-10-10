@@ -171,3 +171,22 @@ test('guards: tools receive unmask in their context to resolve tokens', async ()
   await createAgent({ guards, tools: [lookup], turn }).run({ question: `Look up ${NAME}.` });
   assert.equal(resolved, NAME);
 });
+
+test('guards: the turn can unmask a text as it is written (streamed answer), the raw request stays masked', async () => {
+  const { guards } = setup(); const shown = [];
+  const agent = createAgent({ guards, system: 'Be useful.', turn: (request) => {
+    assert.equal(typeof request.unmask, 'function');
+    shown.push(request.unmask('Writing to #PERSON_0001'));
+    return { text: 'Done for #PERSON_0001.' };
+  } });
+  const task = await agent.run({ question: `Write to ${NAME}.` });
+  assert.equal(task.state, 'completed');
+  assert.deepEqual(shown, [`Writing to ${NAME}`]);
+});
+
+test('without guards, the turn gets no unmask', async () => {
+  let seen;
+  const agent = createAgent({ guards: false, system: 'Be useful.', turn: (request) => { seen = request.unmask; return { text: 'ok' }; } });
+  await agent.run({ question: 'Hi' });
+  assert.equal(seen, undefined);
+});

@@ -182,7 +182,8 @@ function createAgent(options = {}) {
         if (!reserve && reason) throw new BudgetStop(reason);
         task.turns += 1;
         await save();
-        const response = await abortable(() => options.turn({ ...request, signal: activeSignal, phase }), activeSignal);
+        // `unmask` : de quoi montrer à la personne un texte du modèle pendant qu'il s'écrit (réponse en flux).
+        const response = await abortable(() => options.turn({ ...request, signal: activeSignal, phase, ...(guards && run ? { unmask: (text) => run.unmask(text) } : {}) }), activeSignal);
         activeSignal.throwIfAborted();
         const usage = usageOf(request, response, options.pricing);
         for (const field of ['inputTokens', 'outputTokens', 'cost']) task.usage[field] += usage[field];

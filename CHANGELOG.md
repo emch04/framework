@@ -3,6 +3,17 @@
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Chaque package Astratra est versionné indépendamment.
 
+## 2026-10-10 — `@astratra/agent` 1.1.0 : montrer une réponse pendant qu'elle s'écrit
+
+### Ajouté
+- Avec des gardes, `turn` reçoit `unmask(texte)` : les vrais mots d'un texte du modèle, pour montrer une réponse en flux (`onText` de `@astratra/ai` 1.10.0) sans ses repères de masquage. La réponse finale passe toujours par la garde de sortie ; la requête envoyée au modèle reste masquée. Tests.
+
+## 2026-10-10 — `@astratra/ai` 1.10.0 : la réponse petit à petit
+
+### Ajouté
+- `onText` (contexte de `route()`, ou `io` d'`askChatModel` et `askGeminiModel`) : la réponse est demandée en flux (`stream` au format OpenAI, `streamGenerateContent` chez Gemini) et le texte montrable entier est rendu à chaque avancée, sans réflexion, sans balise coupée, sans appel d'outil écrit ; il repart de zéro au modèle suivant ; la valeur rendue ne change pas. Jamais passé à un fournisseur masqué.
+- `visibleSoFar`, `readServerEvents`, `textReporter` ; tests (OpenAI, appels d'outils en morceaux, Gemini avec sources, routeur).
+
 ## 2026-10-10 — `@astratra/conscience` 1.2.0 : magasins MongoDB
 
 ### Ajouté

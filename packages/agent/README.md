@@ -318,6 +318,12 @@ tenant: scope it for tenant dashboards.
 The interface parts are `FeedbackBar` in `@astratra/native-ui` (React Native)
 and `@astratra/saas-kit-ui` (web).
 
+### Showing the answer while it is written
+
+With guards, `turn` receives `unmask(text)`: the real words of a (masked) model text. With `onText` from
+`@astratra/ai` (1.10.0) you can show a streamed answer without its masking markers (`#PERSON_0001`). The final answer
+still goes through the output guard (leaks, moderation); what is sent to the model stays masked.
+
 ## Tests
 
 `npm test -w @astratra/agent` uses `node --test`; the guard tests run on

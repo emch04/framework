@@ -21,6 +21,7 @@ const { readRetryAfter } = require('./providerLimits');
  */
 
 const { providerResult, readWrittenAnswer, withoutThinking } = require('./modelAnswers');
+const { readServerEvents, textReporter } = require('./streamedAnswer');
 
 const DEFAULT_ENDPOINT = 'https://generativelanguage.googleapis.com/v1beta/models';
 const DEFAULT_TIMEOUT_MS = 45_000;
@@ -162,7 +163,10 @@ async function askGeminiModel(model, request, io = {}) {
   const hasFunctions = Boolean(request.tools && request.tools.length);
   const timeout = globalThis.AbortSignal.timeout(io.timeoutMs || DEFAULT_TIMEOUT_MS);
   const signal = io.signal ? globalThis.AbortSignal.any([io.signal, timeout]) : timeout;
-  const send = (dropFunctions) => io.fetch(`${io.endpoint || DEFAULT_ENDPOINT}/${model}:generateContent`, {
+  /* `onText` : la réponse en flux (streamGenerateContent), le texte montrable entier à chaque avancée. */
+  const report = textReporter(io.onText);
+  const method = report ? 'streamGenerateContent?alt=sse' : 'generateContent';
+  const send = (dropFunctions) => io.fetch(`${io.endpoint || DEFAULT_ENDPOINT}/${model}:${method}`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', 'x-goog-api-key': io.key },
     body: JSON.stringify({ ...requestBody(model, request, io.noSystemInstruction || noSystemInstructionByDefault, search, dropFunctions), ...(io.extra || {}) }),
@@ -179,7 +183,8 @@ async function askGeminiModel(model, request, io = {}) {
     const retryAfterMs = readRetryAfter(response);
     return { status: response.status, ...(retryAfterMs === null ? {} : { retryAfterMs }) };
   }
-  const answer = await response.json();
+  const contentType = (response.headers && typeof response.headers.get === 'function' && response.headers.get('content-type')) || '';
+  const answer = report && contentType.includes('text/event-stream') ? await readGeminiStream(response, report) : await response.json();
   const candidate = (answer && answer.candidates && answer.candidates[0]) || {};
   const grounding = search ? { grounding: { ...readGeminiGrounding(candidate), functionsDropped } } : {};
   const parts = (candidate.content && candidate.content.parts) || [];
@@ -193,6 +198,28 @@ async function askGeminiModel(model, request, io = {}) {
   const written = readWrittenAnswer(text, hasFunctions && !functionsDropped);
   if (written) return { status: response.status, ...written, ...grounding };
   return { status: response.status, text, cut: candidate.finishReason === 'MAX_TOKENS', ...grounding };
+}
+
+/* Une réponse en flux, rassemblée en un seul candidat : ses parties (texte, réflexion, appels), sa fin, ses sources. */
+async function readGeminiStream(response, report) {
+  const parts = [];
+  let finishReason;
+  let groundingMetadata;
+  let shown = '';
+  await readServerEvents(response, (event) => {
+    const candidate = event && Array.isArray(event.candidates) ? event.candidates[0] : null;
+    if (!candidate) return;
+    if (candidate.finishReason) finishReason = candidate.finishReason;
+    if (candidate.groundingMetadata) groundingMetadata = candidate.groundingMetadata;
+    for (const part of (candidate.content && candidate.content.parts) || []) {
+      parts.push(part);
+      if (!part.thought && !part.functionCall && typeof part.text === 'string') {
+        shown += part.text;
+        report(shown);
+      }
+    }
+  });
+  return { candidates: [{ content: { parts }, ...(finishReason ? { finishReason } : {}), ...(groundingMetadata ? { groundingMetadata } : {}) }] };
 }
 
 /**
@@ -240,6 +267,7 @@ function createGeminiProvider(options = {}) {
         timeoutMs: ctx.timeoutMs || options.timeoutMs,
         endpoint: options.endpoint,
         noSystemInstruction: options.noSystemInstruction,
+        onText: ctx.onText,
         extra: { ...(options.extra || {}), ...(model.extra || {}) }
       });
       return providerResult(id, answer, options.detailed);

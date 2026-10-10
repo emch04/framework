@@ -78,7 +78,7 @@ const config = {
 | `@astratra/centrale` | `creerCentrale(config, transport?)` : `erreur(e, extra?)`, `vue(nom)`, `usage(nom, props?)`, `ia({…})`, `session(etat)`, `miette(categorie, message, donnees?)`, `definirUtilisateur(id)`, `vider()`. Le transport (fetch par défaut) est injectable. |
 | `@astratra/centrale/node` | `demarrer(config)` ; `app.use(centrale.intergiciel())` en tête, `app.use(centrale.gestionnaireErreurs())` en fin. |
 | `@astratra/centrale/navigateur` | `demarrer(config)` au chargement de l'app web. |
-| `@astratra/centrale/expo` | `demarrer({ ...config, plateforme: Platform.OS, version, build, miseAJour, os, appareil, appState: AppState })`, puis `centrale.ecran(nom)` depuis la navigation. |
+| `@astratra/centrale/expo` | `demarrer({ ...config, plateforme: Platform.OS, version, build, miseAJour, os, appareil, appState: AppState, stockage })`, puis `centrale.ecran(nom)` depuis la navigation. `stockage` (AsyncStorage, expo-file-system…) garde l'état entre deux lancements. |
 | `@astratra/centrale/ia` | `mesurerAppelIA({ fournisseur, modele, outil?, jetons?, estRepli? }, () => appel())`. |
 | `@astratra/centrale/conscience` | `creerConscienceCentrale({ adresse, jeton })` : réglages de la conscience d'une IA, bilan du matin, décisions humaines (section plus bas). |
 
@@ -130,6 +130,12 @@ Les erreurs sont des `ErreurConscience` : `statut` HTTP (ou `null` hors ligne) e
 - **Node** : exceptions non attrapées (enregistrées en `fatal`, puis comportement normal de Node : pile et code 1), promesses rejetées sans gestionnaire (le plantage par défaut est conservé), requêtes Express (identifiant `X-Request-Id`, route en gabarit, durée, statut, miette), erreurs Express (statut ≥ 500 : `erreur`, sinon `avertissement`), vidage à la sortie (`beforeExit`, `SIGTERM`, `SIGINT`, 2 s au plus).
 - **Navigateur** : `error` et `unhandledrejection` (sans remplacer `window.onerror`), vues SPA (`pushState`, `replaceState`, `popstate`) en gabarit, temps de chargement de la première page, sessions (début à l'ouverture, fin quand la page est cachée), envoi final par `navigator.sendBeacon` avec `?cle=`.
 - **Expo** : `ErrorUtils.setGlobalHandler` (fatale : plantage, vidage puis gestionnaire précédent), sessions liées à `AppState` (fin après 30 s en arrière-plan), écrans. `signalerPlantageNatif(rapport)` attend le futur module natif (MetricKit, raison de dernière fermeture Android).
+- **Surveillance renforcée** (navigateur et Expo, `/vigilance`, désactivable option par option) :
+  - requêtes `fetch` dans le fil d'Ariane (gabarit, statut, durée) ; pas de réponse, 5xx, 408 et 429 signalés (`RequeteSansReponse`, `RequeteEchouee`) ; les envois à la Centrale et les annulations ne comptent pas (`requetes`) ;
+  - `console.error` signalé (une fois par message toutes les 10 s), `console.warn` dans le fil d'Ariane (`console`) ;
+  - gardien du fil principal : interface bloquée plus de 2 s signalée (`AppBloquee`, erreur au-delà de 5 s), en pause en arrière-plan (`blocages`) ;
+  - Expo : promesses rejetées sans `catch` (Hermes, `promesses`), alerte mémoire d'iOS (`MemoireSaturee`, au plus une fois par minute), premier plan, arrière-plan et lancement dans le fil d'Ariane ;
+  - avec un `stockage` : le fil d'Ariane, l'écran et la session ouverte sont gardés au fil de l'eau ; au lancement suivant, une session restée ouverte est close « anormale » (ou « plantage » après une erreur fatale), et une fermeture au premier plan est signalée (`FermetureInattendue`, avec le fil d'Ariane et l'écran). Navigateur : à réserver aux apps ouvertes dans un seul onglet.
 - **IA** : fournisseur, modèle, outil, durée, jetons, résultat (`ok`, `erreur`, `quota`, `repli`). **Jamais le contenu.**
 
 Envoi : lots de 100 événements au plus (1 Mio au plus), toutes les 10 s ou dès 50 événements ; file de 500 événements (les plus vieux usages partent d'abord, jamais une erreur avant un usage) ; recul progressif (2 s, 4 s… plafonné à 5 min) ; `Retry-After` respecté sur 429 ; abandon silencieux sur 400, 401, 413 ; hors ligne, la file attend.
@@ -140,7 +146,7 @@ Si le build est passé par `centrale injecter` (paquet `@astratra/centrale-cli`)
 
 ## Vie privée
 
-- Aucun cookie, aucun stockage local.
+- Aucun cookie ; aucun stockage local sans `stockage` (il ne garde que le fil d'Ariane déjà masqué, l'écran et l'identifiant de session).
 - Masquage **avant tout envoi** : e-mails, téléphones, cartes, IBAN, clés, jetons, mots de passe, et les `noms` fournis.
 - Adresses ramenées à leur gabarit (`/eleve/123?token=x` devient `/eleve/:id`).
 - Utilisateur : seulement une empreinte SHA-256 salée, jamais l'identifiant brut.
@@ -150,7 +156,7 @@ Si le build est passé par `centrale injecter` (paquet `@astratra/centrale-cli`)
 ## Ce que le paquet ne fait pas
 
 - Il n'héberge ni backend ni tableau de bord : il envoie les événements à l'adresse que vous indiquez.
-- Il ne capte pas le contenu des appels d'IA, ni de cookie, ni de stockage local.
+- Il ne capte pas le contenu des appels d'IA, ni les cookies.
 - Les rapports de plantage natifs (iOS, Android) ne sont pas encore captés : `signalerPlantageNatif` attend un module natif.
 
 ## Licence

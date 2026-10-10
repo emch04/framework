@@ -6,13 +6,18 @@
  * - `ecran(nom)` à appeler depuis la navigation ;
  * - contexte (plateforme, version, build, mise à jour) lu dans des valeurs INJECTÉES : aucun import
  *   d'expo-constants ni de react-native ;
- * - `signalerPlantageNatif(rapport)` pour le futur module natif (MetricKit, raison de dernière fermeture Android).
+ * - `signalerPlantageNatif(rapport)` pour le futur module natif (MetricKit, raison de dernière fermeture Android) ;
+ * - surveillance renforcée (vigilance.ts) : requêtes `fetch`, `console.error`, promesses rejetées (Hermes), app
+ *   bloquée, alerte mémoire d'iOS, et avec un `stockage` la mémoire d'un lancement à l'autre (fermeture inattendue
+ *   signalée avec le fil d'Ariane et l'écran).
  */
 
 import type { Cadre } from './envoi.ts';
 import { creerCentrale, definirCentraleParDefaut, NOM_SDK } from './coeur.ts';
 import type { Centrale, ConfigCentrale, ReglagesInternes } from './coeur.ts';
 import type { Transport } from './transport.ts';
+import { memoireLancement, suivreConsole, suivreRequetes, surveillerBlocages } from './vigilance.ts';
+import type { ConsoleSuivie, MemoireLancement, StockageCentrale } from './vigilance.ts';
 
 export * from './index.ts';
 
@@ -32,7 +37,7 @@ export interface ErrorUtilsRN {
 /** L'objet `AppState` de React Native. */
 export interface AppStateRN {
   currentState?: string | null;
-  addEventListener(type: 'change', ecouteur: (etat: string) => void): { remove(): void } | undefined;
+  addEventListener(type: 'change' | 'memoryWarning', ecouteur: (etat: string) => void): { remove(): void } | undefined;
 }
 
 export interface ConfigExpo extends ConfigCentrale {
@@ -52,6 +57,25 @@ export interface ConfigExpo extends ConfigCentrale {
   appState?: AppStateRN;
   /** `ErrorUtils` ; par défaut, le global de React Native. */
   errorUtils?: ErrorUtilsRN;
+  /**
+   * Où garder l'état entre deux lancements (AsyncStorage, expo-file-system, SecureStore…). Sans lui, une app
+   * tuée par le système (mémoire, plantage natif) n'est pas vue.
+   */
+  stockage?: StockageCentrale;
+  /** Requêtes `fetch` suivies (vrai par défaut). */
+  requetes?: boolean;
+  /** `console.error` signalé, `console.warn` dans le fil d'Ariane (vrai par défaut). */
+  console?: boolean;
+  /** Gardien du fil JavaScript : interface bloquée signalée (vrai par défaut). */
+  blocages?: boolean;
+  /** Promesses rejetées sans `catch` signalées, par Hermes (vrai par défaut). */
+  promesses?: boolean;
+  /** Où trouver `fetch`, `console` et `HermesInternal` ; par défaut, `globalThis` (surtout pour les tests). */
+  globaux?: { fetch?: unknown; console?: ConsoleSuivie; HermesInternal?: HermesRN };
+}
+
+interface HermesRN {
+  enablePromiseRejectionTracker?(options: { allRejections: boolean; onUnhandled: (id: number, erreur: unknown) => void }): void;
 }
 
 /** Ce que remontera le module natif : un plantage de la session précédente. */
@@ -91,15 +115,17 @@ export function demarrer(config: ConfigExpo, transport?: Transport, reglages: Re
   );
   const nettoyages: Array<() => void> = [];
   let ecranCourant: string | undefined;
+  let memoire: MemoireLancement | undefined;
 
   const resultat: CentraleExpo = {
     ...centrale,
     ecran: (nom: string) => {
       try {
         if (!nom || nom === ecranCourant) return;
-        if (ecranCourant) centrale.miette('navigation', `${ecranCourant} → ${nom}`);
+        centrale.miette('navigation', ecranCourant ? `${ecranCourant} → ${nom}` : nom);
         ecranCourant = nom;
         centrale.vue(nom);
+        memoire?.garder({ ecran: nom });
       } catch { /* jamais chez l'appelant */ }
     },
     signalerPlantageNatif: (rapport: RapportPlantageNatif) => {
@@ -122,6 +148,8 @@ export function demarrer(config: ConfigExpo, transport?: Transport, reglages: Re
       centrale.arreter();
     }
   };
+  // Chaque miette part aussi dans l'état gardé sur le disque.
+  resultat.miette = (categorie, message, donnees) => { centrale.miette(categorie, message, donnees); memoire?.garder(); };
   if (!centrale.actif) return resultat;
   definirCentraleParDefaut(resultat);
 
@@ -135,6 +163,7 @@ export function demarrer(config: ConfigExpo, transport?: Transport, reglages: Re
         try {
           centrale.erreur(erreur, { niveau: estFatale ? 'fatal' : 'erreur' });
           if (estFatale) {
+            memoire?.garderMaintenant({ fatale: true });
             if (centrale.sessionCourante()) centrale.session('plantage');
             // On laisse un court délai au vidage avant que le gestionnaire précédent n'arrête l'app.
             let rendu = false;
@@ -150,24 +179,47 @@ export function demarrer(config: ConfigExpo, transport?: Transport, reglages: Re
       nettoyages.push(() => { if (precedent) errorUtils.setGlobalHandler(precedent); });
     }
 
+    // ——— Surveillance renforcée ———
+    const global = config.globaux ?? (globalThis as { fetch?: unknown; console?: ConsoleSuivie; HermesInternal?: HermesRN });
+    if (config.requetes !== false) nettoyages.push(suivreRequetes(resultat, global, { adresseCentrale: config.adresse, maintenant }));
+    if (config.console !== false && global.console) nettoyages.push(suivreConsole(resultat, global.console, maintenant));
+    const gardien = config.blocages !== false ? surveillerBlocages(resultat, { minuterie: reglages.minuterie }) : undefined;
+    if (gardien) nettoyages.push(() => gardien.arreter());
+    if (config.promesses !== false) {
+      try {
+        global.HermesInternal?.enablePromiseRejectionTracker?.({
+          allRejections: true,
+          onUnhandled: (_id, erreur) => { centrale.erreur(erreur, { etiquettes: { origine: 'promesse' } }); }
+        });
+      } catch { /* rien */ }
+    }
+
     // ——— Sessions ———
     const appState = config.appState;
     let depuisArrierePlan: number | null = null;
     let minuterie: ReturnType<typeof setTimeout> | null = null;
     const finirSession = () => {
       if (centrale.sessionCourante()) centrale.session('ok');
+      memoire?.garderMaintenant({ premierPlan: false });
       void centrale.vider();
     };
     const annuler = () => { if (minuterie) clearTimeout(minuterie); minuterie = null; };
     const surEtat = (etat: string) => {
       if (etat === 'active') {
         annuler();
+        gardien?.reprise();
+        resultat.miette('autre', 'Premier plan');
         // La minuterie peut ne pas avoir tourné (JavaScript suspendu en arrière-plan).
         if (depuisArrierePlan !== null && maintenant() - depuisArrierePlan >= ARRIERE_PLAN_MS) finirSession();
         depuisArrierePlan = null;
         if (!centrale.sessionCourante()) centrale.session('debut');
+        memoire?.garderMaintenant({ premierPlan: true });
       } else if (etat === 'background') {
         if (depuisArrierePlan === null) depuisArrierePlan = maintenant();
+        // En arrière-plan, JavaScript est suspendu : le gardien prendrait la suspension pour un blocage.
+        gardien?.pause();
+        resultat.miette('autre', 'Arrière-plan');
+        memoire?.garderMaintenant({ premierPlan: false });
         void centrale.vider();
         annuler();
         minuterie = setTimeout(() => { minuterie = null; finirSession(); }, ARRIERE_PLAN_MS);
@@ -175,11 +227,29 @@ export function demarrer(config: ConfigExpo, transport?: Transport, reglages: Re
     };
     if (appState) {
       const abonnement = appState.addEventListener('change', (etat) => { try { surEtat(etat); } catch { /* rien */ } });
-      nettoyages.push(() => { annuler(); abonnement?.remove(); });
+      // iOS manque de mémoire : l'app risque d'être fermée.
+      let derniereAlerte = -Infinity;
+      const memoireBasse = appState.addEventListener('memoryWarning', () => {
+        try {
+          resultat.miette('autre', 'Mémoire saturée');
+          if (maintenant() - derniereAlerte < 60_000) return;
+          derniereAlerte = maintenant();
+          centrale.erreur({ name: 'MemoireSaturee', message: "Le système manque de mémoire : l'app risque d'être fermée." }, { niveau: 'avertissement', pile: [] });
+        } catch { /* rien */ }
+      });
+      nettoyages.push(() => { annuler(); abonnement?.remove(); memoireBasse?.remove(); });
       if (!appState.currentState || appState.currentState === 'active') centrale.session('debut');
     } else {
       centrale.session('debut');
     }
+    // L'état du lancement précédent, puis le nôtre, gardés entre deux lancements.
+    if (config.stockage) {
+      memoire = memoireLancement(resultat, config.stockage, { maintenant });
+      const m = memoire;
+      nettoyages.push(() => m.arreter());
+      void m.reprendre();
+    }
+    resultat.miette('autre', "Lancement de l'app");
   } catch (err) {
     if (config.debug) console.warn('[centrale] branchement Expo incomplet', err);
   }

@@ -1,6 +1,6 @@
 {
   "name": "@astratra/centrale",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Paquet de collecte pour un tableau de bord de surveillance auto-hébergé : erreurs, vues, usages, sessions et appels d'IA, masqués à la source ; client des réglages, bilans et décisions de la conscience d'une IA. Sans aucune dépendance.",
   "type": "module",
   "exports": {
@@ -31,6 +31,10 @@
     "./masquage": {
       "types": "./dist/masquage.d.ts",
       "default": "./dist/masquage.js"
+    },
+    "./vigilance": {
+      "types": "./dist/vigilance.d.ts",
+      "default": "./dist/vigilance.js"
     },
     "./conscience": {
       "types": "./dist/conscience.d.ts",

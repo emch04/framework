@@ -21,7 +21,12 @@ function fauxAppState(initial = 'active') {
   const ecouteurs = new Set<(etat: string) => void>();
   const appState: AppStateRN & { changer(etat: string): void; ecouteurs: number } = {
     currentState: initial,
-    addEventListener: (_type, ecouteur) => { ecouteurs.add(ecouteur); return { remove: () => ecouteurs.delete(ecouteur) }; },
+    addEventListener: (type, ecouteur) => {
+      // Seuls les changements d'état passent ici ; l'alerte mémoire a son propre test.
+      if (type !== 'change') return { remove: () => undefined };
+      ecouteurs.add(ecouteur);
+      return { remove: () => ecouteurs.delete(ecouteur) };
+    },
     changer(etat: string) { this.currentState = etat; for (const e of ecouteurs) e(etat); },
     get ecouteurs() { return ecouteurs.size; }
   };
@@ -52,7 +57,7 @@ test('contexte injecté, écrans, erreurs non fatales, gestionnaire précédent 
   assert.deepEqual((evs.filter((e) => e.type === 'vue') as EvenementVue[]).map((v) => v.nom), ['Accueil', 'FicheEleve']);
   const err = evs.find((e) => e.type === 'erreur') as EvenementErreur;
   assert.equal(err.niveau, 'erreur');
-  assert.deepEqual(err.filAriane?.map((m) => m.message), ['Accueil → FicheEleve']);
+  assert.deepEqual(err.filAriane?.map((m) => m.message), ["Lancement de l'app", 'Accueil', 'Accueil → FicheEleve']);
 });
 
 test('erreur fatale : plantage enregistré, vidage, puis gestionnaire précédent', async () => {

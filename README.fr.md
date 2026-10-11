@@ -90,7 +90,7 @@ est dans [CHANGELOG.md](CHANGELOG.md).
 | Paquet | Version | Rôle |
 |---|---|---|
 | [`@astratra/core`](packages/core/README.md) | 1.1.0 | Réponses d'API, erreurs, journaux, identifiants de requête, configuration par variables d'environnement |
-| [`@astratra/security`](packages/security/README.md) | 1.13.0 | JWT et RBAC, limitation de débit (mémoire ou Redis), CSP, WAF heuristique, passkeys WebAuthn, HMAC entre services, journal d'audit chaîné |
+| [`@astratra/security`](packages/security/README.md) | 1.12.1 | JWT et RBAC, limitation de débit (mémoire ou Redis), CSP, WAF heuristique, passkeys WebAuthn, HMAC entre services, journal d'audit chaîné |
 | [`@astratra/credentials`](packages/credentials/README.md) | 1.1.0 | Clés de service chiffrées en base, modifiables depuis l'interface sans redémarrage |
 | [`@astratra/entitlements`](packages/entitlements/README.md) | 1.0.0 | Plans, fonctionnalités, gardes de facturation et de statut, isolation par locataire qui échoue fermée, invitations par lien, quotas et budgets d'IA |
 | [`@astratra/flags`](packages/flags/README.md) | 1.0.1 | Drapeaux de fonctionnalités et expériences déterministes : ciblage, déploiement progressif, fournisseur compatible OpenFeature |
@@ -138,7 +138,7 @@ est dans [CHANGELOG.md](CHANGELOG.md).
 | [`@astratra/store-postgres`](packages/store-postgres/README.md) | 1.1.0 | Adaptateurs de persistance PostgreSQL (`pg`) pour les magasins du SaaS |
 | [`@astratra/saas-kit-ui`](packages/saas-kit-ui/README.md) | 1.4.0 | Tableau de bord React pour `@astratra/saas-kit`, barre de retours 👍/👎 |
 | [`@astratra/react`](packages/react/README.md) | 1.0.0 | Primitives React nues pour sessions, permissions et appels d'API, sans tableau de bord imposé |
-| [`@astratra/client`](packages/client/README.md) | 1.2.0 | Plomberie côté client indépendante du framework : rafraîchissement sur 401, garde de route, règles de mot de passe, file hors ligne |
+| [`@astratra/client`](packages/client/README.md) | 1.1.0 | Plomberie côté client indépendante du framework : rafraîchissement sur 401, garde de route, règles de mot de passe, file hors ligne |
 | [`@astratra/prerender`](packages/prerender/README.md) | 1.0.0 | Prérendu SEO pour un site Vite et React : un HTML par route, sitemap issu de la même liste |
 | [`@astratra/native`](packages/native/README.md) | 1.0.0 | Plomberie mobile : session dans le trousseau, verrou biométrique, enregistrement des notifications, retour de paiement |
 | [`@astratra/native-ui`](packages/native-ui/README.md) | 1.2.0 | Kit d'interface React Native et Expo, dont la logique pure se teste dans Node, barre de retours 👍/👎 |

@@ -2,7 +2,7 @@
  * Password rules, said once — and said per condition.
  *
  * The usual shape is one regex, copied into the signup screen and enforced
- * blindly by the server. The user sees a single line — "12 characters min…" —
+ * blindly by the server. The user sees a single line — "8 characters min…" —
  * and only finds out WHICH of the five conditions failed when the form
  * bounces. Worse, the two copies drift, and a password the screen accepts
  * fails on the server.
@@ -22,13 +22,13 @@ const DEFAULT_CONDITIONS = [
 
 /**
  * @param {object} [options]
- * @param {number} [options.minLength] default 12 (the same floor as isStrongPassword on the server).
+ * @param {number} [options.minLength] default 8.
  * @param {Array}  [options.conditions] replaces the defaults: [{ key, test }].
  *   Keys, not sentences: the screen translates them, the rule does not carry
  *   a language.
  */
 function createPasswordRules(options = {}) {
-  const minLength = options.minLength || 12;
+  const minLength = options.minLength || 8;
   const conditions = options.conditions || DEFAULT_CONDITIONS;
   if (!Array.isArray(conditions) || !conditions.length) {
     throw new Error('createPasswordRules requires at least one condition.');

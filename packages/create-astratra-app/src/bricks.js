@@ -336,7 +336,7 @@ export const archive = createArchiveBuilder({
 
   client: {
     package: '@astratra/client',
-    version: '^1.2.0',
+    version: '^1.1.0',
     summary: 'session sur 401, garde de route, mots de passe, file hors ligne',
     file: 'web/src/lib/client.js',
     contents: () => `import { createPasswordRules, createRouteGuard, createSessionClient } from '@astratra/client';

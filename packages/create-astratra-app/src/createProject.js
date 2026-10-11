@@ -70,7 +70,7 @@ function packageJson(projectName, template, bricks = []) {
   const dependencies = {
     '@astratra/ai': '^1.9.0',
     '@astratra/core': '^1.1.0',
-    '@astratra/saas-kit': '^1.8.0',
+    '@astratra/saas-kit': '^2.0.0',
     '@astratra/security': '^1.12.0'
   };
   // Scaffolded (api/stores/mongo.js, api/db/mongo.js) but not wired into
@@ -301,7 +301,7 @@ export async function createMemoryStores() {
   if (process.env.NODE_ENV === 'production') {
     throw new Error('In-memory stores and demo accounts are for development only: plug real stores in production.');
   }
-  const demoPassword = process.env.DEMO_PASSWORD || crypto.randomBytes(12).toString('base64url');
+  const demoPassword = process.env.DEMO_PASSWORD || crypto.randomBytes(9).toString('base64url') /* 12 characters */;
   const passwordHash = await hashPassword(demoPassword);
   return {
     demoPassword,

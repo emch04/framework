@@ -12,13 +12,13 @@ describe('per-condition checks', () => {
   });
 
   test('a password meeting everything is valid', () => {
-    expect(rules().isValid('Abcdef1!')).toBe(true);
+    expect(rules().isValid('Abcdefgh1!xy')).toBe(true);
   });
 
   test('one missing condition invalidates, and says WHICH', () => {
-    const checks = rules().check('Abcdefg!');
+    const checks = rules().check('Abcdefghijk!');
 
-    expect(rules().isValid('Abcdefg!')).toBe(false);
+    expect(rules().isValid('Abcdefghijk!')).toBe(false);
     expect(checks.find((c) => c.key === 'digit').met).toBe(false);
     expect(checks.filter((c) => !c.met)).toHaveLength(1);
   });
@@ -38,23 +38,24 @@ describe('strength and submission', () => {
   test('strength is the share of conditions met — feeds a progress bar', () => {
     expect(rules().strength('')).toBe(0);
     expect(rules().strength('abc')).toBe(0.2);
-    expect(rules().strength('Abcdef1!')).toBe(1);
+    expect(rules().strength('Abcdefgh1!xy')).toBe(1);
   });
 
   test('submission requires validity AND a matching confirmation', () => {
-    expect(rules().canSubmit('Abcdef1!', 'Abcdef1!')).toBe(true);
-    expect(rules().canSubmit('Abcdef1!', 'autre')).toBe(false);
+    expect(rules().canSubmit('Abcdefgh1!xy', 'Abcdefgh1!xy')).toBe(true);
+    expect(rules().canSubmit('Abcdefgh1!xy', 'autre')).toBe(false);
     expect(rules().canSubmit('faible', 'faible')).toBe(false);
   });
 });
 
 describe('configuration', () => {
   test('the minimum length is adjustable', () => {
-    const strict = createPasswordRules({ minLength: 12 });
+    const strict = createPasswordRules({ minLength: 14 });
 
-    expect(strict.isValid('Abcdef1!')).toBe(false);
-    expect(strict.isValid('Abcdefghij1!')).toBe(true);
-    expect(strict.minLength).toBe(12);
+    expect(strict.isValid('Abcdefgh1!xy')).toBe(false);
+    expect(strict.isValid('Abcdefghij1!xy')).toBe(true);
+    expect(strict.minLength).toBe(14);
+    expect(createPasswordRules().minLength).toBe(12);
   });
 
   test('the conditions themselves can be replaced', () => {
@@ -66,8 +67,8 @@ describe('configuration', () => {
     });
 
     expect(custom.keys).toEqual(['length', 'no-spaces']);
-    expect(custom.isValid('sansespace')).toBe(true);
-    expect(custom.isValid('avec espace')).toBe(false);
+    expect(custom.isValid('sansespacebien')).toBe(true);
+    expect(custom.isValid('avec un espace')).toBe(false);
   });
 
   test('THE SAME MODULE runs on both ends — screen and server cannot drift', () => {
@@ -75,7 +76,7 @@ describe('configuration', () => {
        screen, and a password accepted on screen bouncing at submit. */
     const screen = createPasswordRules();
     const server = createPasswordRules();
-    for (const candidate of ['Abcdef1!', 'faible', 'ABCDEF1!', 'Abcdefgh']) {
+    for (const candidate of ['Abcdefgh1!xy', 'faible', 'ABCDEF1!', 'Abcdefgh']) {
       expect(screen.isValid(candidate)).toBe(server.isValid(candidate));
     }
   });

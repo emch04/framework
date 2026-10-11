@@ -47,7 +47,7 @@
     "done_help": "Votre compte est créé. Connectez-vous pour continuer."
   },
   "password": {
-    "length": "8 caractères minimum",
+    "length": "12 caractères minimum",
     "lowercase": "Une minuscule",
     "uppercase": "Une majuscule",
     "digit": "Un chiffre",

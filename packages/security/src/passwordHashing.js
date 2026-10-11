@@ -85,7 +85,8 @@ async function verifyPasswordHash(password, hash) {
   return crypto.timingSafeEqual(derivedKey, expectedKey);
 }
 
-const DEFAULT_MIN_LENGTH = 8;
+/* 12 since 2026-10-11 (was 8): length is what makes a password hard to guess. */
+const DEFAULT_MIN_LENGTH = 12;
 const REGEX_UPPERCASE = /[A-Z]/;
 const REGEX_LOWERCASE = /[a-z]/;
 const REGEX_DIGIT = /\d/;

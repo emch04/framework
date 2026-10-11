@@ -100,7 +100,7 @@ function createIdTokenVerifier(options = {}) {
     attemptedAt = now();
     let body;
     try {
-      const signal = typeof AbortSignal !== 'undefined' && AbortSignal.timeout ? AbortSignal.timeout(timeoutMs) : undefined;
+      const signal = typeof globalThis.AbortSignal?.timeout === 'function' ? globalThis.AbortSignal.timeout(timeoutMs) : undefined;
       const response = await fetchImpl(jwksUrl, signal ? { signal } : undefined);
       if (!response || !response.ok) throw new Error('status');
       body = await response.json();

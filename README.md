@@ -85,7 +85,7 @@ package is in [CHANGELOG.md](CHANGELOG.md).
 | Package | Version | What it does |
 |---|---|---|
 | [`@astratra/core`](packages/core/README.md) | 1.1.0 | API responses, errors, logs, request IDs, environment configuration |
-| [`@astratra/security`](packages/security/README.md) | 1.11.1 | JWT and RBAC, rate limiting (memory or Redis), CSP, heuristic WAF, WebAuthn passkeys, HMAC between services, chained audit log |
+| [`@astratra/security`](packages/security/README.md) | 1.13.0 | JWT and RBAC, rate limiting (memory or Redis), CSP, heuristic WAF, WebAuthn passkeys, HMAC between services, chained audit log |
 | [`@astratra/credentials`](packages/credentials/README.md) | 1.1.0 | Encrypted service keys stored in your database, editable from the interface without a restart |
 | [`@astratra/entitlements`](packages/entitlements/README.md) | 1.0.0 | Plans, features, billing and status guards, tenant isolation that fails closed, invitations by link, AI quotas and budgets |
 | [`@astratra/flags`](packages/flags/README.md) | 1.0.1 | Deterministic feature flags and experiments: targeting, gradual rollout, OpenFeature-compatible provider |
@@ -97,10 +97,10 @@ package is in [CHANGELOG.md](CHANGELOG.md).
 
 | Package | Version | What it does |
 |---|---|---|
-| [`@astratra/ai`](packages/ai/README.md) | 1.7.0 | Multi-provider AI routing with quotas and fallback, tool registry, agent loop, risk levels with confirmation, local llama.cpp provider |
+| [`@astratra/ai`](packages/ai/README.md) | 1.9.0 | Multi-provider AI routing with quotas and fallback, tool registry, agent loop, risk levels with confirmation, local llama.cpp provider |
 | [`@astratra/agent`](packages/agent/README.md) | 1.0.0 | Durable tasks, budgets, plans, completion checks, context summaries, consumption tracking, and user feedback (👍/👎) the agent learns from |
-| [`@astratra/models`](packages/models/README.md) | 1.0.0 | Local CPU model service (embeddings, reranking, NLI, entities, speech-to-text) and its Node client; price catalogue and cost calculation |
-| [`@astratra/conscience`](packages/conscience/README.md) | 1.0.0 | Documented memory of an agent's decisions (outcomes, corrections, lessons with evidence, self-model, lineage, erasure) under a deterministic governor without any language model |
+| [`@astratra/models`](packages/models/README.md) | 1.1.0 | Local CPU model service (embeddings, reranking, NLI, entities, speech-to-text) and its Node client; price catalogue and cost calculation |
+| [`@astratra/conscience`](packages/conscience/README.md) | 1.2.0 | Documented memory of an agent's decisions (outcomes, corrections, lessons with evidence, self-model, lineage, erasure) under a deterministic governor without any language model |
 | [`@astratra/memory`](packages/memory/README.md) | 2.0.0 | Per-person memories for an assistant: hybrid recall, duplicate merging, undoable corrections, PostgreSQL store |
 | [`@astratra/rag`](packages/rag/README.md) | 1.0.0 | Document retrieval: chunking, injected embeddings, hybrid search, source verification, document reading through an optional service |
 | [`@astratra/voice`](packages/voice/README.md) | 1.1.0 | Server-side text-to-speech (Piper, ffmpeg), versioned caches, provider chain with key rotation, local transcription |
@@ -128,23 +128,23 @@ package is in [CHANGELOG.md](CHANGELOG.md).
 
 | Package | Version | What it does |
 |---|---|---|
-| [`@astratra/saas-kit`](packages/saas-kit/README.md) | 1.6.1 | Backend starter: `createSaasApp()` assembles users, authentication, settings, notifications and dashboard routes |
+| [`@astratra/saas-kit`](packages/saas-kit/README.md) | 2.0.0 | Backend starter: `createSaasApp()` assembles users, authentication, settings, notifications and dashboard routes |
 | [`@astratra/store-mongo`](packages/store-mongo/README.md) | 1.1.0 | MongoDB (Mongoose) persistence adapters for the SaaS stores |
 | [`@astratra/store-postgres`](packages/store-postgres/README.md) | 1.1.0 | PostgreSQL (`pg`) persistence adapters for the SaaS stores |
-| [`@astratra/saas-kit-ui`](packages/saas-kit-ui/README.md) | 1.2.0 | React dashboard for `@astratra/saas-kit`, 👍/👎 feedback bar |
+| [`@astratra/saas-kit-ui`](packages/saas-kit-ui/README.md) | 1.4.0 | React dashboard for `@astratra/saas-kit`, 👍/👎 feedback bar |
 | [`@astratra/react`](packages/react/README.md) | 1.0.0 | Bare React primitives for sessions, permissions and API calls, without an imposed dashboard |
-| [`@astratra/client`](packages/client/README.md) | 1.1.0 | Framework-agnostic client plumbing: refresh on 401, route guard, password rules, offline queue |
+| [`@astratra/client`](packages/client/README.md) | 1.2.0 | Framework-agnostic client plumbing: refresh on 401, route guard, password rules, offline queue |
 | [`@astratra/prerender`](packages/prerender/README.md) | 1.0.0 | SEO prerendering for Vite and React sites: one HTML file per route, sitemap from the same list |
 | [`@astratra/native`](packages/native/README.md) | 1.0.0 | Mobile plumbing: keychain session, biometric gate, push registration, payment return |
-| [`@astratra/native-ui`](packages/native-ui/README.md) | 1.1.0 | UI kit for React Native and Expo, with pure logic testable in Node, 👍/👎 feedback bar |
+| [`@astratra/native-ui`](packages/native-ui/README.md) | 1.2.0 | UI kit for React Native and Expo, with pure logic testable in Node, 👍/👎 feedback bar |
 | [`@astratra/app-version`](packages/app-version/README.md) | 1.0.0 | Announcements of new mobile builds: public version route, one announcement per version |
-| [`create-astratra-app`](packages/create-astratra-app/README.md) | 1.10.0 | Project generator: full stack, API only, or Expo app, with optional building blocks |
+| [`create-astratra-app`](packages/create-astratra-app/README.md) | 1.11.0 | Project generator: full stack, API only, or Expo app, with optional building blocks |
 
 ### Monitoring and tooling
 
 | Package | Version | What it does |
 |---|---|---|
-| [`@astratra/centrale`](packages/centrale/README.md) | 1.0.1 | Collection package for a self-hosted monitoring dashboard: errors, crashes, views, usage, AI calls; masked at the source, sent in batches; no dependencies |
+| [`@astratra/centrale`](packages/centrale/README.md) | 1.4.0 | Collection package for a self-hosted monitoring dashboard: errors, crashes, views, usage, AI calls; masked at the source, sent in batches; no dependencies |
 | [`@astratra/centrale-cli`](packages/centrale-cli/README.md) | 1.0.1 | Command-line tool for the same dashboard: debug IDs and source maps, deployment declaration |
 | [`@astratra/tooling`](packages/tooling/README.md) | 1.5.0 | Workspace audit (secrets, routes, translations), test runner, deployment with rollback, app publishing, AI evaluation |
 | [`@astratra/testkit`](packages/testkit/README.md) | 1.1.0 | Disposable MongoDB or PostgreSQL test databases, reproducible per-country fake data, guard against production databases |

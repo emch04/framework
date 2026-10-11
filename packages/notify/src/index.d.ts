@@ -311,3 +311,42 @@ export function createNotificationCatalog(options: {
   /** One object, or several (one per domain) — a key declared twice throws. */
   entries: NotificationEntries | NotificationEntries[];
 }): NotificationCatalog;
+
+/** What createApnsTransport sends: the alert, Apple's options, and your data beside `aps`. */
+export interface ApnsPayload {
+  title?: string;
+  body?: string;
+  data?: Record<string, unknown>;
+  /** Number on the app icon. */
+  badge?: number;
+  /** null: silent. Default 'default'. */
+  sound?: string | null;
+  /** Time-sensitive: passes Focus modes. */
+  urgent?: boolean;
+  /** Silent background notification. */
+  contentAvailable?: boolean;
+  threadId?: string;
+  collapseId?: string;
+  /** UNIX seconds after which Apple stops trying. */
+  expiration?: number;
+  pushType?: 'alert' | 'background' | 'voip';
+}
+export interface ApnsTransport {
+  (deviceToken: string | { token: string }, payload: ApnsPayload): Promise<{ status: 200 }>;
+  /** Closes the kept HTTP/2 connection. */
+  close(): void;
+}
+export function createApnsTransport(options: {
+  /** The .p8 private key (PEM, or one line). */
+  key: string;
+  keyId: string;
+  teamId: string;
+  /** The app's bundle identifier. */
+  topic: string;
+  /** Default true; false for the sandbox gateway. */
+  production?: boolean;
+  url?: string;
+  timeoutMs?: number;
+  now?: () => number;
+}): ApnsTransport;
+export function apnsBody(payload: ApnsPayload): string;

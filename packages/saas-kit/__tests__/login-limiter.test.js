@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { createSaasApp, createMemoryUsersStore } = require('../src');
-const { TEST_PASSWORD_HASH, testUsers, verifyTestPassword } = require('./fixtures');
+const { testUsers, verifyTestPassword } = require('./fixtures');
 
 const SECRET = 'saas-kit-test-secret';
 

@@ -215,6 +215,51 @@ describe('output', () => {
     expect(found.map((f) => f.type)).toEqual(['card', 'iban']);
   });
 
+  /* Fake secrets are assembled at run time: a literal key in the source would trip the
+     secret scanners of the host, and would teach nobody anything. */
+  const fake = {
+    openai: ['sk', 'proj', 'A1b2C3d4E5f6G7h8I9j0K1l2M3n4'].join('-'),
+    anthropic: ['sk', 'ant', 'api03', 'Z9y8X7w6V5u4T3s2R1q0P9o8N7m6'].join('-'),
+    google: 'AIza' + 'Sy' + 'B'.repeat(33),
+    github: 'ghp' + '_' + 'a1B2c3D4'.repeat(5),
+    stripe: ['sk', 'live', '4eC39HqLyjWDarjtT1zdp7dc'].join('_'),
+    aws: 'AKIA' + 'IOSFODNN7EXAMPLE',
+    jwt: ['eyJhbGciOiJIUzI1NiJ9', 'eyJzdWIiOiIxMjM0NTY3ODkwIn0', 'dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U'].join('.'),
+    pem: ['-----BEGIN', 'PRIVATE KEY-----'].join(' ') + '\nMIGTAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBHkwdwIBAQQg\n' + ['-----END', 'PRIVATE KEY-----'].join(' ')
+  };
+
+  test('secrets are found: API keys of the main providers, JWTs, private keys', () => {
+    const text = `openai ${fake.openai}, claude ${fake.anthropic}, google ${fake.google}, github ${fake.github}, stripe ${fake.stripe}, aws ${fake.aws}, jeton ${fake.jwt}, cle ${fake.pem}`;
+    const found = findPersonalData(text);
+    expect(found.map((f) => f.type)).toEqual(['apiKey', 'apiKey', 'apiKey', 'apiKey', 'apiKey', 'apiKey', 'jwt', 'privateKey']);
+    expect(found.map((f) => f.value)).toEqual([fake.openai, fake.anthropic, fake.google, fake.github, fake.stripe, fake.aws, fake.jwt, fake.pem]);
+  });
+
+  test('IP addresses are found (v4 and v6), versions, dates and look-alikes are not', () => {
+    const found = findPersonalData('serveur 161.97.142.125, interne 10.0.0.12, v6 2001:db8:85a3::8a2e:370:7334, version 1.12.1, date 2026.10.11, faux 999.1.1.1, heure 12:30');
+    expect(found.map((f) => [f.type, f.value])).toEqual([['ip', '161.97.142.125'], ['ip', '10.0.0.12'], ['ip', '2001:db8:85a3::8a2e:370:7334']]);
+  });
+
+  test('an IP address is never half-read as a phone number, a key never as a card', () => {
+    const found = findPersonalData(`appelle le 192.168.100.200 ou ${fake.stripe}`);
+    expect(found.map((f) => f.type)).toEqual(['ip', 'apiKey']);
+  });
+
+  test('ordinary words that start like a key are not secrets', () => {
+    expect(findPersonalData('le risk-taking, ask-me, sk-8 skating, task_list, AKIA est un nom')).toEqual([]);
+  });
+
+  test('a secret the model writes that nobody gave it is a leak; the same secret given by the person is not', async () => {
+    const { guards } = setup({ policy: { onLeak: 'redact' } });
+    const leaked = await guards.output(`Utilise la cle ${fake.openai}`, guards.newRun());
+    expect(leaked.decision).toBe('flag');
+    expect(leaked.text).not.toContain(fake.openai);
+    const run = guards.newRun();
+    await guards.input(`Ma cle est ${fake.openai}, verifie son format`, run);
+    const echoed = await guards.output(`La cle ${fake.openai} a le bon format`, run);
+    expect(echoed.decision).toBe('allow');
+  });
+
   test('moderation: an unsafe reply is blocked with categories, a clean one passes', async () => {
     const { guards } = setup();
     const bad = await guards.output('I will kill you tomorrow.', guards.newRun());

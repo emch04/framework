@@ -72,7 +72,7 @@ export interface CreateGuardsOptions {
     moderation?: boolean;
     /** Share of supported claims under which the reply is `unsupported`. Default 0.5. */
     minSupport?: number;
-    leakTypes?: Array<'email' | 'iban' | 'card' | 'phone'>;
+    leakTypes?: Array<PersonalDataType>;
     allowLeak?: (item: { type: string; key: string }, run: GuardRun) => boolean;
   };
   /** `verifySources` of @astratra/rag; default: the installed @astratra/rag. */
@@ -143,7 +143,9 @@ export function createGuards(options?: CreateGuardsOptions): Guards;
 /** Every check on, failClosed for actions, 0.3 injection threshold before an action, leaks and unsafe replies blocked. */
 export function recommendedGuards(options?: CreateGuardsOptions & { readOnly?: boolean }): Guards;
 export function frameUntrusted(content: string, options?: { source?: string; nonce?: string }): string;
-export function findPersonalData(text: string, types?: string[]): Array<{ type: string; value: string; key: string; start: number; end: number }>;
+/** Personal data and secrets recognised without a model. */
+export type PersonalDataType = 'email' | 'iban' | 'card' | 'phone' | 'apiKey' | 'jwt' | 'privateKey' | 'ip';
+export function findPersonalData(text: string, types?: PersonalDataType[]): Array<{ type: PersonalDataType; value: string; key: string; start: number; end: number }>;
 export const UNTRUSTED_NOTICE: string;
 export const GUARD_DECISIONS: readonly GuardDecision[];
 export const FAIL_CLOSED: 'failClosed';

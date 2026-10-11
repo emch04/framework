@@ -21,5 +21,6 @@ module.exports = {
   ...require('./privateFileLinks'),
   ...require('./loginDevices'),
   ...require('./trustedDevices'),
-  ...require('./idTokens')
+  ...require('./idTokens'),
+  ...require('./deviceSignatures')
 };

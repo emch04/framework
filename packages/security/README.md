@@ -864,6 +864,89 @@ Ce qui est garanti, et testé :
 fournisseur OpenID Connect ; `fetch` et `now` s'injectent pour les tests (faux
 JWKS signé localement, jamais le vrai réseau).
 
+## Requêtes signées par la puce du téléphone (sans connexion)
+
+Une app qui s'ouvre **sans écran de connexion**, mais ne répond qu'aux
+téléphones qu'elle connaît. Le téléphone crée une paire de clés P-256 **dans sa
+puce de sécurité** (Secure Enclave sur iPhone) : la clé privée n'en sort
+jamais. Chaque requête porte une signature de ce qu'elle dit (méthode, chemin,
+heure, nonce, empreinte du corps). Le serveur ne garde que la clé publique :
+une copie de sa base ne signe rien.
+
+Deux clés par appareil :
+
+- la **clé d'appareil** signe chaque requête, sans rien demander ;
+- la **clé Face ID** est créée par l'app avec un contrôle d'accès qui fait
+  refuser à la puce toute signature sans Face ID ou empreinte. Une route qui
+  l'exige reçoit une signature que la puce n'a produite qu'après la
+  vérification. Le serveur vérifie la clé, le téléphone garantit le contrôle.
+
+```js
+const { createDeviceSignatureVerifier, createMemoryDeviceStore } = require('@astratra/security');
+
+const appareils = createDeviceSignatureVerifier({
+  store: monStoreEnBase,   // getDevice, countDevices, addDevice, revokeDevice, spendNonce (atomique)
+  maxDevices: 1            // le premier téléphone devient le seul ; l'enregistrement se ferme
+});
+
+app.use(express.raw({ type: '*/*' }));     // la signature porte sur le corps BRUT
+app.post('/appareil', async (req, res) => {
+  const { id, publicKey, biometricPublicKey, biometricSignature } = JSON.parse(req.body);
+  try {
+    await appareils.enroll({ method: req.method, path: req.originalUrl, headers: req.headers, body: req.body },
+      { id, publicKey, biometricPublicKey, biometricSignature });
+    res.status(201).json({ ok: true });
+  } catch { res.status(404).end(); }
+});
+app.get('/conversation', appareils.middleware({ rejectStatus: 404 }), lireConversation);
+app.post('/arret-urgence', appareils.middleware({ requireBiometric: true, rejectStatus: 404 }), arreter);
+```
+
+Les en-têtes : `x-device-id`, `x-device-time` (millisecondes), `x-device-nonce`
+(16 à 128 caractères), `x-device-signature` (base64, DER ou brut 64 octets),
+`x-device-key` (`device` ou `biometric`). Le texte signé est
+`MÉTHODE\nchemin\nheure\nnonce\nsha256(corps) en base64url` — donné par
+`canonicalDeviceRequest`.
+
+Côté iPhone (Swift), les deux clés et une signature :
+
+```swift
+import Security
+import LocalAuthentication
+
+func cleDansLaPuce(tag: String, faceID: Bool) throws -> SecKey {
+    var flags: SecAccessControlCreateFlags = [.privateKeyUsage]
+    if faceID { flags.insert(.biometryCurrentSet) }
+    let acces = SecAccessControlCreateWithFlags(nil, kSecAttrAccessibleWhenUnlockedThisDeviceOnly, flags, nil)!
+    let attributs: [String: Any] = [
+        kSecAttrKeyType as String: kSecAttrKeyTypeECSECPrimeRandom,
+        kSecAttrKeySizeInBits as String: 256,
+        kSecAttrTokenID as String: kSecAttrTokenIDSecureEnclave,
+        kSecPrivateKeyAttrs as String: [kSecAttrIsPermanent as String: true,
+                                        kSecAttrApplicationTag as String: Data(tag.utf8),
+                                        kSecAttrAccessControl as String: acces]
+    ]
+    var erreur: Unmanaged<CFError>?
+    guard let cle = SecKeyCreateRandomKey(attributs as CFDictionary, &erreur) else { throw erreur!.takeRetainedValue() }
+    return cle
+}
+
+// Clé publique à envoyer à l'enregistrement : les 65 octets bruts, en base64.
+let publique = SecKeyCopyExternalRepresentation(SecKeyCopyPublicKey(cle)!, nil)! as Data
+
+// Signature d'une requête (DER, ce que le serveur attend).
+let signature = SecKeyCreateSignature(cle, .ecdsaSignatureMessageX962SHA256, Data(texteSigne.utf8) as CFData, nil)! as Data
+```
+
+Les règles, chacune vérifiée par les tests : une signature de plus de
+`maxSkewMs` (60 s) est refusée ; un nonce ne sert qu'une fois, même une seconde
+après ; un octet changé dans le corps casse la signature ; l'enregistrement
+prouve qu'on détient les clés ; une fausse signature ne grille pas le nonce du
+vrai téléphone ; un appareil révoqué est refusé ; et chaque refus a la **même**
+réponse, pour qu'un curieux n'apprenne rien. En production, `spendNonce` doit
+être atomique (une insertion qui échoue sur un doublon), sinon deux serveurs
+acceptent chacun le même rejeu.
+
 ## Tests
 
 ```bash

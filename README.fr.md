@@ -2,11 +2,26 @@
 
 [English](README.md) | [Français](README.fr.md)
 
-Astratra est un ensemble de paquets npm indépendants pour construire des
-back-ends SaaS et des interfaces web ou mobiles : utilisateurs, rôles, sessions,
-middleware de sécurité, adaptateurs de persistance, tableau de bord, et les
-briques communes derrière les assistants d'IA, les paiements, la comptabilité,
-la prise de rendez-vous et les applications mobiles.
+**Astratra est un framework et un ensemble de SDK pour construire des apps avec l'IA intégrée.**
+
+C'est les deux à la fois, et la différence tient à qui commande :
+
+- **Le framework.** `createSaasApp()` (`@astratra/saas-kit`) monte toute
+  l'application — connexion, sessions, CSRF, comptes, erreurs — et appelle ton
+  code aux endroits prévus (`extendRoutes`, `verifyPassword`, les stores).
+  `create-astratra-app` donne sa forme à un nouveau projet.
+- **Les SDK.** Des paquets qui parlent à un service pour toi, comme
+  `@astratra/centrale` (surveillance, passerelle des clés, recherche) ou le
+  client du service de modèles local dans `@astratra/models`.
+- **Les briques.** Des bibliothèques que tu appelles toi-même, sans structure
+  imposée : `@astratra/security`, `@astratra/client`, `@astratra/ai`,
+  `@astratra/ledger` et les autres.
+
+Le tout est livré en paquets npm indépendants pour des back-ends SaaS et des
+interfaces web ou mobiles : utilisateurs, rôles, sessions, middleware de
+sécurité, adaptateurs de persistance, tableau de bord, et les pièces communes
+derrière les assistants d'IA, les paiements, la comptabilité, la prise de
+rendez-vous et les applications mobiles.
 
 Chaque paquet fait une chose et reçoit ses dépendances par injection : un
 magasin, un transport, un modèle, une horloge, une source de clés. Ton
@@ -90,22 +105,22 @@ est dans [CHANGELOG.md](CHANGELOG.md).
 | Paquet | Version | Rôle |
 |---|---|---|
 | [`@astratra/core`](packages/core/README.md) | 1.1.0 | Réponses d'API, erreurs, journaux, identifiants de requête, configuration par variables d'environnement |
-| [`@astratra/security`](packages/security/README.md) | 1.11.1 | JWT et RBAC, limitation de débit (mémoire ou Redis), CSP, WAF heuristique, passkeys WebAuthn, HMAC entre services, journal d'audit chaîné |
+| [`@astratra/security`](packages/security/README.md) | 1.12.1 | JWT et RBAC, limitation de débit (mémoire ou Redis), CSP, WAF heuristique, passkeys WebAuthn, HMAC entre services, journal d'audit chaîné |
 | [`@astratra/credentials`](packages/credentials/README.md) | 1.1.0 | Clés de service chiffrées en base, modifiables depuis l'interface sans redémarrage |
 | [`@astratra/entitlements`](packages/entitlements/README.md) | 1.0.0 | Plans, fonctionnalités, gardes de facturation et de statut, isolation par locataire qui échoue fermée, invitations par lien, quotas et budgets d'IA |
 | [`@astratra/flags`](packages/flags/README.md) | 1.0.1 | Drapeaux de fonctionnalités et expériences déterministes : ciblage, déploiement progressif, fournisseur compatible OpenFeature |
 | [`@astratra/privacy`](packages/privacy/README.md) | 1.0.0 | Droit d'accès, droit à l'effacement avec validation humaine, anonymisation, nettoyage des journaux |
-| [`@astratra/resilience`](packages/resilience/README.md) | 1.0.0 | Disjoncteur, cache TTL qui se dégrade au lieu d'échouer, relance avec gigue, verrou de tâche à l'échelle du cluster |
+| [`@astratra/resilience`](packages/resilience/README.md) | 1.1.0 | Disjoncteur, cache TTL qui se dégrade au lieu d'échouer, relance avec gigue, verrou de tâche à l'échelle du cluster |
 | [`@astratra/i18n-server`](packages/i18n-server/README.md) | 1.0.0 | Traduction des messages d'API, résolution de la langue, audit de lisibilité des messages d'erreur |
 
 ### IA
 
 | Paquet | Version | Rôle |
 |---|---|---|
-| [`@astratra/ai`](packages/ai/README.md) | 1.7.0 | Routage multi-fournisseur avec quotas et repli, registre d'outils, boucle d'agent, niveaux de risque avec confirmation, fournisseur llama.cpp local |
-| [`@astratra/agent`](packages/agent/README.md) | 1.0.0 | Tâches durables, budgets, plans, vérifications de fin, résumés de contexte, suivi de la consommation et retours utilisateur (👍/👎) dont l'agent tient compte |
-| [`@astratra/models`](packages/models/README.md) | 1.0.0 | Service local de modèles sur CPU (vecteurs, reclassement, NLI, entités, transcription) et son client Node ; catalogue des prix et calcul du coût |
-| [`@astratra/conscience`](packages/conscience/README.md) | 1.0.0 | Mémoire documentée des décisions d'un agent (résultats, corrections, leçons avec preuves, modèle de soi, traçabilité, effacement) sous un gouverneur déterministe sans aucun modèle de langage |
+| [`@astratra/ai`](packages/ai/README.md) | 1.10.0 | Routage multi-fournisseur avec quotas et repli, registre d'outils, boucle d'agent, niveaux de risque avec confirmation, fournisseur llama.cpp local |
+| [`@astratra/agent`](packages/agent/README.md) | 1.1.0 | Tâches durables, budgets, plans, vérifications de fin, résumés de contexte, suivi de la consommation et retours utilisateur (👍/👎) dont l'agent tient compte |
+| [`@astratra/models`](packages/models/README.md) | 1.1.0 | Service local de modèles sur CPU (vecteurs, reclassement, NLI, entités, transcription) et son client Node ; catalogue des prix et calcul du coût |
+| [`@astratra/conscience`](packages/conscience/README.md) | 1.2.0 | Mémoire documentée des décisions d'un agent (résultats, corrections, leçons avec preuves, modèle de soi, traçabilité, effacement) sous un gouverneur déterministe sans aucun modèle de langage |
 | [`@astratra/memory`](packages/memory/README.md) | 2.0.0 | Souvenirs par personne pour un assistant : rappel hybride, fusion des doublons, corrections annulables, magasin PostgreSQL |
 | [`@astratra/rag`](packages/rag/README.md) | 1.0.0 | Recherche dans des documents : découpage, vecteurs injectés, recherche mixte, vérification des sources, lecture de documents par un service optionnel |
 | [`@astratra/voice`](packages/voice/README.md) | 1.1.0 | Synthèse vocale côté serveur (Piper, ffmpeg), caches versionnés, chaîne de fournisseurs avec rotation des clés, transcription locale |
@@ -133,23 +148,23 @@ est dans [CHANGELOG.md](CHANGELOG.md).
 
 | Paquet | Version | Rôle |
 |---|---|---|
-| [`@astratra/saas-kit`](packages/saas-kit/README.md) | 1.6.1 | Démarrage côté serveur : `createSaasApp()` assemble utilisateurs, authentification, réglages, notifications et tableau de bord |
+| [`@astratra/saas-kit`](packages/saas-kit/README.md) | 2.0.0 | Démarrage côté serveur : `createSaasApp()` assemble utilisateurs, authentification, réglages, notifications et tableau de bord |
 | [`@astratra/store-mongo`](packages/store-mongo/README.md) | 1.1.0 | Adaptateurs de persistance MongoDB (Mongoose) pour les magasins du SaaS |
 | [`@astratra/store-postgres`](packages/store-postgres/README.md) | 1.1.0 | Adaptateurs de persistance PostgreSQL (`pg`) pour les magasins du SaaS |
-| [`@astratra/saas-kit-ui`](packages/saas-kit-ui/README.md) | 1.2.0 | Tableau de bord React pour `@astratra/saas-kit`, barre de retours 👍/👎 |
+| [`@astratra/saas-kit-ui`](packages/saas-kit-ui/README.md) | 1.4.0 | Tableau de bord React pour `@astratra/saas-kit`, barre de retours 👍/👎 |
 | [`@astratra/react`](packages/react/README.md) | 1.0.0 | Primitives React nues pour sessions, permissions et appels d'API, sans tableau de bord imposé |
 | [`@astratra/client`](packages/client/README.md) | 1.1.0 | Plomberie côté client indépendante du framework : rafraîchissement sur 401, garde de route, règles de mot de passe, file hors ligne |
 | [`@astratra/prerender`](packages/prerender/README.md) | 1.0.0 | Prérendu SEO pour un site Vite et React : un HTML par route, sitemap issu de la même liste |
 | [`@astratra/native`](packages/native/README.md) | 1.0.0 | Plomberie mobile : session dans le trousseau, verrou biométrique, enregistrement des notifications, retour de paiement |
-| [`@astratra/native-ui`](packages/native-ui/README.md) | 1.1.0 | Kit d'interface React Native et Expo, dont la logique pure se teste dans Node, barre de retours 👍/👎 |
+| [`@astratra/native-ui`](packages/native-ui/README.md) | 1.2.0 | Kit d'interface React Native et Expo, dont la logique pure se teste dans Node, barre de retours 👍/👎 |
 | [`@astratra/app-version`](packages/app-version/README.md) | 1.0.0 | Annonces de nouvelles versions d'applications mobiles : route publique des versions, une annonce par version |
-| [`create-astratra-app`](packages/create-astratra-app/README.md) | 1.10.0 | Générateur de projets : pile complète, API seule ou application Expo, briques optionnelles |
+| [`create-astratra-app`](packages/create-astratra-app/README.md) | 1.11.0 | Générateur de projets : pile complète, API seule ou application Expo, briques optionnelles |
 
 ### Supervision et outillage
 
 | Paquet | Version | Rôle |
 |---|---|---|
-| [`@astratra/centrale`](packages/centrale/README.md) | 1.0.1 | Paquet de collecte pour un tableau de bord de surveillance auto-hébergé : erreurs, plantages, vues, usages, appels d'IA ; masqué à la source, envoyé par lots ; sans dépendance |
+| [`@astratra/centrale`](packages/centrale/README.md) | 1.4.0 | Paquet de collecte pour un tableau de bord de surveillance auto-hébergé : erreurs, plantages, vues, usages, appels d'IA ; masqué à la source, envoyé par lots ; sans dépendance |
 | [`@astratra/centrale-cli`](packages/centrale-cli/README.md) | 1.0.1 | Outil en ligne de commande du même tableau de bord : identifiants de débogage, cartes de code, déclaration des déploiements |
 | [`@astratra/tooling`](packages/tooling/README.md) | 1.5.0 | Audit de l'espace de travail (secrets, routes, traductions), lanceur de tests, déploiement avec retour arrière, publication d'applications, évaluation d'IA |
 | [`@astratra/testkit`](packages/testkit/README.md) | 1.1.0 | Bases de test MongoDB ou PostgreSQL jetables, fausses données reproductibles par pays, garde contre les bases de production |

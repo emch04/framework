@@ -5,6 +5,7 @@ import Dashboard from './screens/Dashboard.jsx';
 import Login from './screens/Login.jsx';
 import Settings from './screens/Settings.jsx';
 import Users from './screens/Users.jsx';
+import { canSeeView, visibleViews } from './lib/access.js';
 import './styles/global.css';
 
 const VIEWS = {
@@ -13,7 +14,7 @@ const VIEWS = {
   settings: Settings
 };
 
-function GuardedApp() {
+function GuardedApp({ adminRoles }) {
   const [view, setView] = useState('dashboard');
   const auth = useAuth();
 
@@ -21,18 +22,20 @@ function GuardedApp() {
     return <Login onLoggedIn={() => setView('dashboard')} />;
   }
 
-  const Screen = VIEWS[view] || Dashboard;
+  /* A screen the person's role does not allow is never rendered, even if asked for. */
+  const shown = canSeeView(view, auth.user, { adminRoles }) ? view : 'dashboard';
+  const Screen = VIEWS[shown] || Dashboard;
   return (
-    <Layout activeView={view} onNavigate={setView}>
+    <Layout activeView={shown} onNavigate={setView} views={visibleViews(auth.user, { adminRoles })}>
       <Screen />
     </Layout>
   );
 }
 
-export default function AstratraDashboardApp() {
+export default function AstratraDashboardApp({ adminRoles } = {}) {
   return (
     <AuthProvider>
-      <GuardedApp />
+      <GuardedApp adminRoles={adminRoles} />
     </AuthProvider>
   );
 }

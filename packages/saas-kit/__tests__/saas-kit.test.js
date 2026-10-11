@@ -7,6 +7,7 @@ const {
   createMemorySettingsStore,
   createMemoryUsersStore
 } = require('../src');
+const { TEST_PASSWORD_HASH, testUsers, verifyTestPassword } = require('./fixtures');
 
 const TEST_SECRET = 'saas-kit-test-secret';
 
@@ -18,7 +19,8 @@ function createTestApp(options = {}) {
       notifications.push({ userId, notification });
       return { queued: true };
     },
-    verifyPassword: async (user, password) => user.password === password,
+    usersStore: createMemoryUsersStore({ users: testUsers() }),
+    verifyPassword: verifyTestPassword,
     loginRateLimit: { max: 100 },
     apiRateLimit: { max: 100 },
     ...options
@@ -441,7 +443,7 @@ test('dashboard summary reports generic user count and role breakdown', async ()
 });
 
 test('dashboard summary uses aggregate store methods when available', async () => {
-  const usersStore = createMemoryUsersStore();
+  const usersStore = createMemoryUsersStore({ users: testUsers() });
   usersStore.count = async () => 2;
   usersStore.countByRole = async () => ({ owner: 1, member: 1 });
   usersStore.list = async () => {
@@ -463,8 +465,8 @@ test('dashboard summary uses aggregate store methods when available', async () =
 test('custom admin roles are honored without imposing fixed roles', async () => {
   const usersStore = createMemoryUsersStore({
     users: [
-      { id: 'u1', email: 'lead@example.test', role: 'lead', password: 'password' },
-      { id: 'u2', email: 'regular@example.test', role: 'regular', password: 'password' }
+      { id: 'u1', email: 'lead@example.test', role: 'lead', passwordHash: TEST_PASSWORD_HASH },
+      { id: 'u2', email: 'regular@example.test', role: 'regular', passwordHash: TEST_PASSWORD_HASH }
     ]
   });
   const settingsStore = createMemorySettingsStore();
@@ -529,7 +531,7 @@ test('login rejects a missing password with a 400', async () => {
 });
 
 test('creating a user with an invalid email is rejected with a 400', async () => {
-  const usersStore = createMemoryUsersStore();
+  const usersStore = createMemoryUsersStore({ users: testUsers() });
   const settingsStore = createMemorySettingsStore();
   const { app } = createTestApp({ usersStore, settingsStore });
   const token = await login(app, 'owner@example.test');
@@ -801,4 +803,86 @@ test('options.mongoSanitize: false disables the sanitizer entirely', async () =>
   });
 
   assert.deepEqual(response.body.data, { date: { $gt: '' } });
+});
+
+test('users routes write only allowed fields: id, password and hashes in the body are dropped', async () => {
+  const usersStore = createMemoryUsersStore({ users: testUsers() });
+  const { app } = createTestApp({ usersStore });
+  const token = await login(app, 'owner@example.test');
+
+  const created = await request(app, 'POST', '/users', {
+    headers: { authorization: `Bearer ${token}` },
+    body: { email: 'mass@example.test', role: 'member', id: 'user-owner', password: 'chosen', passwordHash: 'scrypt$forged', isVerified: true }
+  });
+  assert.equal(created.status, 201);
+  assert.notEqual(created.body.data.id, 'user-owner', 'an id in the body never overwrites an account');
+  const stored = await usersStore.findById(created.body.data.id);
+  assert.equal(stored.password, undefined);
+  assert.equal(stored.passwordHash, undefined);
+  assert.equal(stored.isVerified, undefined);
+  assert.equal((await usersStore.findById('user-owner')).email, 'owner@example.test');
+
+  const patched = await request(app, 'PATCH', `/users/${created.body.data.id}`, {
+    headers: { authorization: `Bearer ${token}` },
+    body: { name: 'Renamed', password: 'changed', passwordHash: 'scrypt$forged' }
+  });
+  assert.equal(patched.status, 200);
+  const after = await usersStore.findById(created.body.data.id);
+  assert.equal(after.name, 'Renamed');
+  assert.equal(after.password, undefined);
+  assert.equal(after.passwordHash, undefined);
+});
+
+test('an admin cannot grant an admin role nor touch another admin; an owner can', async () => {
+  const usersStore = createMemoryUsersStore({
+    users: [
+      { id: 'user-owner', email: 'owner@example.test', role: 'owner', passwordHash: TEST_PASSWORD_HASH },
+      { id: 'user-admin', email: 'admin@example.test', role: 'admin', passwordHash: TEST_PASSWORD_HASH },
+      { id: 'user-admin-2', email: 'admin2@example.test', role: 'admin', passwordHash: TEST_PASSWORD_HASH },
+      { id: 'user-member', email: 'member@example.test', role: 'member', passwordHash: TEST_PASSWORD_HASH }
+    ]
+  });
+  const { app } = createTestApp({ usersStore });
+  const admin = await login(app, 'admin@example.test');
+  const owner = await login(app, 'owner@example.test');
+  const as = (token) => ({ authorization: `Bearer ${token}` });
+
+  assert.equal((await request(app, 'POST', '/users', { headers: as(admin), body: { email: 'boss@example.test', role: 'owner' } })).status, 403);
+  assert.equal((await request(app, 'POST', '/users', { headers: as(admin), body: { email: 'adm@example.test', role: 'admin' } })).status, 403);
+  assert.equal((await request(app, 'PATCH', '/users/user-member', { headers: as(admin), body: { role: 'owner' } })).status, 403);
+  assert.equal((await request(app, 'PATCH', '/users/user-admin', { headers: as(admin), body: { role: 'owner' } })).status, 403, 'no self-promotion');
+  assert.equal((await request(app, 'PATCH', '/users/user-admin-2', { headers: as(admin), body: { name: 'x' } })).status, 403);
+  assert.equal((await request(app, 'PATCH', '/users/user-owner', { headers: as(admin), body: { email: 'mine@example.test' } })).status, 403);
+  assert.equal((await usersStore.findById('user-member')).role, 'member');
+
+  assert.equal((await request(app, 'POST', '/users', { headers: as(admin), body: { email: 'staff@example.test', role: 'member' } })).status, 201);
+  assert.equal((await request(app, 'PATCH', '/users/user-member', { headers: as(admin), body: { name: 'Member' } })).status, 200);
+  assert.equal((await request(app, 'PATCH', '/users/user-admin', { headers: as(admin), body: { name: 'Me' } })).status, 200, 'an admin edits their own name');
+
+  assert.equal((await request(app, 'PATCH', '/users/user-member', { headers: as(owner), body: { role: 'admin' } })).status, 200);
+  assert.equal((await usersStore.findById('user-member')).role, 'admin');
+});
+
+test('a demoted admin loses the right at once (role read from the store, not the token)', async () => {
+  const usersStore = createMemoryUsersStore({
+    users: [
+      { id: 'user-owner', email: 'owner@example.test', role: 'owner', passwordHash: TEST_PASSWORD_HASH },
+      { id: 'user-admin', email: 'admin@example.test', role: 'admin', passwordHash: TEST_PASSWORD_HASH }
+    ]
+  });
+  const { app } = createTestApp({ usersStore });
+  const admin = await login(app, 'admin@example.test');
+  await usersStore.update('user-admin', { role: 'member' });
+  const r = await request(app, 'POST', '/users', { headers: { authorization: `Bearer ${admin}` }, body: { email: 'late@example.test', role: 'member' } });
+  assert.equal(r.status, 403);
+});
+
+test('the default in-memory accounts carry no credentials: nobody signs in with them', async () => {
+  const usersStore = createMemoryUsersStore();
+  const owner = await usersStore.findByEmail('owner@example.test');
+  assert.equal(owner.password, undefined);
+  assert.equal(owner.passwordHash, undefined);
+  const { app } = createTestApp({ usersStore });
+  const response = await request(app, 'POST', '/auth/login', { body: { email: 'owner@example.test', password: 'password' } });
+  assert.equal(response.status, 401);
 });

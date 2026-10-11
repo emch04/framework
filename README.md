@@ -2,10 +2,25 @@
 
 [English](README.md) | [Français](README.fr.md)
 
-Astratra is a set of independent npm packages for building SaaS back ends and
-web or mobile front ends: users, roles, sessions, security middleware,
-persistence adapters, a dashboard, and the common building blocks behind AI
-assistants, payments, accounting, booking and mobile apps.
+**Astratra is a framework and a set of SDKs for building apps with AI built in.**
+
+It is both, and the difference is who is in charge:
+
+- **The framework.** `createSaasApp()` (`@astratra/saas-kit`) assembles the
+  whole application — sign-in, sessions, CSRF, accounts, errors — and calls
+  your code at the places it provides (`extendRoutes`, `verifyPassword`, the
+  stores). `create-astratra-app` sets the shape of a new project.
+- **The SDKs.** Packages that talk to a service for you, such as
+  `@astratra/centrale` (monitoring, key gateway, search) or the client of the
+  local model service in `@astratra/models`.
+- **The building blocks.** Libraries you call yourself, with no structure
+  imposed: `@astratra/security`, `@astratra/client`, `@astratra/ai`,
+  `@astratra/ledger` and the others.
+
+They ship as independent npm packages for SaaS back ends and web or mobile
+front ends: users, roles, sessions, security middleware, persistence adapters,
+a dashboard, and the common pieces behind AI assistants, payments, accounting,
+booking and mobile apps.
 
 Each package does one job and takes its dependencies by injection: a store, a
 transport, a model, a clock, a key source. Your application decides the

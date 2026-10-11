@@ -3,6 +3,14 @@
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Chaque package Astratra est versionné indépendamment.
 
+
+## 2026-10-11 — `@astratra/notify` 1.1.0, `@astratra/ai` 1.11.0, `@astratra/security` 1.13.0 : ce qu'il manquait à Palabre
+
+### Ajouté
+- `@astratra/notify` 1.1.0 : `createApnsTransport`, les notifications Apple en direct (HTTP/2, jeton de fournisseur ES256 gardé 50 minutes, une seule connexion réutilisée). Transport prêt pour `createPushSender` : un appareil mort (410, `BadDeviceToken`, `Unregistered`) est rendu pour suppression. Badge, notification urgente (`time-sensitive`), notification silencieuse ; clé `.p8` acceptée sur une seule ligne. Repris du code de Centrale LJ, vérifié en vrai sur iPhone et Mac le 11/10/2026.
+- `@astratra/ai` 1.11.0 : les gardes reconnaissent les secrets — clés d'API (OpenAI, Anthropic, Google, GitHub, Stripe, AWS, Slack, Groq, Hugging Face), jetons JWT, clés privées — et les adresses IP (v4, v6). Masqués à l'entrée, signalés en fuite à la sortie quand la personne ne les a pas donnés. Nouveaux types de `findPersonalData` : `apiKey`, `jwt`, `privateKey`, `ip` ; une clé ou une adresse n'est jamais lue à moitié comme un téléphone ou une carte.
+- `@astratra/security` 1.13.0 : `createDeviceSignatureVerifier`, des requêtes signées par la puce du téléphone (Secure Enclave), pour une app sans écran de connexion qui ne répond qu'aux appareils connus. Clé d'appareil et clé Face ID (P-256), signature de la méthode, du chemin, de l'heure, d'un nonce et du corps ; nonce à usage unique, décalage horaire borné, enregistrement prouvant la possession des clés, appareil unique (`maxDevices: 1`), révocation, même réponse à chaque refus. `createMemoryDeviceStore` pour le développement ; exemple Swift dans le README.
+
 ## 2026-10-11 — `@astratra/saas-kit` 2.0.0, `@astratra/saas-kit-ui` 1.4.0, `create-astratra-app` 1.11.0, `@astratra/security` 1.12.1 : failles de comptes corrigées
 
 ### Rupture

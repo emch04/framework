@@ -100,7 +100,7 @@ package is in [CHANGELOG.md](CHANGELOG.md).
 | Package | Version | What it does |
 |---|---|---|
 | [`@astratra/core`](packages/core/README.md) | 1.1.0 | API responses, errors, logs, request IDs, environment configuration |
-| [`@astratra/security`](packages/security/README.md) | 1.12.1 | JWT and RBAC, rate limiting (memory or Redis), CSP, heuristic WAF, WebAuthn passkeys, HMAC between services, chained audit log |
+| [`@astratra/security`](packages/security/README.md) | 1.13.0 | JWT and RBAC, rate limiting (memory or Redis), CSP, heuristic WAF, WebAuthn passkeys, HMAC between services, chained audit log |
 | [`@astratra/credentials`](packages/credentials/README.md) | 1.1.0 | Encrypted service keys stored in your database, editable from the interface without a restart |
 | [`@astratra/entitlements`](packages/entitlements/README.md) | 1.0.0 | Plans, features, billing and status guards, tenant isolation that fails closed, invitations by link, AI quotas and budgets |
 | [`@astratra/flags`](packages/flags/README.md) | 1.0.1 | Deterministic feature flags and experiments: targeting, gradual rollout, OpenFeature-compatible provider |
@@ -112,7 +112,7 @@ package is in [CHANGELOG.md](CHANGELOG.md).
 
 | Package | Version | What it does |
 |---|---|---|
-| [`@astratra/ai`](packages/ai/README.md) | 1.10.0 | Multi-provider AI routing with quotas and fallback, tool registry, agent loop, risk levels with confirmation, local llama.cpp provider |
+| [`@astratra/ai`](packages/ai/README.md) | 1.11.0 | Multi-provider AI routing with quotas and fallback, tool registry, agent loop, risk levels with confirmation, local llama.cpp provider |
 | [`@astratra/agent`](packages/agent/README.md) | 1.1.0 | Durable tasks, budgets, plans, completion checks, context summaries, consumption tracking, and user feedback (👍/👎) the agent learns from |
 | [`@astratra/models`](packages/models/README.md) | 1.1.0 | Local CPU model service (embeddings, reranking, NLI, entities, speech-to-text) and its Node client; price catalogue and cost calculation |
 | [`@astratra/conscience`](packages/conscience/README.md) | 1.2.0 | Documented memory of an agent's decisions (outcomes, corrections, lessons with evidence, self-model, lineage, erasure) under a deterministic governor without any language model |
@@ -137,7 +137,7 @@ package is in [CHANGELOG.md](CHANGELOG.md).
 | [`@astratra/wallet`](packages/wallet/README.md) | 1.0.0 | Apple Wallet and Google Wallet passes kept up to date: signing, web service, add-to-wallet links, removal |
 | [`@astratra/pdf`](packages/pdf/README.md) | 1.0.0 | PDFKit layout primitives: text that fits its box, paginated tables, card sheets with vector QR codes |
 | [`@astratra/closure`](packages/closure/README.md) | 1.0.0 | Period closing checklist with blocking and acknowledged items, and an archive free of credentials |
-| [`@astratra/notify`](packages/notify/README.md) | 1.0.0 | Outbound e-mail, SMS and push: injected transport, header-injection safe, never throws |
+| [`@astratra/notify`](packages/notify/README.md) | 1.1.0 | Outbound e-mail, SMS and push: injected transport, header-injection safe, never throws |
 
 ### Web and mobile
 

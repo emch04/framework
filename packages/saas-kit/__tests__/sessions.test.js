@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { PassThrough, Readable, Writable } = require('node:stream');
 const { createSaasApp, createMemoryUsersStore } = require('../src');
+const { TEST_PASSWORD_HASH, testUsers, verifyTestPassword } = require('./fixtures');
 
 const TEST_SECRET = 'saas-kit-test-secret';
 
@@ -81,7 +82,8 @@ function appWith(options = {}) {
   return createSaasApp({
     jwtSecret: TEST_SECRET,
     notify: async () => ({ queued: true }),
-    verifyPassword: async (user, password) => user.password === password,
+    usersStore: createMemoryUsersStore({ users: testUsers() }),
+    verifyPassword: verifyTestPassword,
     loginRateLimit: { max: 100 },
     apiRateLimit: { max: 100 },
     ...options
@@ -256,7 +258,7 @@ test('AN UNKNOWN ADDRESS GETS THE SAME ANSWER — the screen is not a directory'
 
 test('a reset token sets the new password and can only be used once', async () => {
   const sent = [];
-  const users = createMemoryUsersStore();
+  const users = createMemoryUsersStore({ users: testUsers() });
   const app = appWith({
     usersStore: users,
     passwordReset: { send: async (payload) => { sent.push(payload); } },
@@ -395,7 +397,7 @@ test('a registration without its identifiers is refused', async () => {
 
 test('issueSession opens the same session as /auth/login, refresh chain included', async () => {
   let fromContext = null;
-  const users = createMemoryUsersStore();
+  const users = createMemoryUsersStore({ users: testUsers() });
   const app = appWith({
     usersStore: users,
     refreshTokens: { enabled: true },

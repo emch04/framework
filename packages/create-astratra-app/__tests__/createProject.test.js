@@ -413,7 +413,7 @@ test('the generated API never compares passwords in clear nor ships a fixed demo
   assert.match(server, /verifyPasswordHash\(password, user\.passwordHash\)/);
   assert.match(server, /await createMemoryStores\(\)/);
   assert.match(stores, /hashPassword\(demoPassword\)/);
-  assert.match(stores, /randomBytes/);
+  assert.match(stores, /randomBytes\(9\)\.toString\('base64url'\)/, 'a 12-character demo password');
   assert.match(stores, /NODE_ENV === 'production'/);
   assert.ok(!/\/ password|password: 'password'/.test(server + stores + readme), 'no fixed "password" demo password');
   assert.match(lire('.env.example'), /^DEMO_PASSWORD=$/m);

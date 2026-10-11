@@ -1,16 +1,13 @@
+/*
+ * Example accounts WITHOUT credentials: nobody can sign in with them. A clear
+ * password (the old 'password') was a ready-made login for anyone who knew the
+ * kit. Seed your own accounts with a hash: options.users =
+ * [{ id, email, role, passwordHash: await hashPassword(...) }] (@astratra/security),
+ * and verifyPassword: (user, p) => verifyPasswordHash(p, user.passwordHash).
+ */
 const DEFAULT_USERS = [
-  {
-    id: 'user-owner',
-    email: 'owner@example.test',
-    role: 'owner',
-    password: 'password'
-  },
-  {
-    id: 'user-member',
-    email: 'member@example.test',
-    role: 'member',
-    password: 'password'
-  }
+  { id: 'user-owner', email: 'owner@example.test', role: 'owner' },
+  { id: 'user-member', email: 'member@example.test', role: 'member' }
 ];
 
 function clone(value) {

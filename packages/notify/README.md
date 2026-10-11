@@ -220,6 +220,40 @@ Le statut du fournisseur est cherché où qu'il l'ait mis — `statusCode`,
 `status`, `response.status` — parce que web-push et les clients HTTP ne sont pas
 d'accord entre eux.
 
+## Les notifications Apple, en direct : `createApnsTransport`
+
+Un transport prêt pour `createPushSender`, qui parle directement aux serveurs
+d'Apple (HTTP/2, jeton de fournisseur signé ES256 avec la clé `.p8` de
+l'équipe). Aucun SDK, aucun relais.
+
+```js
+const { createApnsTransport, createPushSender } = require('@astratra/notify');
+
+const transport = createApnsTransport({
+  key: process.env.APNS_CLE,          // la clé .p8 (PEM, ou sur une seule ligne)
+  keyId: process.env.APNS_CLE_ID,
+  teamId: process.env.APNS_EQUIPE_ID,
+  topic: 'com.exemple.app',          // l'identifiant de l'app
+  production: true                   // false : passerelle de test (sandbox)
+});
+const push = createPushSender({ transport, onGone: async (jeton) => supprimerAppareil(jeton) });
+
+await push.send(jetonAppareil, { title: 'Alerte', body: 'Le serveur ne répond plus', badge: 3, urgent: true, data: { alerteId } });
+```
+
+- **Le jeton de fournisseur est gardé 50 minutes** : Apple refuse un jeton de
+  plus d'une heure et ralentit qui en signe un à chaque envoi.
+- **Une seule connexion HTTP/2** porte tous les envois ; fermée ou cassée,
+  elle est rouverte au suivant. `transport.close()` la ferme à l'arrêt.
+- **Un appareil mort** (410, `BadDeviceToken`, `Unregistered`) lève une erreur
+  410 : `createPushSender` te le rend pour suppression.
+- `urgent: true` envoie une notification urgente (`time-sensitive`), qui passe
+  les modes Concentration ; `badge` pose le nombre sur l'icône ;
+  `contentAvailable` fait une notification silencieuse.
+- La clé est lue à la création : une clé mal formée échoue au démarrage, pas
+  à la première alerte de la nuit. Une clé rangée sur une seule ligne (coffre,
+  `.env`) est acceptée.
+
 ---
 
 # La boîte de notifications, côté serveur
@@ -369,8 +403,9 @@ test('le catalogue des notifications', () => {
 
 ## Ce que ce package ne fait pas
 
-- Il n'envoie **rien** lui-même : les transports sont injectés. Aucun SDK — ni
-  nodemailer, ni Twilio, ni web-push — n'est importé.
+- Il n'envoie **rien** lui-même, sauf vers Apple avec `createApnsTransport` :
+  les autres transports sont injectés. Aucun SDK — ni nodemailer, ni Twilio,
+  ni web-push — n'est importé.
 - Il ne stocke pas les abonnements : il te rend les morts, tu les supprimes.
   Il ne tient pas non plus de registre d'appareils par compte : tu choisis la
   liste, `broadcast` l'envoie.

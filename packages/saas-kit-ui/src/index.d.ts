@@ -2,7 +2,7 @@ import type { CSSProperties, ReactElement, ReactNode } from 'react';
 import type { ApiFetchOptions } from './lib/api';
 export { ApiError, apiFetch } from './lib/api';
 export type { ApiFetchOptions } from './lib/api';
-export default function AstratraDashboardApp(): ReactElement;
+export default function AstratraDashboardApp(props?: { adminRoles?: readonly string[] }): ReactElement;
 export { AstratraDashboardApp };
 export interface AuthUser { email?: string; role?: string; [key: string]: unknown }
 export interface AuthValue {
@@ -16,7 +16,14 @@ export interface AuthValue {
 export function AuthProvider(props: { children?: ReactNode }): ReactElement;
 export function useAuth(): AuthValue;
 export type DashboardView = 'dashboard' | 'users' | 'settings';
-export function Layout(props: { activeView: DashboardView; onNavigate: (view: DashboardView) => void; children?: ReactNode }): ReactElement;
+export function Layout(props: { activeView: DashboardView; onNavigate: (view: DashboardView) => void; children?: ReactNode; /** Screens to offer; default: those the signed-in role allows. */ views?: readonly DashboardView[] }): ReactElement;
+export const DEFAULT_ADMIN_ROLES: readonly string[];
+export const DEFAULT_OWNER_ROLES: readonly string[];
+/** null: any signed-in person; 'admin': one of the admin roles. */
+export const VIEW_ACCESS: Readonly<Record<DashboardView, null | 'admin'>>;
+export function canSeeView(view: string, user: AuthUser | null | undefined, options?: { adminRoles?: readonly string[] }): boolean;
+export function visibleViews(user: AuthUser | null | undefined, options?: { adminRoles?: readonly string[] }): DashboardView[];
+export function assignableRoles(user: AuthUser | null | undefined, options?: { adminRoles?: readonly string[]; ownerRoles?: readonly string[]; roles?: readonly string[] }): string[];
 export function Notice(props: { tone?: 'neutral' | 'error' | 'success'; children?: ReactNode }): ReactElement | null;
 export function DashboardScreen(): ReactElement;
 export function LoginScreen(props: { onLoggedIn: () => void }): ReactElement;

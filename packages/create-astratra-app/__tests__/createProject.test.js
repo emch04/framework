@@ -401,3 +401,21 @@ test('the mobile template asks for the packages it is built on, at their real ve
     assert.equal(manifest.dependencies[name], `^${versions[name]}`, `${name} dans le gabarit mobile`);
   }
 });
+
+test('the generated API never compares passwords in clear nor ships a fixed demo password', () => {
+  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'astratra-mdp-'));
+  createProject({ targetDir: 'mdp-app' }, cwd);
+  const lire = (fichier) => fs.readFileSync(path.join(cwd, 'mdp-app', fichier), 'utf8');
+  const server = lire('api/server.js');
+  const stores = lire('api/stores/memory.js');
+  const readme = lire('README.md');
+  assert.ok(!/user\.password\s*===/.test(server), 'no clear-text comparison');
+  assert.match(server, /verifyPasswordHash\(password, user\.passwordHash\)/);
+  assert.match(server, /await createMemoryStores\(\)/);
+  assert.match(stores, /hashPassword\(demoPassword\)/);
+  assert.match(stores, /randomBytes/);
+  assert.match(stores, /NODE_ENV === 'production'/);
+  assert.ok(!/\/ password|password: 'password'/.test(server + stores + readme), 'no fixed "password" demo password');
+  assert.match(lire('.env.example'), /^DEMO_PASSWORD=$/m);
+  fs.rmSync(cwd, { recursive: true, force: true });
+});

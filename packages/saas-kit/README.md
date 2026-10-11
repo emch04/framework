@@ -30,12 +30,20 @@ const app = createSaasApp({
   verifyPassword: async (user, password) => passwordService.verify(user, password),
   notify: async (userId, notification) => notificationService.send(userId, notification),
   roles: {
-    adminRoles: ['owner', 'admin']
+    adminRoles: ['owner', 'admin'],
+    ownerRoles: ['owner']
   }
 });
 
 app.listen(3000);
 ```
+
+Les routes `/users` n'écrivent que les champs de `writableUserFields` (par défaut
+`email`, `role`, `name`) : `id`, mot de passe, empreinte et jetons envoyés dans
+la requête sont ignorés. Un administrateur gère les comptes ordinaires ;
+donner un rôle d'administrateur (propriétaire compris) ou modifier le compte
+d'un autre administrateur est réservé aux `ownerRoles`. Le rôle de la personne
+qui agit est relu dans le store, pas dans son jeton.
 
 Ça donne immédiatement à un nouveau projet une API fonctionnelle :
 

@@ -3,6 +3,21 @@
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Chaque package Astratra est versionné indépendamment.
 
+## 2026-10-11 — `@astratra/saas-kit` 2.0.0, `@astratra/saas-kit-ui` 1.4.0, `create-astratra-app` 1.11.0, `@astratra/security` 1.12.1 : failles de comptes corrigées
+
+### Rupture
+- `saas-kit` 2.0.0 : les deux comptes d'exemple du store mémoire (`createMemoryUsersStore()` sans `users`, et `createSaasApp` sans `usersStore`) n'ont plus aucun identifiant : le mot de passe en clair `password` est retiré, plus personne ne s'y connecte. Fournir ses comptes avec une empreinte (`passwordHash: await hashPassword(...)`) et `verifyPassword: (user, p) => verifyPasswordHash(p, user.passwordHash)`. Les tests du kit suivent la même règle (empreinte scrypt, plus aucune comparaison en clair).
+
+### Sécurité
+- `saas-kit` : `POST` et `PATCH /users` n'écrivent plus le corps de la requête tel quel (affectation de masse). Seuls les champs de `writableUserFields` passent (par défaut `email`, `role`, `name`) ; `id`, `password`, `passwordHash`, `hash`, `salt` et les jetons sont toujours ignorés.
+- `saas-kit` : un administrateur ne peut plus se donner, ni donner, un rôle d'administrateur ou de propriétaire, ni modifier le compte d'un autre administrateur ; c'est réservé à `roles.ownerRoles` (par défaut `['owner']`). Le rôle de l'appelant est relu dans le store : une rétrogradation s'applique aussitôt.
+- `saas-kit-ui` : chaque écran déclare qui peut le voir (`VIEW_ACCESS`) ; un membre ne voit plus que le tableau de bord, et un écran interdit n'est jamais rendu, même demandé. Le formulaire « Utilisateurs » ne propose les rôles d'administration qu'à un propriétaire et n'envoie plus de mot de passe pré-rempli (`password`). Nouveaux exports : `canSeeView`, `visibleViews`, `assignableRoles`, `VIEW_ACCESS`, `DEFAULT_ADMIN_ROLES`, `DEFAULT_OWNER_ROLES` ; `AstratraDashboardApp` accepte `adminRoles`.
+- `create-astratra-app` : l'API générée ne compare plus les mots de passe en clair (`verifyPasswordHash` sur `user.passwordHash`). Les comptes de démonstration n'ont plus le mot de passe fixe `password` : il est tiré au hasard à chaque démarrage, 12 caractères (ou `DEMO_PASSWORD`), gardé seulement en empreinte scrypt, affiché dans la console ; les stores en mémoire refusent de démarrer en production.
+
+### Modifié
+- `@astratra/security` 1.12.1 : erreur de lint corrigée dans `idTokens.js` (`AbortSignal` lu sur `globalThis`), sans changement de comportement. La longueur minimale d'un mot de passe reste de 8 caractères.
+- README (anglais et français) : tableau des versions réaligné sur les paquets du dépôt (dix paquets y étaient en retard).
+- `create-astratra-app` : planchers des dépendances alignés sur l'espace de travail (`@astratra/ai` ^1.10.0, `@astratra/security` ^1.12.1, `@astratra/saas-kit` ^2.0.0, `@astratra/saas-kit-ui` ^1.4.0) ; trois tests de cohérence échouaient avant.
 ## 2026-10-10 — `@astratra/resilience` 1.1.0 : connexions gardées ouvertes
 
 ### Ajouté

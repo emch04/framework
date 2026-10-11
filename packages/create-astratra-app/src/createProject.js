@@ -68,10 +68,10 @@ function assertCanCreate(targetDir, force) {
 
 function packageJson(projectName, template, bricks = []) {
   const dependencies = {
-    '@astratra/ai': '^1.8.0',
+    '@astratra/ai': '^1.10.0',
     '@astratra/core': '^1.1.0',
-    '@astratra/saas-kit': '^1.6.1',
-    '@astratra/security': '^1.11.1'
+    '@astratra/saas-kit': '^2.0.0',
+    '@astratra/security': '^1.12.1'
   };
   // Scaffolded (api/stores/mongo.js, api/db/mongo.js) but not wired into
   // api/server.js by default — the project starts on the in-memory store.
@@ -85,7 +85,7 @@ function packageJson(projectName, template, bricks = []) {
   const devDependencies = {};
 
   if (template === 'fullstack') {
-    dependencies['@astratra/saas-kit-ui'] = '^1.2.0';
+    dependencies['@astratra/saas-kit-ui'] = '^1.4.0';
     dependencies.react = '^19.0.0';
     dependencies['react-dom'] = '^19.0.0';
     devDependencies['@vitejs/plugin-react'] = '^4.3.4';
@@ -118,6 +118,7 @@ function apiServer() {
   return `import fs from 'node:fs';
 import path from 'node:path';
 import saasKit from '@astratra/saas-kit';
+import security from '@astratra/security';
 import { env } from './config/env.js';
 import { createAuthSecurity } from './security/auth.js';
 import { createRateLimitSecurity } from './security/rateLimit.js';
@@ -128,9 +129,10 @@ import { createNotificationModule } from './modules/notifications.js';
 import { createAiTools } from './ai/tools.js';
 
 const { createSaasApp } = saasKit;
+const { verifyPasswordHash } = security;
 const preferredPort = env.port;
 const host = env.host;
-const stores = createMemoryStores();
+const stores = await createMemoryStores();
 const notifications = createNotificationModule();
 const aiTools = createAiTools();
 
@@ -146,7 +148,9 @@ const app = createSaasApp({
   usersStore: stores.usersStore,
   settingsStore: stores.settingsStore,
   publicUserFields: userPublicFields(),
-  verifyPassword: async (user, password) => user.password === password,
+  // Passwords are only ever stored as scrypt hashes (hashPassword) and checked
+  // in constant time — never compared in clear.
+  verifyPassword: async (user, password) => verifyPasswordHash(password, user.passwordHash),
   notify: notifications.notify,
   // This is where YOUR routes go — not app.use()'d after createSaasApp()
   // returns. createSaasApp() ends its own middleware stack with a
@@ -180,8 +184,8 @@ function listen(port, attemptsLeft = 20) {
     const selectedPort = typeof address === 'object' && address ? address.port : port;
     writeApiRuntimeConfig(selectedPort);
     console.log(\`Astratra API listening on http://\${host}:\${selectedPort}\`);
-    console.log('Seeded owner: owner@example.test / password');
-    console.log('Seeded member: member@example.test / password');
+    // Development only: a random password drawn at each start (or DEMO_PASSWORD), never a fixed one.
+    console.log(\`Demo accounts (development only): owner@example.test and member@example.test, password: \${stores.demoPassword}\`);
   });
 
   server.on('error', (error) => {
@@ -280,14 +284,33 @@ function securityWaf() {
 }
 
 function memoryStores() {
-  return `import saasKit from '@astratra/saas-kit';
+  return `import crypto from 'node:crypto';
+import saasKit from '@astratra/saas-kit';
+import security from '@astratra/security';
 import { defaultSettings } from '../modules/settings.js';
 
 const { createMemorySettingsStore, createMemoryUsersStore } = saasKit;
+const { hashPassword } = security;
 
-export function createMemoryStores() {
+/**
+ * In-memory stores for local development. The two demo accounts get a random
+ * password at each start (or DEMO_PASSWORD from .env), stored only as a scrypt
+ * hash. Refused in production: plug real stores before going live.
+ */
+export async function createMemoryStores() {
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('In-memory stores and demo accounts are for development only: plug real stores in production.');
+  }
+  const demoPassword = process.env.DEMO_PASSWORD || crypto.randomBytes(9).toString('base64url') /* 12 characters */;
+  const passwordHash = await hashPassword(demoPassword);
   return {
-    usersStore: createMemoryUsersStore(),
+    demoPassword,
+    usersStore: createMemoryUsersStore({
+      users: [
+        { id: 'user-owner', email: 'owner@example.test', role: 'owner', passwordHash },
+        { id: 'user-member', email: 'member@example.test', role: 'member', passwordHash }
+      ]
+    }),
     settingsStore: createMemorySettingsStore(defaultSettings)
   };
 }
@@ -626,13 +649,14 @@ plus \`127.0.0.1\`/\`localhost\` autorisés automatiquement hors production).
 - \`api/modules/users.js\`, \`api/modules/settings.js\` et
   \`api/modules/notifications.js\` isolent la logique métier de départ.
 
-Comptes de test :
+Comptes de démonstration (développement seulement) : \`owner@example.test\` et
+\`member@example.test\`. Leur mot de passe est tiré au hasard à chaque démarrage
+et affiché dans la console de l'API (ou fixé par \`DEMO_PASSWORD\` dans
+\`.env\`). Il n'est gardé que sous forme d'empreinte scrypt (\`hashPassword\`),
+et la connexion le vérifie avec \`verifyPasswordHash\`, jamais en clair.
 
-- \`owner@example.test\` / \`password\`
-- \`member@example.test\` / \`password\`
-
-Avant la production, remplace \`JWT_SECRET\`, branche de vrais stores et change
-la vérification de mot de passe. Définis aussi \`JWT_ISSUER\` et
+Avant la production, remplace \`JWT_SECRET\` et branche de vrais stores : les
+stores en mémoire refusent de démarrer avec \`NODE_ENV=production\`. Définis aussi \`JWT_ISSUER\` et
 \`JWT_AUDIENCE\` quand l'API sort du développement local.
 `;
 }
@@ -725,7 +749,7 @@ export function createProject({ targetDir, template = 'fullstack', force = false
   writeFile(absoluteTarget, 'api/modules/settings.js', settingsModule());
   writeFile(absoluteTarget, 'api/modules/notifications.js', notificationsModule());
   writeFile(absoluteTarget, '.gitignore', 'node_modules\n.env\n.astratra\n');
-  writeFile(absoluteTarget, '.env.example', 'PORT=\nHOST=127.0.0.1\nJWT_SECRET=change-me\nLEGACY_JWT_SECRET=\nJWT_ISSUER=\nJWT_AUDIENCE=\nCORS_ORIGIN=\nMONGO_URI=\nREDIS_URL=\n');
+  writeFile(absoluteTarget, '.env.example', 'PORT=\nHOST=127.0.0.1\nJWT_SECRET=change-me\nLEGACY_JWT_SECRET=\nJWT_ISSUER=\nJWT_AUDIENCE=\nCORS_ORIGIN=\nMONGO_URI=\nREDIS_URL=\n# Développement seulement : mot de passe des comptes de démonstration (vide = tiré au hasard à chaque démarrage).\nDEMO_PASSWORD=\n');
   writeFile(absoluteTarget, 'README.md', readme(projectName, template));
 
   if (template === 'fullstack') {

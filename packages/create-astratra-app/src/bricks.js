@@ -220,7 +220,7 @@ export const erasure = createErasureWorkflow({
 
   resilience: {
     package: '@astratra/resilience',
-    version: '^1.0.0',
+    version: '^1.1.0',
     summary: 'disjoncteur, cache TTL, relance avec brouillage',
     file: 'api/bricks/resilience.js',
     contents: () => `import { createCache, createCircuitBreaker, retry } from '@astratra/resilience';

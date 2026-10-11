@@ -36,7 +36,9 @@ const { DEFAULT_PUBLIC_USER_FIELDS, assertAdapter } = require('./utils');
 
 const DEFAULT_JWT_SECRET = 'saas-kit-dev-secret';
 const DEFAULT_ROLES = {
-  adminRoles: ['owner', 'admin']
+  adminRoles: ['owner', 'admin'],
+  /* Only these roles may grant an admin role or manage another admin (see modules/users.js). */
+  ownerRoles: ['owner']
 };
 
 function normalizeOptions(options = {}) {
@@ -101,6 +103,7 @@ function normalizeOptions(options = {}) {
     notify,
     verifyPassword,
     roles,
+    writableUserFields: Array.isArray(options.writableUserFields) ? options.writableUserFields : null,
     publicUserFields
   };
 }
@@ -225,7 +228,10 @@ function createSaasApp(options = {}) {
   app.use('/users', authMiddleware, csrfMiddleware, createUsersRoutes({
     usersStore: normalized.usersStore,
     authorizeAdmin,
-    publicUserFields: normalized.publicUserFields
+    publicUserFields: normalized.publicUserFields,
+    adminRoles: normalized.roles.adminRoles,
+    ownerRoles: normalized.roles.ownerRoles,
+    ...(normalized.writableUserFields ? { writableUserFields: normalized.writableUserFields } : {})
   }));
   app.use('/settings', authMiddleware, csrfMiddleware, createSettingsRoutes({
     settingsStore: normalized.settingsStore,

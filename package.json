@@ -2,7 +2,7 @@
   "name": "astratra",
   "private": true,
   "version": "0.0.0",
-  "description": "Astratra npm workspace monorepo.",
+  "description": "Astratra: a framework and a set of SDKs for building apps with AI built in.",
   "engines": {
     "node": ">=20"
   },

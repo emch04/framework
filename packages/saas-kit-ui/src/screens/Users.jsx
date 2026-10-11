@@ -2,13 +2,15 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '../auth/AuthContext.jsx';
 import Notice from '../components/Notice.jsx';
 import styles from './Screen.module.css';
+import { assignableRoles } from '../lib/access.js';
 
 export default function Users() {
-  const { request } = useAuth();
+  const { request, user } = useAuth();
+  const roles = assignableRoles(user);
   const [users, setUsers] = useState([]);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-  const [form, setForm] = useState({ email: '', role: 'member', password: 'password' });
+  const [form, setForm] = useState({ email: '', role: 'member' });
   const [loading, setLoading] = useState(true);
   const [authorized, setAuthorized] = useState(true);
 
@@ -41,7 +43,7 @@ export default function Users() {
     setSuccess('');
     try {
       await request('/users', { method: 'POST', body: form });
-      setForm({ email: '', role: 'member', password: 'password' });
+      setForm({ email: '', role: 'member' });
       setSuccess('Utilisateur cree.');
       await loadUsers();
     } catch (apiError) {
@@ -73,16 +75,9 @@ export default function Users() {
               value={form.role}
               onChange={(event) => setForm({ ...form, role: event.target.value })}
             >
-              <option value="member">member</option>
-              <option value="admin">admin</option>
-              <option value="owner">owner</option>
+              {/* Admin roles are offered to owners only (the server refuses them to an admin anyway). */}
+              {roles.map((role) => <option key={role} value={role}>{role}</option>)}
             </select>
-            <input
-              aria-label="Mot de passe"
-              value={form.password}
-              onChange={(event) => setForm({ ...form, password: event.target.value })}
-              required
-            />
             <button type="submit">Creer un utilisateur</button>
           </form>
           {loading ? <p className={styles.muted}>Chargement des utilisateurs...</p> : null}

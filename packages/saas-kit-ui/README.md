@@ -41,12 +41,17 @@ VITE_API_URL=https://api.exemple.fr npm run dev
 
 Les réponses suivent le format `apiResponse` d'`@astratra/core` : `{ success, data, message }`.
 
+## Qui voit quel écran
+
+Chaque écran déclare qui peut le voir (`VIEW_ACCESS`) : la vue d'ensemble est pour toute personne connectée, **Utilisateurs** et **Réglages** pour les rôles d'administration seulement (`owner` et `admin` par défaut, réglables par `<AstratraDashboardApp adminRoles={[...]} />`). Le menu ne propose que les écrans permis, et un écran interdit n'est jamais rendu, même demandé. Dans **Utilisateurs**, les rôles d'administration ne sont proposés qu'à un propriétaire ; aucun mot de passe n'est envoyé (il se choisit par la réinitialisation). Le serveur reste l'autorité : `@astratra/saas-kit` refuse ces routes (403) de lui-même.
+
 ## Exports
 
 | Export | Rôle |
 | --- | --- |
 | `AstratraDashboardApp` (aussi export par défaut) | Tableau de bord complet. |
 | `AuthProvider`, `useAuth` | Session par jeton Bearer gardé en mémoire ; `useAuth()` rend `isAuthenticated`, `token`, `user`, `login`, `logout` et `request`. |
+| `canSeeView(vue, user, { adminRoles })`, `visibleViews(user, options)`, `assignableRoles(user, options)`, `VIEW_ACCESS`, `DEFAULT_ADMIN_ROLES`, `DEFAULT_OWNER_ROLES` | Règles d'accès aux écrans, les mêmes que celles du tableau de bord. |
 | `apiFetch(chemin, options)`, `ApiError` | Client minimal. Options : `apiUrl`, `token`, `method`, `body`, `fetcher`, `onUnauthorized`. |
 | `Layout`, `Notice` | Composants de mise en page et de message. |
 | `DashboardScreen`, `LoginScreen`, `SettingsScreen`, `UsersScreen` | Les écrans, réutilisables séparément. |

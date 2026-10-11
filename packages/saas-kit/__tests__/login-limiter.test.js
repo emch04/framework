@@ -1,6 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { createSaasApp } = require('../src');
+const { createSaasApp, createMemoryUsersStore } = require('../src');
+const { testUsers, verifyTestPassword } = require('./fixtures');
 
 const SECRET = 'saas-kit-test-secret';
 
@@ -8,7 +9,8 @@ async function serve(options = {}) {
   const app = createSaasApp({
     jwtSecret: SECRET,
     notify: async () => ({ queued: true }),
-    verifyPassword: async (user, password) => user.password === password,
+    usersStore: createMemoryUsersStore({ users: testUsers() }),
+    verifyPassword: verifyTestPassword,
     loginRateLimit: { max: 3 },
     apiRateLimit: { max: 1000 },
     ...options

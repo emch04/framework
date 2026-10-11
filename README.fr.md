@@ -2,11 +2,26 @@
 
 [English](README.md) | [Français](README.fr.md)
 
-Astratra est un ensemble de paquets npm indépendants pour construire des
-back-ends SaaS et des interfaces web ou mobiles : utilisateurs, rôles, sessions,
-middleware de sécurité, adaptateurs de persistance, tableau de bord, et les
-briques communes derrière les assistants d'IA, les paiements, la comptabilité,
-la prise de rendez-vous et les applications mobiles.
+**Astratra est un framework et un ensemble de SDK pour construire des apps avec l'IA intégrée.**
+
+C'est les deux à la fois, et la différence tient à qui commande :
+
+- **Le framework.** `createSaasApp()` (`@astratra/saas-kit`) monte toute
+  l'application — connexion, sessions, CSRF, comptes, erreurs — et appelle ton
+  code aux endroits prévus (`extendRoutes`, `verifyPassword`, les stores).
+  `create-astratra-app` donne sa forme à un nouveau projet.
+- **Les SDK.** Des paquets qui parlent à un service pour toi, comme
+  `@astratra/centrale` (surveillance, passerelle des clés, recherche) ou le
+  client du service de modèles local dans `@astratra/models`.
+- **Les briques.** Des bibliothèques que tu appelles toi-même, sans structure
+  imposée : `@astratra/security`, `@astratra/client`, `@astratra/ai`,
+  `@astratra/ledger` et les autres.
+
+Le tout est livré en paquets npm indépendants pour des back-ends SaaS et des
+interfaces web ou mobiles : utilisateurs, rôles, sessions, middleware de
+sécurité, adaptateurs de persistance, tableau de bord, et les pièces communes
+derrière les assistants d'IA, les paiements, la comptabilité, la prise de
+rendez-vous et les applications mobiles.
 
 Chaque paquet fait une chose et reçoit ses dépendances par injection : un
 magasin, un transport, un modèle, une horloge, une source de clés. Ton

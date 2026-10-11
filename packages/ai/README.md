@@ -39,7 +39,7 @@ const reply = await guards.output(modelAnswer, run);          // démasqué, pui
 
 | Garde | Ce qu'elle fait |
 |---|---|
-| `input(text, run)` | masque les noms (détecteur d'entités + `names` du registre) et les données structurées (e-mail, IBAN, carte, téléphone) ; le texte revient démasqué dans `output`. Rend `text: null` si elle bloque. |
+| `input(text, run)` | masque les noms (détecteur d'entités + `names` du registre) et les données structurées (e-mail, IBAN, carte, téléphone) ainsi que les secrets (clés d'API, jetons JWT, clés privées, adresses IP) ; le texte revient démasqué dans `output`. Rend `text: null` si elle bloque. |
 | `toolResult(result, run, { tool, external })` | pour un résultat **externe** (ou marqué `{ untrusted: true, content }`) : détection d'injection (texte long lu par fenêtres, jamais passé sans contrôle), contenu encadré par des marqueurs à nonce comme *données non fiables*. Injection suspectée : `run.requiresConfirmation = true` pour tout le reste de l'exécution. |
 | `output(text, run)` | démasque ; **ancrage** (chaque phrase contre les sources lues, NLI, via `verifySources` de rag) avec `groundingScore` et la liste `unsupported` ; **fuite** de données personnelles que la personne n'a pas données (`onLeak`: `block`, `redact`, `flag`) ; **modération**. |
 | `beforeAction(action, run, { humanConfirmed })` | refuse toute action tant qu'une injection est suspectée et qu'aucun humain n'a confirmé (`humanConfirmed: true` vient de votre interface, jamais du modèle). |
@@ -61,7 +61,12 @@ vraies gardes sur ce client, avec un enregistreur d'événements) et
 `createEventRecorder`.
 
 Limites : les gardes réduisent le risque, elles ne le suppriment pas. Les
-règles de fuite ne couvrent que les données structurées ; l'ancrage compte
+règles de fuite ne couvrent que les données structurées et les secrets à forme
+connue (`findPersonalData` : `email`, `iban`, `card`, `phone`, `apiKey` —
+OpenAI, Anthropic, Google, GitHub, Stripe, AWS, Slack, Groq, Hugging Face —,
+`jwt`, `privateKey`, `ip`) ; une clé sans préfixe reconnaissable passe. Une
+clé ou une adresse IP n'est jamais lue à moitié comme un téléphone ou une
+carte. L'ancrage compte
 aussi comme « non soutenues » des phrases de liaison ; la détection d'injection
 lit un texte isolé.
 

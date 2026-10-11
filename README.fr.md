@@ -105,7 +105,7 @@ est dans [CHANGELOG.md](CHANGELOG.md).
 | Paquet | Version | Rôle |
 |---|---|---|
 | [`@astratra/core`](packages/core/README.md) | 1.1.0 | Réponses d'API, erreurs, journaux, identifiants de requête, configuration par variables d'environnement |
-| [`@astratra/security`](packages/security/README.md) | 1.12.1 | JWT et RBAC, limitation de débit (mémoire ou Redis), CSP, WAF heuristique, passkeys WebAuthn, HMAC entre services, journal d'audit chaîné |
+| [`@astratra/security`](packages/security/README.md) | 1.13.0 | JWT et RBAC, limitation de débit (mémoire ou Redis), CSP, WAF heuristique, passkeys WebAuthn, HMAC entre services, journal d'audit chaîné |
 | [`@astratra/credentials`](packages/credentials/README.md) | 1.1.0 | Clés de service chiffrées en base, modifiables depuis l'interface sans redémarrage |
 | [`@astratra/entitlements`](packages/entitlements/README.md) | 1.0.0 | Plans, fonctionnalités, gardes de facturation et de statut, isolation par locataire qui échoue fermée, invitations par lien, quotas et budgets d'IA |
 | [`@astratra/flags`](packages/flags/README.md) | 1.0.1 | Drapeaux de fonctionnalités et expériences déterministes : ciblage, déploiement progressif, fournisseur compatible OpenFeature |
@@ -117,7 +117,7 @@ est dans [CHANGELOG.md](CHANGELOG.md).
 
 | Paquet | Version | Rôle |
 |---|---|---|
-| [`@astratra/ai`](packages/ai/README.md) | 1.10.0 | Routage multi-fournisseur avec quotas et repli, registre d'outils, boucle d'agent, niveaux de risque avec confirmation, fournisseur llama.cpp local |
+| [`@astratra/ai`](packages/ai/README.md) | 1.11.0 | Routage multi-fournisseur avec quotas et repli, registre d'outils, boucle d'agent, niveaux de risque avec confirmation, fournisseur llama.cpp local |
 | [`@astratra/agent`](packages/agent/README.md) | 1.1.0 | Tâches durables, budgets, plans, vérifications de fin, résumés de contexte, suivi de la consommation et retours utilisateur (👍/👎) dont l'agent tient compte |
 | [`@astratra/models`](packages/models/README.md) | 1.1.0 | Service local de modèles sur CPU (vecteurs, reclassement, NLI, entités, transcription) et son client Node ; catalogue des prix et calcul du coût |
 | [`@astratra/conscience`](packages/conscience/README.md) | 1.2.0 | Mémoire documentée des décisions d'un agent (résultats, corrections, leçons avec preuves, modèle de soi, traçabilité, effacement) sous un gouverneur déterministe sans aucun modèle de langage |
@@ -142,7 +142,7 @@ est dans [CHANGELOG.md](CHANGELOG.md).
 | [`@astratra/wallet`](packages/wallet/README.md) | 1.0.0 | Cartes Apple Wallet et Google Wallet tenues à jour : signature, service web, lien d'ajout, retrait |
 | [`@astratra/pdf`](packages/pdf/README.md) | 1.0.0 | Primitives de mise en page PDFKit : texte qui tient dans sa case, tableaux paginés, planches de cartes avec QR vectoriel |
 | [`@astratra/closure`](packages/closure/README.md) | 1.0.0 | Liste de clôture de période à points bloquants et reconnus, archive sans aucun identifiant |
-| [`@astratra/notify`](packages/notify/README.md) | 1.0.0 | Messages sortants : e-mail, SMS, push ; transport injecté, protégé contre l'injection d'en-têtes, ne lève jamais |
+| [`@astratra/notify`](packages/notify/README.md) | 1.1.0 | Messages sortants : e-mail, SMS, push ; transport injecté, protégé contre l'injection d'en-têtes, ne lève jamais |
 
 ### Web et mobile
 

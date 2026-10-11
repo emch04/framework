@@ -1,6 +1,7 @@
 import { useAuth } from '../auth/AuthContext.jsx';
 import logoUrl from '../assets/logo.svg';
 import styles from './Layout.module.css';
+import { visibleViews } from '../lib/access.js';
 
 const NAV_ITEMS = [
   { id: 'dashboard', index: '01', label: 'Dashboard' },
@@ -8,8 +9,10 @@ const NAV_ITEMS = [
   { id: 'settings', index: '03', label: 'Parametres' }
 ];
 
-export default function Layout({ activeView, children, onNavigate }) {
+export default function Layout({ activeView, children, onNavigate, views }) {
   const { logout, user } = useAuth();
+  /* Only the screens this person's role allows (all admin screens hidden from a member). */
+  const allowed = views || visibleViews(user);
 
   return (
     <div className={styles.shell}>
@@ -23,7 +26,7 @@ export default function Layout({ activeView, children, onNavigate }) {
         </div>
 
         <nav className={styles.nav} aria-label="Primary">
-          {NAV_ITEMS.map((item) => (
+          {NAV_ITEMS.filter((item) => allowed.includes(item.id)).map((item) => (
             <button
               key={item.id}
               type="button"

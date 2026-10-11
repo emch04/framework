@@ -67,6 +67,8 @@ export interface NotificationPayload {
 
 export interface SaasRoles {
   adminRoles?: string[];
+  /** Roles that may grant an admin role or manage another admin's account. Default ['owner']. */
+  ownerRoles?: string[];
   [key: string]: unknown;
 }
 
@@ -144,6 +146,11 @@ export interface CreateSaasAppOptions {
   hashPassword?: (password: string) => Promise<string> | string;
   extractToken?: AuthMiddlewareOptions['extractToken'];
   roles?: SaasRoles;
+  /**
+   * Fields an admin may write through POST/PATCH /users. Default ['email', 'role', 'name'].
+   * id, password, passwordHash, hash, salt and tokens are never writable there.
+   */
+  writableUserFields?: string[];
   publicUserFields?: string[];
   cookie?: SessionCookieOptions;
   csrf?: CsrfMiddlewareOptions;

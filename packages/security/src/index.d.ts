@@ -948,3 +948,46 @@ export const GOOGLE_JWKS_URL: string;
 export const GOOGLE_ISSUERS: string[];
 export const APPLE_JWKS_URL: string;
 export const APPLE_ISSUERS: string[];
+
+/** One enrolled phone: public keys only, never a private key. */
+export interface EnrolledDevice {
+  id: string;
+  publicKey: string;
+  biometricPublicKey: string | null;
+  label: string | null;
+  enrolledAt: number;
+  revokedAt: number | null;
+}
+export interface DeviceStore {
+  getDevice(id: string): Promise<EnrolledDevice | null>;
+  /** Devices not revoked. */
+  countDevices(): Promise<number>;
+  /** false when the id already exists. */
+  addDevice(device: EnrolledDevice): Promise<boolean>;
+  revokeDevice(id: string, at: number): Promise<boolean>;
+  /** MUST be atomic: false when this nonce was already spent by this device. */
+  spendNonce(deviceId: string, nonce: string, expiresAt: number): Promise<boolean>;
+}
+export interface SignedDeviceRequest {
+  method: string;
+  path: string;
+  headers: Record<string, string | string[] | undefined>;
+  /** The RAW body bytes. */
+  body?: string | Buffer;
+}
+export type DeviceSignatureErrorCode = 'unknown_device' | 'revoked' | 'stale' | 'bad_nonce' | 'replay' | 'bad_signature' | 'biometric_required' | 'closed' | 'exists' | 'bad_key' | 'bad_request';
+export class DeviceSignatureError extends Error { code: DeviceSignatureErrorCode; }
+export interface DeviceSignatureVerifier {
+  verify(request: SignedDeviceRequest, rules?: { requireBiometric?: boolean }): Promise<{ device: { id: string; label: string | null }; biometric: boolean }>;
+  enroll(request: SignedDeviceRequest, enrolment: { id: string; publicKey: string; biometricPublicKey?: string; biometricSignature?: string; label?: string }): Promise<{ id: string }>;
+  enrollmentOpen(): Promise<boolean>;
+  /** Sets req.device and req.deviceBiometric; needs the raw body (express.raw or req.rawBody). */
+  middleware(options?: { requireBiometric?: boolean; rejectStatus?: number }): RequestHandler;
+  revoke(id: string): Promise<boolean>;
+}
+export function createDeviceSignatureVerifier(options: { store: DeviceStore; maxSkewMs?: number; maxDevices?: number | null; now?: () => number }): DeviceSignatureVerifier;
+export function createMemoryDeviceStore(): DeviceStore;
+export function canonicalDeviceRequest(parts: { method: string; path: string; time: number | string; nonce: string; body?: string | Buffer | null }): string;
+/** Raw 65-byte point (base64), SPKI DER (base64) or PEM, P-256 only; returns the SPKI PEM. */
+export function importDevicePublicKey(value: string): string;
+export const DEVICE_SIGNATURE_HEADERS: { device: string; time: string; nonce: string; signature: string; key: string };

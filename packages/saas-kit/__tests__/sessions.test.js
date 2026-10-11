@@ -2,7 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { PassThrough, Readable, Writable } = require('node:stream');
 const { createSaasApp, createMemoryUsersStore } = require('../src');
-const { TEST_PASSWORD_HASH, testUsers, verifyTestPassword } = require('./fixtures');
+const { testUsers, verifyTestPassword } = require('./fixtures');
 
 const TEST_SECRET = 'saas-kit-test-secret';
 

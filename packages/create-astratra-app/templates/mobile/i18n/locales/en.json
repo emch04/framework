@@ -47,7 +47,7 @@
     "done_help": "Your account is ready. Sign in to continue."
   },
   "password": {
-    "length": "At least 12 characters",
+    "length": "At least 8 characters",
     "lowercase": "One lowercase letter",
     "uppercase": "One uppercase letter",
     "digit": "One digit",

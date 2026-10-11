@@ -180,11 +180,11 @@ if (!isStrongPassword(nouveauMotDePasse)) {
 }
 ```
 
-12 caractères minimum + majuscule + minuscule + chiffre + caractère spécial,
+8 caractères minimum + majuscule + minuscule + chiffre + caractère spécial,
 toutes exigences activées par défaut et individuellement désactivables :
 
 ```js
-isStrongPassword(candidat, { minLength: 16, requireSpecial: false });
+isStrongPassword(candidat, { minLength: 12, requireSpecial: false });
 ```
 
 ## Auth JWT + RBAC

@@ -174,13 +174,13 @@ ajouté ensuite et oublié dans la liste part ouvert en production.
 
 La forme habituelle : une expression régulière, recopiée dans l'écran
 d'inscription et appliquée à l'aveugle par le serveur. L'utilisateur voit une
-ligne — « 12 caractères min… » — et ne découvre qu'au rejet LAQUELLE des cinq
+ligne — « 8 caractères min… » — et ne découvre qu'au rejet LAQUELLE des cinq
 conditions manquait. Pire : les deux copies dérivent.
 
 ```js
 const { createPasswordRules } = require('@astratra/client');
 
-const rules = createPasswordRules();       // 12+, minuscule, majuscule, chiffre, spécial
+const rules = createPasswordRules();       // 8+, minuscule, majuscule, chiffre, spécial
 
 rules.check('Abc1');
 // [{ key: 'length', met: false }, { key: 'lowercase', met: true }, …]

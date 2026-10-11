@@ -49,24 +49,29 @@ describe('password hashing', () => {
 });
 
 describe('isStrongPassword', () => {
+  test('the default minimum length is 12 characters', () => {
+    expect(isStrongPassword('Correct1!xy')).toBe(false);
+    expect(isStrongPassword('Correct1!xyz')).toBe(true);
+  });
+
   test('accepts a password with all 4 categories and default min length', () => {
-    expect(isStrongPassword('Correct1!')).toBe(true);
+    expect(isStrongPassword('Correct1!horse')).toBe(true);
   });
 
   test('rejects missing uppercase', () => {
-    expect(isStrongPassword('correct1!')).toBe(false);
+    expect(isStrongPassword('correct1!horse')).toBe(false);
   });
 
   test('rejects missing lowercase', () => {
-    expect(isStrongPassword('CORRECT1!')).toBe(false);
+    expect(isStrongPassword('CORRECT1!HORSE')).toBe(false);
   });
 
   test('rejects missing digit', () => {
-    expect(isStrongPassword('Correctly!')).toBe(false);
+    expect(isStrongPassword('Correctly!horse')).toBe(false);
   });
 
   test('rejects missing special character', () => {
-    expect(isStrongPassword('Correct123')).toBe(false);
+    expect(isStrongPassword('Correct123horse')).toBe(false);
   });
 
   test('rejects below the minimum length even with all categories', () => {

@@ -3,7 +3,7 @@
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Chaque package Astratra est versionné indépendamment.
 
-## 2026-10-11 — `@astratra/saas-kit` 2.0.0, `@astratra/saas-kit-ui` 1.4.0, `create-astratra-app` 1.11.0 : failles de comptes corrigées
+## 2026-10-11 — `@astratra/saas-kit` 2.0.0, `@astratra/saas-kit-ui` 1.4.0, `create-astratra-app` 1.11.0, `@astratra/security` 1.13.0, `@astratra/client` 1.2.0 : failles de comptes corrigées, mots de passe de 12 caractères
 
 ### Rupture
 - `saas-kit` 2.0.0 : les deux comptes d'exemple du store mémoire (`createMemoryUsersStore()` sans `users`, et `createSaasApp` sans `usersStore`) n'ont plus aucun identifiant : le mot de passe en clair `password` est retiré, plus personne ne s'y connecte. Fournir ses comptes avec une empreinte (`passwordHash: await hashPassword(...)`) et `verifyPassword: (user, p) => verifyPasswordHash(p, user.passwordHash)`. Les tests du kit suivent la même règle (empreinte scrypt, plus aucune comparaison en clair).
@@ -15,7 +15,9 @@ Chaque package Astratra est versionné indépendamment.
 - `create-astratra-app` : l'API générée ne compare plus les mots de passe en clair (`verifyPasswordHash` sur `user.passwordHash`). Les comptes de démonstration n'ont plus le mot de passe fixe `password` : il est tiré au hasard à chaque démarrage, 12 caractères (ou `DEMO_PASSWORD`), gardé seulement en empreinte scrypt, affiché dans la console ; les stores en mémoire refusent de démarrer en production.
 
 ### Modifié
-- `create-astratra-app` : planchers des dépendances alignés sur l'espace de travail (`@astratra/ai` ^1.9.0, `@astratra/security` ^1.12.0, `@astratra/saas-kit` ^2.0.0, `@astratra/saas-kit-ui` ^1.4.0) ; trois tests de cohérence échouaient avant.
+- `@astratra/security` 1.13.0 et `@astratra/client` 1.2.0 : la longueur minimale par défaut d'un mot de passe passe de **8 à 12 caractères** (`isStrongPassword` côté serveur, `createPasswordRules` côté écran : toujours la même règle des deux côtés). Les mots de passe déjà enregistrés continuent de fonctionner (seule la création ou le changement d'un mot de passe est concerné) ; `minLength` reste réglable. Textes du gabarit mobile (« 12 caractères minimum »), documentation et tests mis à jour.
+- README (anglais et français) : tableau des versions réaligné sur les paquets du dépôt (dix paquets y étaient en retard).
+- `create-astratra-app` : planchers des dépendances alignés sur l'espace de travail (`@astratra/ai` ^1.9.0, `@astratra/security` ^1.13.0, `@astratra/client` ^1.2.0, `@astratra/saas-kit` ^2.0.0, `@astratra/saas-kit-ui` ^1.4.0) ; trois tests de cohérence échouaient avant.
 
 ## 2026-10-10 — `@astratra/conscience` 1.2.0 : magasins MongoDB
 

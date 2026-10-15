@@ -214,6 +214,9 @@ export function demarrer(config: ConfigExpo, transport?: Transport, reglages: Re
         depuisArrierePlan = null;
         if (!centrale.sessionCourante()) centrale.session('debut');
         memoire?.garderMaintenant({ premierPlan: true });
+      } else if (etat === 'inactive') {
+        // Centre de contrôle, sélecteur d'apps, verrouillage en cours : JavaScript peut s'arrêter juste après.
+        gardien?.pause();
       } else if (etat === 'background') {
         if (depuisArrierePlan === null) depuisArrierePlan = maintenant();
         // En arrière-plan, JavaScript est suspendu : le gardien prendrait la suspension pour un blocage.

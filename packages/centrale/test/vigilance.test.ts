@@ -88,6 +88,18 @@ test('gardien : un blocage au-delà de 2 s est signalé avec sa durée, une erre
   ]);
 });
 
+test('gardien : un retard de plus d\'une minute est une pause de l\'app (téléphone verrouillé), pas un blocage', async () => {
+  const tr = transportFactice();
+  const c = creerCentrale(CONFIG, tr.transport, { minuterie: false });
+  const g = surveillerBlocages(c, { minuterie: false, maintenant: () => 0 });
+  g.tic(500);
+  g.tic(1_684_900); // l'app reprend après 28 minutes : JavaScript était suspendu
+  g.tic(1_685_400);
+  g.tic(1_689_000); // un vrai blocage de 3,1 s ensuite
+  await c.vider();
+  assert.deepEqual(erreurs(tr).map((e) => [e.exception.type, e.etiquettes?.duree_s]), [['AppBloquee', '3.1']]);
+});
+
 function memoireVive(): StockageCentrale & { valeurs: Map<string, string> } {
   const valeurs = new Map<string, string>();
   return { valeurs, lire: async (c) => valeurs.get(c) ?? null, ecrire: async (c, v) => { valeurs.set(c, v); } };
@@ -174,4 +186,12 @@ test('alerte mémoire d’iOS : dans le fil d’Ariane à chaque fois, signalée
   assert.equal(erreurs(tr).filter((e) => e.exception.type === 'MemoireSaturee').length, 2);
   assert.equal(c.filAriane().filter((m) => m.message === 'Mémoire saturée').length, 3);
   c.debrancher();
+});
+
+test('les vérifications de connexion (generate_204, captive.apple.com) ne sont jamais signalées', async () => {
+  const { estVerificationDeConnexion } = await import('../src/vigilance.ts');
+  for (const adresse of ['https://clients3.google.com/generate_204', 'http://connectivitycheck.gstatic.com/generate_204', 'https://captive.apple.com/hotspot-detect.html', 'http://www.msftconnecttest.com/connecttest.txt'])
+    assert.equal(estVerificationDeConnexion(adresse), true, adresse);
+  for (const adresse of ['https://api.scolarisapp.com/api/students', 'https://google.com/search?q=generate_204'])
+    assert.equal(estVerificationDeConnexion(adresse), false, adresse);
 });

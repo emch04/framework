@@ -85,6 +85,11 @@ public enum Appareil {
 /// Le gardien du fil principal : une app dont l'interface ne répond plus (blocage) est signalée, avec sa durée,
 /// l'écran et le fil d'Ariane. Pendant le blocage, son début est noté sur le disque : si le système tue l'app
 /// (chien de garde), le lancement suivant le dit.
+///
+/// Une app mise en PAUSE n'est pas bloquée : Mac en veille, app endormie par macOS (App Nap), débogueur arrêté.
+/// Le gardien s'en aperçoit à son propre retard : s'il n'a pas tourné depuis plus que le seuil, c'est toute l'app
+/// qui était arrêtée, et l'intervalle est oublié (15/10/2026 : 146 des 191 « blocages » de Muzika sur Mac
+/// duraient de 1 à 14 minutes, la nuit, Mac endormi).
 final class GardienBlocage: @unchecked Sendable {
     /// Au-delà, le fil principal est considéré bloqué.
     let seuil: TimeInterval
@@ -92,6 +97,8 @@ final class GardienBlocage: @unchecked Sendable {
     private let verrou = NSLock()
     private var dernierSigne = Date()
     private var bloqueDepuis: Date?
+    /// Le dernier tour du gardien lui-même.
+    private var dernierTour: Date?
     private var fil: Thread?
     private let signaler: @Sendable (_ debut: Date, _ duree: TimeInterval) -> Void
     private let noter: @Sendable (_ debut: Date?) -> Void
@@ -137,14 +144,27 @@ final class GardienBlocage: @unchecked Sendable {
         }
     }
 
-    /// Sans réponse depuis plus que le seuil : le blocage commence (noté une fois).
+    /// Sans réponse depuis plus que le seuil : le blocage commence (noté une fois). Si le gardien lui-même n'a pas
+    /// tourné depuis plus que le seuil, l'app était en pause : rien n'est compté, un blocage en cours est oublié.
     func verifier(maintenant: Date) {
-        let debut: Date? = verrou.withLock {
-            guard bloqueDepuis == nil, maintenant.timeIntervalSince(dernierSigne) > seuil else { return nil }
+        enum Issue { case rien, debut(Date), pause(oublie: Bool) }
+        let issue: Issue = verrou.withLock {
+            defer { dernierTour = maintenant }
+            if let tour = dernierTour, maintenant.timeIntervalSince(tour) > seuil {
+                let oublie = bloqueDepuis != nil
+                bloqueDepuis = nil
+                dernierSigne = maintenant
+                return .pause(oublie: oublie)
+            }
+            guard bloqueDepuis == nil, maintenant.timeIntervalSince(dernierSigne) > seuil else { return .rien }
             bloqueDepuis = dernierSigne
-            return dernierSigne
+            return .debut(dernierSigne)
         }
-        if let debut { noter(debut) }
+        switch issue {
+        case .debut(let debut): noter(debut)
+        case .pause(oublie: true): noter(nil)
+        case .pause(oublie: false), .rien: break
+        }
     }
 }
 

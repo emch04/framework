@@ -113,3 +113,43 @@ private func resume(_ evenements: [[String: Any]]) -> [String] {
     #expect(appareil.contains(" Go"), "modèle et mémoire de l'appareil")
     #expect(appareil == Appareil.decrire())
 }
+
+/// Une app en pause (Mac en veille, App Nap, débogueur) n'est pas bloquée : le gardien, en retard lui-même,
+/// oublie l'intervalle (15/10/2026).
+@Test func gardienOublieUnePauseDeLApp() {
+    final class Releve: @unchecked Sendable {
+        let verrou = NSLock()
+        var signales: [TimeInterval] = []
+        var notes: [Date?] = []
+    }
+    let releve = Releve()
+    let gardien = GardienBlocage(
+        seuil: 2,
+        signaler: { _, duree in releve.verrou.withLock { releve.signales.append(duree) } },
+        noter: { debut in releve.verrou.withLock { releve.notes.append(debut) } })
+    let t0 = Date(timeIntervalSince1970: 5_000)
+    gardien.signe(t0)
+    gardien.verifier(maintenant: t0.addingTimeInterval(0.5))
+    // Le Mac s'endort 14 minutes : le gardien ne tourne plus, puis reprend.
+    gardien.verifier(maintenant: t0.addingTimeInterval(848))
+    gardien.signe(t0.addingTimeInterval(848.1))
+    #expect(releve.signales.isEmpty, "une veille n'est pas un blocage")
+    #expect(releve.notes.isEmpty)
+    // Un vrai blocage ensuite, gardien régulier : il est signalé.
+    let t1 = t0.addingTimeInterval(900)
+    gardien.signe(t1)
+    gardien.verifier(maintenant: t1)
+    for pas in stride(from: 0.5, through: 4.0, by: 0.5) { gardien.verifier(maintenant: t1.addingTimeInterval(pas)) }
+    gardien.signe(t1.addingTimeInterval(4.2))
+    #expect(releve.signales.count == 1)
+    #expect(abs((releve.signales.first ?? 0) - 4.2) < 0.01)
+    // Un blocage commencé puis une pause de l'app : il est oublié, et effacé du disque.
+    let t2 = t1.addingTimeInterval(100)
+    gardien.signe(t2)
+    gardien.verifier(maintenant: t2)
+    for pas in stride(from: 0.5, through: 3.0, by: 0.5) { gardien.verifier(maintenant: t2.addingTimeInterval(pas)) }
+    gardien.verifier(maintenant: t2.addingTimeInterval(600))
+    gardien.signe(t2.addingTimeInterval(600.1))
+    #expect(releve.signales.count == 1, "le blocage interrompu par la pause n'est pas signalé")
+    #expect(releve.notes.last == .some(nil), "son début est effacé du disque")
+}

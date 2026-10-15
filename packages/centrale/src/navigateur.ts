@@ -38,6 +38,12 @@ export interface ConfigNavigateur extends ConfigCentrale {
    * réserver aux apps ouvertes dans un seul onglet.
    */
   stockage?: StockageCentrale;
+  /**
+   * Collecter aussi quand le navigateur est piloté par un robot (Playwright, Selenium : `navigator.webdriver`).
+   * Faux par défaut : les tests automatisés d'un déploiement n'envoient rien (15/10/2026 : 57 fausses erreurs de
+   * Scolaris venaient de ses tests Playwright, comptées en production).
+   */
+  robots?: boolean;
 }
 
 /** Ce que le paquet utilise du navigateur ; injectable pour les tests. */
@@ -46,7 +52,7 @@ export interface EnvironnementNavigateur {
   document: Pick<Document, 'addEventListener' | 'removeEventListener' | 'visibilityState' | 'readyState'>;
   location: Pick<Location, 'pathname'>;
   history: Pick<History, 'pushState' | 'replaceState'>;
-  navigator?: { onLine?: boolean; language?: string; userAgent?: string; sendBeacon?: (url: string, corps?: BodyInit | null) => boolean };
+  navigator?: { onLine?: boolean; language?: string; userAgent?: string; webdriver?: boolean; sendBeacon?: (url: string, corps?: BodyInit | null) => boolean };
   performance?: { getEntriesByType?: (type: string) => unknown[] };
   console?: ConsoleSuivie;
 }
@@ -87,10 +93,13 @@ function dureeChargement(env: EnvironnementNavigateur): number | undefined {
 export function demarrer(config: ConfigNavigateur, transport?: Transport, env: EnvironnementNavigateur | undefined = environnementGlobal(), reglages: ReglagesInternes = {}): CentraleNavigateur {
   const nettoyages: Array<() => void> = [];
   const enLigne = () => env?.navigator?.onLine !== false;
+  /* Un navigateur piloté par un robot (tests automatisés) ne collecte rien, sauf demande expresse. */
+  const robot = env?.navigator?.webdriver === true && config?.robots !== true;
   const centrale = creerCentrale(
     {
       plateforme: 'web',
       ...config,
+      ...(robot ? { desactive: true } : {}),
       contexte: { os: systemeDepuisAgent(env?.navigator?.userAgent), langue: env?.navigator?.language, ...config?.contexte }
     },
     transport,

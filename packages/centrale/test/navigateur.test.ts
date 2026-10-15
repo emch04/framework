@@ -150,3 +150,15 @@ test('systemeDepuisAgent', () => {
   assert.equal(systemeDepuisAgent('Mozilla/5.0 (X11; Linux x86_64)'), 'Linux');
   assert.equal(systemeDepuisAgent(undefined), undefined);
 });
+
+test('un navigateur piloté par un robot (Playwright) ne collecte rien, sauf demande expresse', () => {
+  const env = fauxNavigateur();
+  const robotise = { ...env.env, navigator: { ...env.env.navigator, webdriver: true } } as EnvironnementNavigateur;
+  const { transport } = transportFactice();
+  const muet = demarrer({ ...CONFIG }, transport, robotise);
+  assert.equal(muet.actif, false);
+  muet.debrancher();
+  const voulu = demarrer({ ...CONFIG, robots: true }, transport, robotise);
+  assert.equal(voulu.actif, true);
+  voulu.debrancher();
+});

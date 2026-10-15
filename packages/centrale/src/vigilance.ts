@@ -43,6 +43,17 @@ export interface OptionsRequetes {
 }
 
 /** Remplace `cible.fetch` par une version suivie. Rend de quoi la remettre. */
+/**
+ * Les vérifications de connexion des systèmes et des bibliothèques (« ai-je Internet ? ») : leur échec dit seulement
+ * que le réseau manque, jamais une erreur de l'app (15/10/2026 : 83 fausses erreurs de Scolaris sur
+ * clients3.google.com/generate_204). Elles restent dans le fil d'Ariane, sans signalement.
+ */
+const VERIFICATIONS_DE_CONNEXION = /^(https?:\/\/)?(clients\d*\.google\.com\/generate_204|connectivitycheck\.(gstatic|android)\.com\/generate_204|www\.google\.com\/generate_204|captive\.apple\.com|www\.apple\.com\/library\/test\/success\.html|www\.msftconnecttest\.com|detectportal\.firefox\.com)/i;
+
+export function estVerificationDeConnexion(adresse: string): boolean {
+  return VERIFICATIONS_DE_CONNEXION.test(adresse.trim());
+}
+
 export function suivreRequetes(centrale: Centrale, cible: { fetch?: unknown }, options: OptionsRequetes): Nettoyage {
   const originale = cible.fetch as ((entree: unknown, init?: { method?: string }) => Promise<{ status: number }>) | undefined;
   if (typeof originale !== 'function') return () => undefined;
@@ -66,6 +77,7 @@ export function suivreRequetes(centrale: Centrale, cible: { fetch?: unknown }, o
         const gabarit = gabaritRequete(adresse);
         const dureeMs = Math.max(0, Math.round(maintenant() - debut));
         centrale.miette('requete', `${methode} ${gabarit}`, { statut, dureeMs });
+        if (estVerificationDeConnexion(adresse)) return;
         if (statut === 0 || statut >= 500 || statut === 408 || statut === 429) {
           centrale.erreur(
             { name: statut === 0 ? 'RequeteSansReponse' : 'RequeteEchouee', message: statut === 0 ? `Pas de réponse : ${methode} ${gabarit}` : `Le serveur a répondu ${statut} : ${methode} ${gabarit}` },
@@ -151,6 +163,12 @@ export interface OptionsGardien {
   minuterie?: boolean;
   /** Appelé au début (avec l'instant) et à la fin (null) d'un blocage, pour le garder sur le disque. */
   noter?: (debut: number | null) => void;
+  /**
+   * Au-delà, un retard de la minuterie est une PAUSE de l'app (téléphone verrouillé, onglet endormi), pas un blocage :
+   * JavaScript a pu être suspendu avant même d'apprendre le passage en arrière-plan (15/10/2026 : 59 « blocages » de
+   * Scolaris sur iPhone, jusqu'à 2 181 s). 60 s par défaut.
+   */
+  plafondMs?: number;
 }
 
 /**
@@ -161,6 +179,7 @@ export function surveillerBlocages(centrale: Centrale, options: OptionsGardien =
   const seuil = options.seuilMs ?? SEUIL_BLOCAGE_MS;
   const pas = options.pasMs ?? 500;
   const maintenant = options.maintenant ?? (() => Date.now());
+  const plafond = options.plafondMs ?? 60_000;
   let precedent = maintenant();
   let enPause = false;
   let minuterie: ReturnType<typeof setInterval> | null = null;
@@ -170,6 +189,10 @@ export function surveillerBlocages(centrale: Centrale, options: OptionsGardien =
       precedent = instant;
       if (enPause || ecart < seuil) return;
       const secondes = Math.round(ecart / 100) / 10;
+      if (ecart > plafond) {
+        centrale.miette('autre', `Pause de l'app ${secondes} s`);
+        return;
+      }
       centrale.miette('autre', `Interface bloquée ${secondes} s`);
       centrale.erreur(
         { name: 'AppBloquee', message: `L'interface n'a pas répondu pendant ${secondes} s.` },

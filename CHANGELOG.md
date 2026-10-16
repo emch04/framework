@@ -22,7 +22,7 @@ Chaque package Astratra est versionné indépendamment.
 - README (anglais et français) : tableau des versions à jour.
 
 ### Modifié
-- `create-astratra-app` 1.11.1 : les projets générés demandent `@astratra/payments` ^1.0.1 (rejeux atomiques), `@astratra/privacy` ^1.0.1 et `@astratra/saas-kit` ^2.0.1. Les écarts déjà présents pour `ai`, `security` et `notify` (4 tests de cohérence en échec avant ce lot) ne sont pas traités ici.
+- `create-astratra-app` 1.11.1 : les projets générés demandent les versions que l'espace de travail publie : `@astratra/payments` ^1.0.1 (rejeux atomiques), `@astratra/privacy` ^1.0.1, `@astratra/saas-kit` ^2.0.1, `@astratra/prerender` ^1.0.1, et `@astratra/ai` ^1.11.0, `@astratra/security` ^1.13.0, `@astratra/notify` ^1.1.0 (ces trois planchers n'avaient pas suivi la livraison du 11/10 : 4 tests de cohérence échouaient). Le test de cohérence des briques couvre aussi le modèle fullstack, seul à accepter les briques navigateur (le plancher de `prerender` dérivait sans être vu).
 
 ## 2026-10-11 — `@astratra/notify` 1.1.0, `@astratra/ai` 1.11.0, `@astratra/security` 1.13.0 : ce qu'il manquait à Palabre
 

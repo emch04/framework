@@ -104,7 +104,7 @@ export const tenants = createTenantScope({
 
   notify: {
     package: '@astratra/notify',
-    version: '^1.0.0',
+    version: '^1.1.0',
     summary: 'e-mail, SMS et notifications poussées, transport injecté',
     file: 'api/bricks/notify.js',
     contents: () => `import { createCaptureChannel, createMailer, renderEmail, renderText } from '@astratra/notify';
@@ -367,7 +367,7 @@ export const passwordRules = createPasswordRules();
 
   prerender: {
     package: '@astratra/prerender',
-    version: '^1.0.0',
+    version: '^1.0.1',
     summary: 'prérendu SEO + sitemap tiré de la même liste',
     file: 'astratra.prerender.config.cjs',
     contents: () => `// Lancé après le build : "vite build && astratra-prerender"

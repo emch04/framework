@@ -381,13 +381,17 @@ test('the generated API asks for versions that actually contain the features', (
 
 test('every brick asks for the version the workspace publishes', () => {
   const cwd = tempRoot();
-  const result = createProject({ targetDir: 'demo-bricks', template: 'api', bricks: ['all'] }, cwd);
-  const manifest = JSON.parse(fs.readFileSync(path.join(result.targetDir, 'package.json'), 'utf8'));
   const versions = workspaceVersions();
+  /* api ET fullstack : les briques navigateur (prerender…) ne sont acceptées
+     que par fullstack, et leur plancher dérivait sans qu'aucun test le voie. */
+  for (const template of ['api', 'fullstack']) {
+    const result = createProject({ targetDir: `demo-bricks-${template}`, template, bricks: ['all'] }, cwd);
+    const manifest = JSON.parse(fs.readFileSync(path.join(result.targetDir, 'package.json'), 'utf8'));
 
-  for (const [name, range] of Object.entries(manifest.dependencies)) {
-    if (!name.startsWith('@astratra/')) continue;
-    assert.equal(range, `^${versions[name]}`, `brique ${name}: ${range} ≠ ^${versions[name]}`);
+    for (const [name, range] of Object.entries(manifest.dependencies)) {
+      if (!name.startsWith('@astratra/')) continue;
+      assert.equal(range, `^${versions[name]}`, `${template}, brique ${name}: ${range} ≠ ^${versions[name]}`);
+    }
   }
 });
 

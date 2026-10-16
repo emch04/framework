@@ -135,6 +135,83 @@ by itself (see Approvals and Reversible changes below).
   resume, register, stage, deploy, promote, rollback, finding) is written to the audit journal before it is returned:
   `listAudit({ organisationId })`.
 
+### Tool policy, calendar budget, tool kill switch (1.3.0)
+
+The rest of the governor decides about changes an agent proposes to itself.
+`createToolPolicy` decides about **one call of one tool**, by code, outside any
+model. It knows nothing about what a tool does: families, levels, caps and
+every word it returns come from your configuration.
+
+```js
+const { createToolPolicy, createPostgresGovernorStore, createPostgresToolBudgetStore,
+  postgresToolBudgetSchema } = require('@astratra/conscience/governor');
+
+await pool.query(postgresToolBudgetSchema());           // once, idempotent
+const policy = createToolPolicy({
+  store: createPostgresGovernorStore(pool),             // audit journal + kill switch
+  tools: [
+    { name: 'read_items',  family: 'catalogue', level: 'read', maxPerRun: 5 },
+    { name: 'update_item', family: 'catalogue', level: 'controlled',
+      validate: (input) => Number.isInteger(input?.amount),
+      overThreshold: (input, settings) => input.amount > settings.maxAmount },
+    { name: 'delete_item', family: 'catalogue', level: 'sensitive' }
+  ],
+  // Read before EVERY call (a database row, a dashboard...). If it throws, the call is refused.
+  settings: async ({ organisationId }) => ({ enabled: true, families: { catalogue: true }, budgetLimit: 15000, maxCallsPerRun: 12, maxAmount: 500 }),
+  budget: { period: 'month', timeZone: 'Europe/Paris', store: createPostgresToolBudgetStore(pool) },
+  emergency: { activateRoles: ['owner', 'support'], releaseRoles: ['owner'] }
+});
+
+const run = policy.createRun();                         // counters of one conversation / task
+const decision = await policy.decide({ tool: 'update_item', input: { amount: 40 }, run, actor: { kind: 'model', id: 'assistant' } });
+// { allowed, decision: 'allowed' | 'pending' | 'refused', code, level, input, budget, auditId, ... }
+
+const done = await policy.execute({ tool: 'read_items', input: {}, run }, (input, { signal }) => fetchItems(input, { signal }));
+// Runs only when allowed. done.executed, done.result, done.interrupted.
+await policy.recordSpend({ id: 'call-42', amount: 120 }); // whole units (cents), idempotent by id
+```
+
+- **Levels** (`TOOL_LEVELS`): `read` runs; `controlled` runs unless it is over its
+  own `overThreshold(input, settings)`, or the run read untrusted content
+  (`run.markUntrusted()` or `untrusted: true` on the call), then it is `pending`;
+  `sensitive` is always `pending`. The policy never runs a pending call: the
+  application keeps it and a person decides.
+- **Refusal codes** (`TOOL_REASONS`): `emergency_stop`, `disabled`,
+  `unknown_tool`, `family_disabled`, `invalid_input`, `budget_exceeded`,
+  `cap_reached` (calls per run, or `maxPerRun` of the tool), and
+  `settings_unavailable` when settings, kill switch or budget cannot be read.
+  Pending codes: `sensitive_tool`, `untrusted_context`, `over_threshold`.
+  Order: stop, disabled, unknown, family, input, budget, caps, level. Calls asked
+  together are counted at once, so they cannot all slip under a cap.
+- **Your words**: `labels: { levels, decisions, codes }` renames what you get
+  back (`{ decisions: { pending: 'en_attente' } }`); tools then declare their
+  level in your word.
+- **Calendar budget** (`createCalendarBudget`, also usable alone): consumption
+  counted per `'month'` or `'day'` (or your own function) of a time zone
+  (`calendarPeriodKey`), cap and amounts are whole units, never floats (use a
+  smaller unit for fractions of a cent). `check()` runs before each call and
+  also tests the tool's `estimatedCost`; a consumption lands in the period of
+  its own instant, so a call at 23:30 on 31 October in Paris counts for
+  October there and for November in UTC. Stores: memory
+  (`createMemoryToolBudgetStore`), PostgreSQL (`createPostgresToolBudgetStore`:
+  one atomic, idempotent statement, bigint), or your own `{ getSpent(scope,
+  period), addSpend({ scope, period, id, amount, at }) }` (idempotent by id).
+  The scope is `organisationId` by default. The cap is reached when
+  `spent >= limit`; with the measure after the call, the last call may pass it.
+- **Emergency stop**: `halt({ by, reason, organisationId? })` is read before
+  each call and while a tool runs. `execute()` gives the tool an `AbortSignal`
+  that aborts at once on a stop in this process, and within `pollMs` (default
+  1 s) on a stop pulled by another process; the call is also abandoned if the
+  tool ignores the signal (`interrupted: true`). `activateRoles` pull it
+  (default: anyone with an id), `releaseRoles` lift it (default: any human; a
+  `model` or `engine` actor never can). A `governor` option makes the governor
+  kill switch stop the tools too.
+- **Audit**: every decision is written to the governor journal before it is
+  returned (`tool_decision`: who, tool, family, level, decision, reasons, input
+  fingerprint, never the raw input), plus `tool_outcome`, `tool_halt`,
+  `tool_resume` and their refusals. If the journal cannot be written the call
+  does not run. `onEvent` receives the same records.
+
 ### Approvals (matrix, double approval, expiry)
 
 Approval is decided by the policy, not by whoever proposes:
@@ -384,6 +461,7 @@ uses parameters only; the table prefix is a checked identifier.
 ```js
 postgresConscienceSchema({ prefix: 'astratra_conscience' }) // table <prefix>_records
 postgresGovernorSchema({ prefix: 'astratra_governor' })     // <prefix>_proposals, _audit, _spend, _controls, _objects, _versions, _findings
+postgresToolBudgetSchema({ prefix: 'astratra_tools' })       // <prefix>_budget_totals, _budget_entries (tool budget, 1.3.0)
 ```
 
 ### Writing your own store (MongoDB, ...)

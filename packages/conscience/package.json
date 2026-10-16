@@ -1,6 +1,6 @@
 {
   "name": "@astratra/conscience",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "description": "Documented memory of an AI agent's decisions (outcomes, corrections, lessons with evidence, self-model, lineage, erasure) under a deterministic governor with no language model: constitution, permissions, budgets, isolation, kill switch, human approval.",
   "engines": {
     "node": ">=20"

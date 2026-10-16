@@ -147,3 +147,37 @@ function exerciseMongo(db: Db, client: MongoClient) {
   return { memory, control, migrations: Promise.all([mongoConscienceIndexes(db), mongoGovernorIndexes(db)]) };
 }
 void exerciseMongo;
+
+import { createToolPolicy, createCalendarBudget, createMemoryToolBudgetStore, createPostgresToolBudgetStore, postgresToolBudgetSchema, calendarPeriodKey, TOOL_LEVELS, TOOL_REASONS } from './src/governor';
+import type { ToolDecision, ToolExecution, ToolPolicy, BudgetStanding } from './src/governor';
+
+async function toolTypes() {
+  const budget = createCalendarBudget({ period: 'month', timeZone: 'Europe/Paris', limit: 15_000, store: createMemoryToolBudgetStore() });
+  const policy: ToolPolicy = createToolPolicy({
+    tools: [
+      { name: 'read_things', family: 'a', level: TOOL_LEVELS.READ, maxPerRun: 5 },
+      { name: 'change_things', family: 'a', level: 'controlled', validate: (input) => typeof input?.n === 'number', overThreshold: (input, settings) => input.n > Number(settings.limit ?? 0) },
+      { name: 'drop_things', family: 'b', level: 'sensitive', estimatedCost: 10 }
+    ],
+    settings: async () => ({ enabled: true, families: { b: false }, budgetLimit: 1000, limit: 3 }),
+    budget,
+    emergency: { activateRoles: ['owner', 'support'], releaseRoles: ['owner'] },
+    labels: { decisions: { allowed: 'ok' }, codes: { emergency_stop: 'stop' } },
+    store: createPostgresGovernorStore({ query: async () => ({ rows: [] }) })
+  });
+  const run = policy.createRun();
+  const decision: ToolDecision = await policy.decide({ tool: 'read_things', input: {}, run, actor: { kind: 'model', id: 'assistant' } });
+  const done: ToolExecution<number> = await policy.execute({ tool: 'read_things', run }, async (_input, { signal }) => { signal.throwIfAborted(); return 1; });
+  run.markUntrusted();
+  await policy.halt({ by: { kind: 'human', id: 'sam', roles: ['support'] }, reason: 'x' });
+  await policy.resume({ by: { kind: 'human', id: 'olivia', roles: ['owner'] } });
+  const standing: BudgetStanding = await policy.budgetStatus({ organisationId: 'org' });
+  void [decision.allowed, decision.code === TOOL_REASONS.BUDGET, done.result?.toFixed(), done.interrupted, standing.remaining, await policy.availableTools(), policy.listTools()[0]?.level];
+  await policy.recordSpend({ id: 'call-1', amount: 12 });
+  void [calendarPeriodKey(Date.now(), { period: 'day', timeZone: 'UTC' }), postgresToolBudgetSchema({ prefix: 'tools' }), createPostgresToolBudgetStore({ query: async () => ({ rows: [] }) })];
+  // @ts-expect-error A tool needs a family.
+  void createToolPolicy({ tools: [{ name: 'x', level: 'read' }] });
+  // @ts-expect-error The period is a day, a month or a function.
+  void createCalendarBudget({ period: 'week' });
+}
+void toolTypes;

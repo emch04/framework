@@ -14,8 +14,13 @@ const { bucket } = require('./rollout');
 const { createRemoteSettings, parseRemoteSettings, remotePolicy, REMOTE_SETTINGS_SCHEMA, DECISION_RESULTS } = require('./remote');
 
 const { createMongoGovernorStore, mongoGovernorIndexes } = require('./mongo');
+const { createToolPolicy, TOOL_LEVELS, TOOL_DECISIONS, TOOL_REASONS } = require('./tools');
+const { createCalendarBudget, calendarPeriodKey, createMemoryToolBudgetStore } = require('./calendar');
+const { postgresToolBudgetSchema, createPostgresToolBudgetStore } = require('./toolBudgetPostgres');
 
 module.exports = {
+  createToolPolicy, TOOL_LEVELS, TOOL_DECISIONS, TOOL_REASONS, createCalendarBudget, calendarPeriodKey, createMemoryToolBudgetStore,
+  postgresToolBudgetSchema, createPostgresToolBudgetStore,
   createMongoGovernorStore, mongoGovernorIndexes,
   createGovernor, assertGovernorReady, isGovernor, validatePolicy, scopesOf, protectedRulesTouched,
   createMemoryGovernorStore, createPostgresGovernorStore, postgresGovernorSchema, GovernorError,

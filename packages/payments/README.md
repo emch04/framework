@@ -74,6 +74,10 @@ que ton application est seule à connaître ses propres middlewares.
 ```js
 const { createWebhookHandler, createMemoryEventLog } = require('@astratra/payments');
 
+// Développement seulement. En production, un store partagé qui fournit
+// claim / release / record (voir « Les rejeux »).
+const eventLog = createMemoryEventLog();
+
 const webhook = createWebhookHandler({
   // À toi, parce que c'est propre au prestataire. DOIT lever si la signature
   // ne correspond pas.
@@ -114,9 +118,9 @@ Le code HTTP n'est pas décoratif : le prestataire le lit comme une consigne.
 | traité | 200 | terminé |
 | type d'événement inconnu | 200 | acquitté, pas une erreur |
 | `unrelated(...)` | 200 | « reçu, pas mon circuit » |
-| déjà traité | 200 | rejeu reconnu |
+| déjà traité, ou en cours de traitement par une autre livraison | 200 (`duplicate`) | rejeu reconnu, réservé avant le traitement |
 | signature invalide | **400** | relancer ne changerait rien |
-| le gestionnaire a levé | **500** | là, une relance peut aider |
+| le gestionnaire a levé | **500** | réservation libérée : là, une relance peut aider |
 
 Le 400 sur signature invalide est délibéré. Un 500 ferait relancer un message
 que le prestataire a mal signé, ou que tu ne sais pas vérifier — indéfiniment.

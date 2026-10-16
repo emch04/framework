@@ -52,6 +52,13 @@ Puis ajoutez `vite build && astratra-prerender` à votre script `build`.
 - `transformHtml(html, context)` : transforme le HTML d'un projet avant écriture.
 - `isReady(page, route)` : attente asynchrone propre au projet avant capture.
 
+`prerender()` renvoie `{ pages, warnings, sitemap }` : les pages capturées
+(`{ route, html }`), les avertissements qui ne bloquent pas le build (contenu
+mince, URL de sitemap sans page, appels API remplacés par le défaut
+d'`apiPatterns`) et le chemin du sitemap écrit (ou `null`). La CLI affiche
+chaque avertissement sur la sortie d'erreur, préfixé `[astratra-prerender]`,
+sans faire échouer le build.
+
 
 ## ⚠️ Pages dont le contenu vient de l'API
 

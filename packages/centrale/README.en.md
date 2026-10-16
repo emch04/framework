@@ -84,6 +84,28 @@ const centrale = demarrer({ ...config, robots: true });
 
 An app only keeps a project token (`CENTRALE_PASSERELLE_JETON`, `clj_pas_…`) and the Centrale address (`CENTRALE_ADRESSE`): Centrale calls the providers with the keys of its vault and counts usage per project. `lirePasserelle(env)` reads them (null when not set); `modeleDiscussion(p)` gives an OpenAI-format model (`auto`) to put first in an AI's relay; `plongements`, `rechercher` and `voix` cover embeddings, web search and voice. A gateway outage throws `PasserelleIndisponible` and `passerelleDabord` then falls back to the direct keys; a request refused for itself (400, 413) throws `RequetePasserelleRefusee`, without fallback.
 
+## Agent journal (`/agents`)
+
+An AI sends each of its runs (model turns, tools called, tokens, duration, cost, status, proposed actions) to the dashboard: `POST /v1/agents`, with the project's **public** key (`X-Centrale-Cle`), at most 100 runs per batch.
+
+```ts
+import { construireExecution, creerJournalAgents } from '@astratra/centrale/agents';
+
+const journal = creerJournalAgents({ adresse: process.env.CENTRALE_ADRESSE!, cle: process.env.CENTRALE_CLE! });
+
+await journal.envoyer([construireExecution({
+  identifiant: 'run-123', agent: 'Elsa', mode: 'discussion', utilisateur: accountId,    // opaque identifier
+  debut, fin, statut: 'ok',                                                              // ok | erreur | interrompue | en_attente_confirmation
+  tours: [{ modele: 'model-a', dureeMs: 900, jetonsEntree: 1200, jetonsSortie: 80, cout: 0.002 }],
+  outils: [{ outil: 'read_stock', succes: true, dureeMs: 25 }],
+  actions: [{ outil: 'refund', etat: 'proposee' }]
+})]);
+```
+
+- `construireExecution(bilan, { inclureContenu? })`: pure function. **No content by default**: no question, answer, tool arguments or tool results, even if the bilan carries them; the error is a short code (`ia_indisponible`), never a message. `inclureContenu: true` adds them (masked before sending); only turn it on when a use really needs it.
+- `creerJournalAgents({ adresse, cle, fetch? })`: `envoyer(executions)` validates locally (an unknown key, status, step type or action state **rejects** the run; steps, sources and actions are cut to the format's bounds; dates to the second, `Z`), masks texts, queues and sends. Also `vider()`, `enAttente()`, `arreter()`.
+- The queue lives in memory (1,000 runs at most). A network failure, a 5xx or a 429 (`Retry-After` honoured) puts the batch back with progressive back-off (2 s, doubling up to 5 min); a 4xx refusal drops the batch silently. Never throws; `debug: true` explains rejections.
+
 ## Conscience of an AI (`/conscience`)
 
 The dashboard sets an AI's conscience (on, emergency stop, approvers, automatic reflection, cycles per day), receives its morning report and pending proposals, and records human decisions. It never applies anything: the AI reads its settings and the decisions, then submits them to its own governor. Authentication uses the project token (`Authorization: Bearer …`).

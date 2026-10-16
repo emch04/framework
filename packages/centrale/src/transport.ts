@@ -21,9 +21,9 @@ export interface ReponseTransport {
 export type Transport = (requete: RequeteTransport) => Promise<ReponseTransport>;
 
 /** Transport par défaut, avec un délai maximal pour ne jamais rester bloqué. */
-export function transportFetch(delaiMs = 10_000): Transport {
+export function transportFetch(delaiMs = 10_000, fetchPerso?: typeof fetch): Transport {
   return async (requete) => {
-    const f = (globalThis as { fetch?: typeof fetch }).fetch;
+    const f = fetchPerso ?? (globalThis as { fetch?: typeof fetch }).fetch;
     if (typeof f !== 'function') throw new Error('fetch indisponible');
     const signal = typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function'
       ? AbortSignal.timeout(delaiMs)

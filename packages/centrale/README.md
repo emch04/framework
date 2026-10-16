@@ -114,6 +114,28 @@ const resultats = await passerelleDabord(passerelle, (p) => rechercher(p, { requ
 
 Une panne de la passerelle (injoignable, 5xx, 429, 401/403, service non configuré) lève `PasserelleIndisponible` : `passerelleDabord` passe alors aux clés directes. Une requête refusée pour elle-même (400, 413) lève `RequetePasserelleRefusee`, sans repli.
 
+## Journal des agents (`/agents`)
+
+Une IA y envoie chacune de ses exécutions (tours de modèle, outils appelés, jetons, durée, coût, statut, actions proposées) au tableau de bord : `POST /v1/agents`, avec la clé **publique** du projet (`X-Centrale-Cle`), 100 exécutions par lot au plus.
+
+```ts
+import { construireExecution, creerJournalAgents } from '@astratra/centrale/agents';
+
+const journal = creerJournalAgents({ adresse: process.env.CENTRALE_ADRESSE!, cle: process.env.CENTRALE_CLE! });
+
+await journal.envoyer([construireExecution({
+  identifiant: 'run-123', agent: 'Elsa', mode: 'discussion', utilisateur: idDuCompte,   // identifiant opaque
+  debut, fin, statut: 'ok',                                                              // ok | erreur | interrompue | en_attente_confirmation
+  tours: [{ modele: 'modele-a', dureeMs: 900, jetonsEntree: 1200, jetonsSortie: 80, cout: 0.002 }],
+  outils: [{ outil: 'lire_stock', succes: true, dureeMs: 25 }],
+  actions: [{ outil: 'rembourser', etat: 'proposee' }]
+})]);
+```
+
+- `construireExecution(bilan, { inclureContenu? })` : fonction pure. **Sans contenu par défaut** : ni question, ni réponse, ni arguments, ni résultats d'outils, même si le bilan les porte ; l'erreur est un code court (`ia_indisponible`), jamais un message. `inclureContenu: true` les joint (masqués avant l'envoi) ; à n'activer que pour un usage qui l'exige.
+- `creerJournalAgents({ adresse, cle, fetch? })` : `envoyer(executions)` valide en local (une clé inconnue, un statut, un type d'étape ou un état d'action hors liste **refuse** l'exécution ; étapes, sources et actions coupées aux bornes du format ; dates à la seconde, `Z`), masque les textes, met en file et envoie. `vider()`, `enAttente()`, `arreter()`.
+- La file est en mémoire (1 000 exécutions au plus). Un échec réseau, un 5xx ou un 429 (`Retry-After` respecté) remet le lot en file avec un recul progressif (2 s, doublé jusqu'à 5 min) ; un refus 4xx abandonne le lot en silence. Ne lève jamais ; `debug: true` explique les refus.
+
 ## Conscience d'une IA (`/conscience`)
 
 Le tableau de bord règle la conscience d'une IA (allumée, arrêt d'urgence, approbateurs, réflexion automatique,

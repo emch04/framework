@@ -4,6 +4,13 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Chaque package Astratra est versionné indépendamment.
 
 
+## 2026-10-16 — `@astratra/centrale` 1.6.0 : journal des agents
+
+### Ajouté
+- Entrée `/agents` : `creerJournalAgents({ adresse, cle, fetch? })` envoie les exécutions d'une IA à `POST /v1/agents` (lots de 100 au plus, clé publique du projet). Validation locale (clé inconnue, statut, type d'étape ou état d'action hors liste refusés ; bornes du format ; dates à la seconde), masquage des textes, file en mémoire avec recul progressif (`Retry-After` respecté), abandon silencieux d'un lot refusé en 4xx, ne lève jamais.
+- `construireExecution(bilan, { inclureContenu? })` : une exécution générique (tours de modèle, appels d'outils, actions, jetons, coût, statut, code d'erreur) **sans** question, réponse, arguments ni résultats par défaut ; option explicite pour les joindre.
+- `transportFetch(delaiMs, fetch?)` accepte un `fetch` à injecter. Tests.
+
 ## 2026-10-16 — `@astratra/agent` 1.2.0 : ordonnanceur de tâches et file d'actions en attente d'approbation
 
 ### Ajouté

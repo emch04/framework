@@ -156,6 +156,101 @@ Avec des gardes, `turn` reçoit `unmask(texte)` : il rend les vrais mots d'un te
 de `@astratra/ai` (1.10.0), on montre ainsi la réponse en flux, sans ses repères (`#PERSON_0001`). La réponse finale
 passe toujours par la garde de sortie (fuites, modération) ; ce qui part au modèle reste masqué.
 
+## Ordonnanceur (tâches programmées)
+
+Des tâches qui tournent à heure fixe chaque jour, un jour de la semaine, ou à intervalle, dans un fuseau horaire IANA.
+Rien ne démarre au chargement du module : on appelle `start()`.
+
+```js
+const { createScheduler } = require('@astratra/agent');
+
+const scheduler = createScheduler({
+  timeZone: 'Europe/Paris',
+  maxLateMs: 6 * 3600 * 1000,                  // un passage manqué de plus de 6 h est sauté, pas lancé
+  shouldStop: () => reglages.arretUrgence,      // consulté avant ET pendant chaque passage
+  tasks: [
+    { id: 'rapport-du-jour', schedule: { type: 'daily', at: '07:00' }, run: ({ signal }) => produireRapport(signal) },
+    { id: 'resume-hebdo', schedule: { type: 'weekly', day: 'monday', at: '07:30' }, run: envoyerResume },
+    { id: 'nettoyage', schedule: { type: 'interval', everyMs: 15 * 60 * 1000 }, run: nettoyer }
+  ]
+});
+scheduler.start();                              // passage périodique (tous les tickMs, 30 s par défaut)
+await scheduler.run('nettoyage');               // lancement manuel ; ne déplace pas le prochain passage prévu
+await scheduler.state();                        // lastRunAt, nextRunAt, status, lastResult, lastError, skipReason
+scheduler.abortAll();                           // coupe tous les passages en cours (leur signal s'annule)
+scheduler.stop();                               // arrête le passage périodique
+```
+
+- **Programmations** : `{ type: 'daily', at: 'HH:MM' }`, `{ type: 'weekly', day | days, at }` (1 = lundi … 7 =
+  dimanche, ou `'monday'`), `{ type: 'interval', everyMs }`. `timeZone` est global ou propre à la tâche. Les
+  changements d'heure sont gérés : 07:00 reste 07:00 à l'horloge murale. Une heure qui n'existe pas (02:30 au passage à
+  l'heure d'été) part juste après le trou ; une heure qui existe deux fois part une seule fois, à la première
+  occurrence. `nextRun(schedule, apresMs, timeZone)` est exportée.
+- **Jamais deux fois en même temps** : chaque passage prend un `lock` (`acquire(cle)` → `{ release() }` ou `null`). Par
+  défaut un verrou dans le processus ; avec plusieurs processus, `createPostgresLock(pool)` (`pg_try_advisory_lock`,
+  tenu sur une connexion du pool jusqu'à `release()`, libéré si le processus meurt). L'état est relu sous le verrou :
+  un processus qui perd la course ne relance pas une tâche qu'un autre vient de finir. Partagez le `store` (plus bas)
+  entre les processus.
+- **Passages manqués** : un passage échu depuis plus de `maxLateMs` (par tâche ou global, 1 h par défaut) est sauté
+  (`skipReason: 'late'`) et le suivant est programmé. En deçà du délai, il part quand même.
+- **Arrêt global** : `shouldStop()` est lu avant chaque passage (un passage programmé est sauté avec `'stopped'`, un
+  lancement manuel lève `SchedulerError('stopped')`) puis toutes les `stopCheckMs` (1 s) pendant l'exécution ; s'il
+  rend vrai, le `signal` de la tâche s'annule. Un `shouldStop` qui échoue vaut arrêt. Un passage coupé ainsi n'est pas
+  compté comme fait.
+- **État** : `status` vaut `scheduled`, `running` (indicatif : le verrou fait foi), `ok`, `error` ou `skipped`.
+  `lastResult` (JSON) est repassé au passage suivant en `previous`, pour les tâches qui évitent de se répéter.
+- **Stockage de l'état** : mémoire par défaut ; `createPostgresScheduleStore(db)` le garde dans une table
+  (`postgresScheduleSchema()` la crée).
+- **Tests** : injectez `now` (fonction rendant des ms ou une `Date`) et appelez `tick()` vous-même.
+- `onEvent` (`start`, `done`, `error`, `skipped`) et `onError` observent l'ordonnanceur sans jamais le casser.
+
+## File d'actions en attente d'approbation
+
+Des actions qu'une personne doit approuver, **détachées de toute exécution en cours** : on propose maintenant, on décide
+des heures ou des jours plus tard. Le paquet n'authentifie personne : vous contrôlez l'identité et le rôle (dans votre
+route, ou dans `authorize`) et passez le décideur. L'action est exécutée par **votre** exécuteur.
+
+```js
+const { createApprovalQueue, ApprovalRefused } = require('@astratra/agent');
+
+const queue = createApprovalQueue({
+  executors: {
+    publier: async ({ input, idempotencyKey, signal }) => {
+      if (!input.titre) throw new ApprovalRefused('incomplet', { manquants: ['titre'] });  // rien n'a été fait
+      return await publierArticle(input, { idempotencyKey, signal });                      // le résultat est gardé
+    }
+  },
+  authorize: ({ decider }) => decider.role === 'proprietaire',   // votre règle ; false ou une exception = interdit
+  beforeExecute: () => { if (reglages.arretUrgence) throw new Error('arrêt'); },         // dernier contrôle, facultatif
+  onEvent: ({ type, action }) => journal(type, action.id)        // proposed, approved, rejected, refused, failed, expired
+});
+
+const action = await queue.propose({ type: 'publier', input: { titre: 'Bonjour' }, requestedBy: 'assistant', ttlMs: 3 * 24 * 3600 * 1000 });
+await queue.list({ status: 'pending' });
+await queue.approve(action.id, { decider: { id: 'u-1', role: 'proprietaire' } });   // → { action, result }
+await queue.reject(action.id, { decider: { id: 'u-1', role: 'proprietaire' }, reason: 'pas maintenant' });
+await queue.expire();                                                                // fait aussi par list/approve/reject
+```
+
+- **Une seule exécution** : `approve` *réserve* d'abord l'action (`pending` → `approved`) en une étape atomique du
+  stockage, puis lance l'exécuteur. Deux approbations simultanées : l'une s'exécute, l'autre reçoit
+  `ApprovalError('already_decided')`. Avec PostgreSQL, la réservation est un seul `UPDATE` conditionnel. L'exécuteur
+  reçoit `idempotencyKey` (l'identifiant de l'action) : utilisez-la côté système externe, car une file ne peut pas
+  défaire un effet survenu avant un plantage. Une action restée `approved` avec `executedAt: null` après un plantage se
+  retrouve par `list({ status: 'approved' })`.
+- **Refus** : si l'exécuteur lève `ApprovalRefused(reason, details)`, rien n'a eu lieu : l'action repasse en `pending`
+  avec `refusal: { reason, details, at, by }` et l'erreur est relancée. Toute autre erreur fait de même avec
+  `reason: 'execution_failed'` et est relancée en `ApprovalError('execution_failed')` (l'originale est dans `cause`).
+- **Expiration** : `ttlMs` ou `expiresAt` à `propose`. Une action expirée ne peut plus être approuvée ni rejetée
+  (`ApprovalError('expired')`), même si le balayage n'est pas encore passé. `expire()` les marque `expired` ;
+  appelez-la depuis une minuterie ou une tâche de l'ordonnanceur.
+- **Erreurs** (`ApprovalError.code`) : `not_found`, `expired`, `already_decided`, `forbidden`, `no_executor`,
+  `execution_failed`, `invalid`.
+- **Stockage** : mémoire par défaut ; `createPostgresApprovalStore(db)` avec `postgresApprovalSchema()`. Un stockage
+  maison implémente `create/get/list/reserve/finish/revert/reject/expire`, chaque transition étant atomique et rendant
+  `null` quand sa condition n'est plus vraie.
+- Les entrées et résultats conservés doivent être du JSON.
+
 ## Tests
 
 `npm test -w @astratra/agent`. Les tests PostgreSQL réels ne tournent qu'avec

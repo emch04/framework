@@ -324,9 +324,100 @@ With guards, `turn` receives `unmask(text)`: the real words of a (masked) model 
 `@astratra/ai` (1.10.0) you can show a streamed answer without its masking markers (`#PERSON_0001`). The final answer
 still goes through the output guard (leaks, moderation); what is sent to the model stays masked.
 
+## Scheduler (timed tasks)
+
+Tasks that run at a fixed time of day, on a weekday, or at an interval, in an IANA time zone. Nothing starts when the
+module is loaded: you call `start()`.
+
+```js
+const { createScheduler } = require('@astratra/agent');
+
+const scheduler = createScheduler({
+  timeZone: 'Europe/Paris',
+  maxLateMs: 6 * 3600 * 1000,                  // a run missed by more than 6 h is skipped, not run
+  shouldStop: () => settings.killSwitch,        // checked before AND during each run
+  tasks: [
+    { id: 'daily-report', schedule: { type: 'daily', at: '07:00' }, run: ({ signal }) => buildReport(signal) },
+    { id: 'weekly-digest', schedule: { type: 'weekly', day: 'monday', at: '07:30' }, run: sendDigest },
+    { id: 'cleanup', schedule: { type: 'interval', everyMs: 15 * 60 * 1000 }, run: cleanUp }
+  ]
+});
+scheduler.start();                              // periodic pass (every tickMs, 30 s by default)
+await scheduler.run('cleanup');                 // manual run; does not move the next planned run
+await scheduler.state();                        // lastRunAt, nextRunAt, status, lastResult, lastError, skipReason
+scheduler.abortAll();                           // cuts every run in progress (their signal aborts)
+scheduler.stop();                               // stops the periodic pass
+```
+
+- **Schedules**: `{ type: 'daily', at: 'HH:MM' }`, `{ type: 'weekly', day | days, at }` (1 = Monday … 7 = Sunday, or
+  `'monday'`), `{ type: 'interval', everyMs }`. `timeZone` is global or per task. Daylight saving is handled: 07:00
+  stays 07:00 on the wall clock. A time that does not exist (02:30 when clocks go forward) runs right after the gap; a
+  time that happens twice runs once, at the first occurrence. `nextRun(schedule, afterMs, timeZone)` is exported.
+- **Never twice at once**: each run takes a `lock` (`acquire(key)` → `{ release() }` or `null`). The default is an
+  in-process lock; with several processes pass `createPostgresLock(pool)` (`pg_try_advisory_lock`, held on one pooled
+  connection until released, freed if the process dies). The run state is re-read under the lock, so a process that
+  lost the race does not run a task another one just finished. Share the `store` (below) between processes.
+- **Missed runs**: a due run late by more than `maxLateMs` (per task or global, 1 h by default) is skipped with
+  `skipReason: 'late'`, and the next one is planned. Within the delay it still runs.
+- **Global stop**: `shouldStop()` is read before each run (a scheduled run is skipped with `'stopped'`, a manual run
+  throws `SchedulerError('stopped')`) and every `stopCheckMs` (1 s) during a run; when it returns true the task's
+  `signal` aborts. A failing `shouldStop` counts as stopped. A run cut this way is not counted as done.
+- **State**: `status` is `scheduled`, `running` (informative: the lock is the truth), `ok`, `error` or `skipped`.
+  `lastResult` (JSON) is passed to the next run as `previous`, for tasks that avoid repeating themselves.
+- **State store**: memory by default; `createPostgresScheduleStore(db)` keeps it in a table
+  (`postgresScheduleSchema()` creates it).
+- **Tests**: inject `now` (a function returning ms or a `Date`) and call `tick()` yourself.
+- `onEvent` (`start`, `done`, `error`, `skipped`) and `onError` observe the scheduler; they never break it.
+
+## Approval queue (actions waiting for a decision)
+
+Actions that a person must approve, **detached from any running task**: an action is proposed now and decided hours or
+days later. The package does not authenticate anyone: you check identity and role (in your route, or in `authorize`) and
+pass the decider. The action is executed by **your** executor.
+
+```js
+const { createApprovalQueue, ApprovalRefused } = require('@astratra/agent');
+
+const queue = createApprovalQueue({
+  executors: {
+    publish: async ({ input, idempotencyKey, signal }) => {
+      if (!input.title) throw new ApprovalRefused('incomplete', { missing: ['title'] });  // nothing done
+      return await publishPost(input, { idempotencyKey, signal });                       // the result is stored
+    }
+  },
+  authorize: ({ decider }) => decider.role === 'owner',         // your rule; false or a throw = forbidden
+  beforeExecute: () => { if (settings.killSwitch) throw new Error('stopped'); },       // optional last check
+  onEvent: ({ type, action }) => audit(type, action.id)         // proposed, approved, rejected, refused, failed, expired
+});
+
+const action = await queue.propose({ type: 'publish', input: { title: 'Hello' }, requestedBy: 'assistant', ttlMs: 3 * 24 * 3600 * 1000 });
+await queue.list({ status: 'pending' });
+await queue.approve(action.id, { decider: { id: 'user-1', role: 'owner' } });   // → { action, result }
+await queue.reject(action.id, { decider: { id: 'user-1', role: 'owner' }, reason: 'not now' });
+await queue.expire();                                                            // also done by list/approve/reject
+```
+
+- **Once only**: `approve` first *reserves* the action (`pending` → `approved`) in one atomic step of the store, then
+  runs the executor. Two approvals at the same time: one runs, the other gets `ApprovalError('already_decided')`.
+  With PostgreSQL the reservation is one conditional `UPDATE`. The executor receives `idempotencyKey` (the action id):
+  use it with the external system, because a crash after the effect cannot be undone by a queue. An action stuck in
+  `approved` with `executedAt: null` after a crash is findable with `list({ status: 'approved' })`.
+- **Refusal**: if the executor throws `ApprovalRefused(reason, details)`, nothing happened: the action goes back to
+  `pending` with `refusal: { reason, details, at, by }`, and the error is rethrown. Any other error does the same with
+  `reason: 'execution_failed'` and is rethrown as `ApprovalError('execution_failed')` (the original is in `cause`).
+- **Expiry**: `ttlMs` or `expiresAt` at `propose`. An expired action cannot be approved or rejected
+  (`ApprovalError('expired')`), even if the sweep has not run yet. `expire()` marks them `expired`; call it from a
+  timer or from a scheduler task.
+- **Errors** (`ApprovalError.code`): `not_found`, `expired`, `already_decided`, `forbidden`, `no_executor`,
+  `execution_failed`, `invalid`.
+- **Store**: memory by default; `createPostgresApprovalStore(db)` with `postgresApprovalSchema()`. Custom stores
+  implement `create/get/list/reserve/finish/revert/reject/expire`, each transition atomic and returning `null` when
+  its condition no longer holds.
+- Persisted inputs and results must be JSON.
+
 ## Tests
 
 `npm test -w @astratra/agent` uses `node --test`; the guard tests run on
 `@astratra/ai/guards/testing` with no model. Real PostgreSQL tests run only
 with `AGENT_TEST_DATABASE_URL` naming a database ending in `_test`; otherwise
-that test is skipped (feedback tests included). The tests create and drop their own randomly named tables.
+that test is skipped (feedback, scheduler lock and approval store tests included). The tests create and drop their own randomly named tables.

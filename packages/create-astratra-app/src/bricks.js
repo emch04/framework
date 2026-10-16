@@ -136,7 +136,7 @@ export async function sendWelcome(to, name) {
 
   payments: {
     package: '@astratra/payments',
-    version: '^1.0.0',
+    version: '^1.0.1',
     summary: 'webhooks de paiement : signature, rejeux, exemptions',
     file: 'api/bricks/payments.js',
     contents: () => `import {
@@ -176,7 +176,7 @@ export const webhook = createWebhookHandler({
 
   privacy: {
     package: '@astratra/privacy',
-    version: '^1.0.0',
+    version: '^1.0.1',
     summary: 'droit d’accès, droit à l’oubli, nettoyage des journaux',
     file: 'api/bricks/privacy.js',
     contents: () => `import {

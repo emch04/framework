@@ -70,7 +70,7 @@ function packageJson(projectName, template, bricks = []) {
   const dependencies = {
     '@astratra/ai': '^1.10.0',
     '@astratra/core': '^1.1.0',
-    '@astratra/saas-kit': '^2.0.0',
+    '@astratra/saas-kit': '^2.0.1',
     '@astratra/security': '^1.12.1'
   };
   // Scaffolded (api/stores/mongo.js, api/db/mongo.js) but not wired into

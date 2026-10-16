@@ -4,7 +4,8 @@ Speech synthesis, segmentation, echo filtering, local transcription helpers,
 and session privacy policy without bundled models or engines. Providers,
 keys, storage, clock, network, classifiers, and decoders are injected. The
 `createLocalSpeech` module (see "Local CPU speech") is the one exception: it
-bundles a small HTTP client and a lazy sherpa-onnx loader.
+bundles a small HTTP client and a lazy sherpa-onnx loader — tested with doubles
+only, never with a real sherpa-onnx model (see « Limites »).
 
 ## Pure builders shared by server and client
 
@@ -363,6 +364,13 @@ Local transcription and synthesis without a paid API, with a choice of engine:
 | --- | --- | --- |
 | `sherpa` | [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) (Apache-2.0), in-process through `sherpa-onnx-node` | optional peer, install it yourself; loaded lazily, only when this engine is used |
 | `whisper-http` | a **faster-whisper** server (MIT) speaking the OpenAI audio API (`speaches`, `faster-whisper-server`...) | none (plain `fetch`) |
+
+> **Not yet verified with a real model.** The `sherpa` engine has only been
+> tested against test doubles (a fake `sherpa-onnx-node` module): no real
+> sherpa-onnx model has ever been loaded or run through it. Recognition and
+> synthesis through sherpa are therefore unproven; try them on your own model
+> before relying on them (see « Limites » below). `whisper-http` was likewise
+> tested against a fake HTTP server only.
 
 `sherpa-onnx-node` is declared as an optional peer dependency: nothing heavier
 is installed for those who do not use it. The engines plug into the fallback

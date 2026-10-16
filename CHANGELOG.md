@@ -4,6 +4,26 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Chaque package Astratra est versionné indépendamment.
 
 
+## 2026-10-16 — correctifs : `@astratra/payments` 1.0.1, `@astratra/flags` 1.0.2, `@astratra/prerender` 1.0.1, `@astratra/privacy` 1.0.1, `@astratra/saas-kit` 2.0.1, `@astratra/repomap` 1.0.1, `@astratra/voice` 1.1.1, `create-astratra-app` 1.11.1
+
+### Sécurité
+- `payments` 1.0.1 : la protection contre les rejeux est atomique. L'ancien enchaînement `seen()` puis `record()` après le handler laissait passer deux livraisons simultanées du même événement (commande confirmée deux fois). L'événement est désormais réservé avant le traitement (`claim(id)`, faux s'il est déjà traité ou en cours → 200 `duplicate`), libéré si le handler lève ou si l'événement n'est pas le nôtre (`release(id)`), confirmé par `record()`. `createMemoryEventLog` implémente `claim`/`release`, avec une réservation qui expire (`claimTtlMs`, 15 min) pour qu'un processus planté ne bloque pas l'événement. Un type sans handler ne prend plus de réservation. Un ancien journal `{ seen, record }` est encore accepté, avec un avertissement (non atomique) ; un journal sans l'un ni l'autre est refusé à la création. README (exemple SQL `INSERT … ON CONFLICT`) et types (`EventLog`, `LegacyEventLog`) à jour. Tests (livraisons simultanées, libération après échec, compatibilité).
+
+### Corrigé
+- `flags` 1.0.2 : un drapeau absent renvoie la valeur par défaut de l'appelant (`resolveBoolean('absent', true)` → `true`, raison `FLAG_NOT_FOUND`) ; il renvoyait `false` quoi qu'on passe. Test.
+- `prerender` 1.0.1 : les URL du sitemap sont échappées en XML (`&` d'une URL avec paramètres rendait le fichier invalide), comme `lastmod`, `changefreq` et `priority` ; un `label` ne peut plus refermer son commentaire ; l'audit relit les URL échappées comme les chemins d'origine. Tests.
+- `prerender` 1.0.1 : `apiPatterns: false` coupe le remplacement des appels API par `{}` (il levait « not iterable ») ; quand le défaut `['**/api/**']` n'a pas été demandé et qu'il a remplacé des appels, `warnings` le dit page par page (une fiche produit dont le contenu vient de l'API serait capturée vide). README : avertissement dédié. Tests d'intégration.
+- `repomap` 1.0.1 : les tests passent sans `--experimental-vm-modules` (`npx jest` échouait sur 9 tests sur 11) : web-tree-sitter est chargé par sa version CommonJS et la grammaire lui est passée en octets, sans `import()` dynamique. Le script de test n'a plus besoin de `NODE_OPTIONS`.
+- `saas-kit` 2.0.1 : `@astratra/ai` retiré des dépendances, jamais chargé par `src` (les projets de `create-astratra-app` le déclarent eux-mêmes). Test : chaque dépendance déclarée est chargée.
+
+### Documentation
+- `privacy` 1.0.1 : le README et le contrat `runConsentStoreContract` ne laissent plus croire qu'un `createMongoConsentStore` est fourni : seul le store mémoire l'est, l'adaptateur d'une vraie base est à écrire selon le contrat.
+- `voice` 1.1.1 : le README dit, dès la présentation du moteur `sherpa`, qu'il n'a été testé qu'avec des doublures et jamais avec un vrai modèle sherpa-onnx.
+- README (anglais et français) : tableau des versions à jour.
+
+### Modifié
+- `create-astratra-app` 1.11.1 : les projets générés demandent `@astratra/payments` ^1.0.1 (rejeux atomiques), `@astratra/privacy` ^1.0.1 et `@astratra/saas-kit` ^2.0.1. Les écarts déjà présents pour `ai`, `security` et `notify` (4 tests de cohérence en échec avant ce lot) ne sont pas traités ici.
+
 ## 2026-10-11 — `@astratra/notify` 1.1.0, `@astratra/ai` 1.11.0, `@astratra/security` 1.13.0 : ce qu'il manquait à Palabre
 
 ### Ajouté

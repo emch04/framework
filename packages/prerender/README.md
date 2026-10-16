@@ -35,10 +35,12 @@ Puis ajoutez `vite build && astratra-prerender` à votre script `build`.
   page (`state: 'attached'` — pas la visibilité par défaut de Playwright, qui
   n'aboutirait jamais pour un élément sans rendu visuel comme une balise
   `<meta>`).
-- `apiPatterns` : motifs Playwright bloqués avec `{}` ; défaut `['**/api/**']`.
-  Remplace entièrement le défaut s'il est fourni, ne s'y ajoute pas — pour
-  couvrir `/api/**` en plus d'un motif personnalisé, listez les deux motifs
-  explicitement.
+- `apiPatterns` : motifs Playwright dont les appels reçoivent `{}` au lieu de
+  la vraie réponse pendant le prérendu ; défaut `['**/api/**']`. **`false`** (ou
+  `[]`) laisse passer tous les appels. Remplace entièrement le défaut s'il est
+  fourni, ne s'y ajoute pas — pour couvrir `/api/**` en plus d'un motif
+  personnalisé, listez les deux motifs explicitement. Voir l'avertissement
+  ci-dessous.
 - `retries` : seconde tentative après un échec ; défaut `1`.
 - `audit` : vérifie titre et description présents, titres et contenus visibles
   non dupliqués entre pages, avertit (sans bloquer) sur un contenu trop
@@ -50,6 +52,23 @@ Puis ajoutez `vite build && astratra-prerender` à votre script `build`.
 - `transformHtml(html, context)` : transforme le HTML d'un projet avant écriture.
 - `isReady(page, route)` : attente asynchrone propre au projet avant capture.
 
+
+## ⚠️ Pages dont le contenu vient de l'API
+
+Par défaut, tout appel vers `**/api/**` reçoit `{}` pendant le prérendu : une
+page ne reste pas bloquée sur une API absente au moment du build. Mais une page
+dont le **contenu** vient de l'API — une fiche produit, un article — est alors
+capturée **vide**, et c'est ce HTML vide que lisent les robots.
+
+Dans ce cas :
+
+- `apiPatterns: false` laisse passer les appels : l'API doit alors répondre
+  pendant le build (la page appelle l'URL qu'elle appellerait en vrai) ;
+- ou listez seulement les appels à neutraliser (`['**/api/analytics/**']`).
+
+Quand le défaut n'a pas été demandé explicitement et qu'il a remplacé des
+appels, `prerender()` le signale dans `warnings`, page par page. Passer
+`apiPatterns` (même égal au défaut) fait taire l'avertissement.
 
 ## Le sitemap, tiré de la même liste que les pages
 
@@ -81,6 +100,8 @@ des métadonnées éditoriales.
 
 `lastmod`, `changefreq` et `priority` sont des choix éditoriaux ; `lastmod`
 prend la date du jour par défaut, ou celle de `sitemap.defaultLastmod`.
+Chaque valeur est échappée en XML (`&` d'une URL avec paramètres devient
+`&amp;`) et un `label` ne peut pas refermer son commentaire (`--` est réduit).
 
 ### Pourquoi c'est optionnel
 
@@ -115,6 +136,6 @@ projet. Elle doit être exécutée après `vite build` : le package copie d'abor
 le shell non rendu dans `dist/_shell.html`, puis écrit le HTML SEO des routes.
 
 Les routes privées, paramétrées ou nécessitant une session ne doivent pas être
-placées dans `routes`. `apiPatterns` bloque les appels API avec une réponse JSON
-vide. `transformHtml(html, context)` et `isReady(page, route)` permettent une
+placées dans `routes`. `apiPatterns` remplace les appels API par une réponse JSON
+vide (`false` pour l'éviter, voir plus haut). `transformHtml(html, context)` et `isReady(page, route)` permettent une
 adaptation par projet sans modifier le framework.

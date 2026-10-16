@@ -1,16 +1,35 @@
 {
   "name": "@astratra/flags",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Évaluation déterministe de fonctionnalités et d'expériences avec ciblage, déploiement progressif et fournisseur compatible OpenFeature.",
-  "engines": { "node": ">=20" },
+  "engines": {
+    "node": ">=20"
+  },
   "main": "src/index.js",
   "types": "src/index.d.ts",
   "type": "commonjs",
-  "files": ["src"],
-  "scripts": { "test": "jest" },
-  "jest": { "testMatch": ["**/__tests__/**/*.test.js"] },
-  "keywords": ["astratra", "feature-flags", "experimentation", "openfeature"],
+  "files": [
+    "src"
+  ],
+  "scripts": {
+    "test": "jest"
+  },
+  "jest": {
+    "testMatch": [
+      "**/__tests__/**/*.test.js"
+    ]
+  },
+  "keywords": [
+    "astratra",
+    "feature-flags",
+    "experimentation",
+    "openfeature"
+  ],
   "license": "MIT",
-  "publishConfig": { "access": "public" },
-  "devDependencies": { "jest": "30.4.2" }
+  "publishConfig": {
+    "access": "public"
+  },
+  "devDependencies": {
+    "jest": "30.4.2"
+  }
 }

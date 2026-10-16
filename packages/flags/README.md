@@ -99,7 +99,9 @@ const detail = await flags.resolveObject('accueil', {}, { targetingKey: 'user-12
 
 Les résultats incluent une `reason` (`STATIC`, `SPLIT`, `DEFAULT`,
 `TARGETING_MATCH`, `TARGETING_MISMATCH`, `FLAG_NOT_FOUND` ou `ERROR`) et,
-pour une variante, son nom. Les erreurs du callback d'exposition ne bloquent
+pour une variante, son nom. Un drapeau absent renvoie la valeur par défaut
+passée par l'appelant (`resolveBoolean('absent', true)` → `true`, raison
+`FLAG_NOT_FOUND`). Les erreurs du callback d'exposition ne bloquent
 pas l'évaluation. Utilisez une clé de ciblage stable et non sensible; le hachage
 ne constitue ni une protection cryptographique ni un contrôle d'accès.
 

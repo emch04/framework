@@ -232,6 +232,57 @@ describe('prerender() — intégration sur un vrai site Vite + React', () => {
     })).resolves.toBeDefined();
   }, 30000);
 
+  // Le défaut ['**/api/**'] répond {} à la place de l'API : une fiche produit
+  // dont le contenu vient de l'API serait capturée vide. Il faut pouvoir le
+  // couper proprement, et le savoir quand il a joué sans avoir été demandé.
+  const waitForApiProbe = async (page) => {
+    await page.waitForFunction(() => window.__apiFetchOutcome !== undefined, { timeout: 5000 });
+    return page.evaluate(() => window.__apiFetchOutcome);
+  };
+
+  test('apiPatterns: false laisse passer les appels API sans les remplacer', async () => {
+    let outcome;
+    const result = await prerender({
+      routes: ['/'],
+      siteUrl: 'https://example.com',
+      distDir: DIST,
+      waitFor: 'meta[name="description"]',
+      apiPatterns: false,
+      isReady: async (page) => { outcome = await waitForApiProbe(page); },
+    });
+
+    expect(outcome.ok).toBe(false);
+    expect(result.warnings.join('\n')).not.toMatch(/apiPatterns/);
+  }, 30000);
+
+  test('le défaut implicite qui remplace des appels API le dit dans warnings, page par page', async () => {
+    const result = await prerender({
+      routes: ['/', '/about'],
+      siteUrl: 'https://example.com',
+      distDir: DIST,
+      waitFor: 'meta[name="description"]',
+      isReady: async (page) => { await waitForApiProbe(page); },
+    });
+
+    const messages = result.warnings.filter((message) => /apiPatterns/.test(message));
+    expect(messages).toHaveLength(2);
+    expect(messages[0]).toMatch(/^\/ /);
+    expect(messages[0]).toMatch(/apiPatterns: false/);
+  }, 30000);
+
+  test('un apiPatterns explicite, même égal au défaut, ne produit pas cet avertissement', async () => {
+    const result = await prerender({
+      routes: ['/'],
+      siteUrl: 'https://example.com',
+      distDir: DIST,
+      waitFor: 'meta[name="description"]',
+      apiPatterns: ['**/api/**'],
+      isReady: async (page) => { await waitForApiProbe(page); },
+    });
+
+    expect(result.warnings.join('\n')).not.toMatch(/apiPatterns/);
+  }, 30000);
+
   test('transformHtml transforme le HTML avant écriture sur disque', async () => {
     await prerender({
       routes: ['/'],

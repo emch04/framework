@@ -43,7 +43,10 @@ const resolve = async (value) => (typeof value === 'function' ? value() : value)
  *   interface without a restart.
  * @param {Record<string, Function>} options.events  event type -> handler.
  *   An event type absent from this map is acknowledged, never rejected.
- * @param {object} [options.eventLog]  { seen, record } — replay protection.
+ * @param {object} [options.eventLog]  { claim, release, record } — replay
+ *   protection, atomic: the event is reserved before it is handled. A legacy
+ *   { seen, record } log still works but leaves a window where two concurrent
+ *   deliveries both get through.
  * @param {Function} [options.eventId] (event) => string. Defaults to `event.id`.
  * @param {object} [options.logger]
  */
@@ -59,8 +62,18 @@ function createWebhookHandler(options = {}) {
   }
 
   const eventLog = options.eventLog || null;
-  const eventIdOf = options.eventId || ((event) => event && event.id);
   const logger = options.logger || NOOP_LOGGER;
+  const atomic = Boolean(eventLog && typeof eventLog.claim === 'function');
+  if (eventLog && !atomic) {
+    if (typeof eventLog.seen !== 'function' || typeof eventLog.record !== 'function') {
+      throw new Error('createWebhookHandler: options.eventLog needs claim() and release() (or the legacy seen() and record()).');
+    }
+    logger.warn('[payments] eventLog has no claim(): replay protection is not atomic, two concurrent deliveries of one event can both be handled. Add claim() and release().');
+  }
+  if (atomic && typeof eventLog.release !== 'function') {
+    throw new Error('createWebhookHandler: an eventLog with claim() also needs release(), or a failed event could never be retried.');
+  }
+  const eventIdOf = options.eventId || ((event) => event && event.id);
 
   /**
    * Run something that must NOT be able to fail the webhook.
@@ -101,11 +114,6 @@ function createWebhookHandler(options = {}) {
 
     const id = eventIdOf(event);
 
-    if (eventLog && id && (await eventLog.seen(id))) {
-      logger.info(`[payments] ${event.type} ${id} already handled — acknowledged again`);
-      return { status: 200, body: { received: true, status: DUPLICATE } };
-    }
-
     const handler = events[event.type];
     if (!handler) {
       /* Not an error. One endpoint receives everything the account emits, and
@@ -114,6 +122,17 @@ function createWebhookHandler(options = {}) {
       return { status: 200, body: { received: true, status: IGNORED, type: event.type } };
     }
 
+    /* Reserve BEFORE handling: a retry arriving while this delivery runs must
+       be turned away, not handled a second time. */
+    const claimed = eventLog && id
+      ? (atomic ? await eventLog.claim(id, { type: event.type }) : !(await eventLog.seen(id)))
+      : true;
+    if (!claimed) {
+      logger.info(`[payments] ${event.type} ${id} already handled — acknowledged again`);
+      return { status: 200, body: { received: true, status: DUPLICATE } };
+    }
+    const release = () => (atomic && id ? sideEffect('event log release', () => eventLog.release(id)) : null);
+
     let outcome;
     try {
       outcome = await handler(event, { sideEffect, handled, unrelated, duplicate, logger });
@@ -121,6 +140,7 @@ function createWebhookHandler(options = {}) {
       /* A genuine failure: the provider SHOULD retry, so 500 is right here.
          This is the one case where retrying can help. */
       logger.error(`[payments] ${event.type} failed: ${error.message}`);
+      await release();
       return { status: 500, body: { received: false, reason: 'handler-failed' } };
     }
 
@@ -128,6 +148,9 @@ function createWebhookHandler(options = {}) {
 
     if (eventLog && id && result.status === HANDLED) {
       await sideEffect('event log', () => eventLog.record(id, { type: event.type }));
+    } else {
+      /* Not ours, or already acted on elsewhere: nothing to remember. */
+      await release();
     }
 
     if (result.status === UNRELATED) {

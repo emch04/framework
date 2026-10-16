@@ -83,3 +83,33 @@ describe('auditSitemap', () => {
     expect(auditSitemap('<urlset></urlset>', ['/'], SITE)).toEqual([]);
   });
 });
+
+describe('XML escaping', () => {
+  const tricky = [
+    { path: '/recherche?q=sac&tri=prix', label: 'Recherche -- tri <prix>', lastmod: '2026-10-16' },
+    { path: "/l'anse", lastmod: '2026-10-16' }
+  ];
+
+  test('escapes the characters XML reserves in every written value', () => {
+    const xml = buildSitemap(tricky, { siteUrl: 'https://boutique.example/?a=1&b=2' });
+
+    expect(xml).toContain('<loc>https://boutique.example/?a=1&amp;b=2/recherche?q=sac&amp;tri=prix</loc>');
+    expect(xml).toContain('<loc>https://boutique.example/?a=1&amp;b=2/l&apos;anse</loc>');
+    expect(xml).not.toMatch(/&(?!amp;|apos;|lt;|gt;|quot;)/);
+  });
+
+  test('a label cannot break out of its XML comment', () => {
+    const xml = buildSitemap(tricky, { siteUrl: SITE });
+    const comment = xml.match(/<!--(.*)-->/)[1];
+
+    expect(comment).not.toContain('--');
+    expect(comment).not.toContain('<');
+  });
+
+  test('the audit reads escaped URLs back as the original paths', () => {
+    const xml = buildSitemap(tricky, { siteUrl: SITE });
+
+    expect(sitemapPaths(xml, SITE)).toEqual(['/recherche?q=sac&tri=prix', "/l'anse"]);
+    expect(auditSitemap(xml, tricky.map((route) => route.path), SITE)).toEqual([]);
+  });
+});

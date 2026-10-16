@@ -25,6 +25,8 @@ async function dependency(name) {
   return import(pathToFileURL(resolved).href);
 }
 
+const DEFAULT_API_PATTERNS = ['**/api/**'];
+
 function writeRoute(distDir, route, html) {
   const target = route === '/' ? resolve(distDir, 'index.html') : resolve(distDir, route.slice(1), 'index.html');
   mkdirSync(resolve(target, '..'), { recursive: true });
@@ -32,7 +34,15 @@ function writeRoute(distDir, route, html) {
 }
 
 async function prerender(options = {}) {
-  const { routes, siteUrl, distDir = 'dist', apiPatterns = ['**/api/**'], retries = 1, audit = true, sitemap = false } = options;
+  const { routes, siteUrl, distDir = 'dist', retries = 1, audit = true, sitemap = false } = options;
+  // Le défaut répond {} à la place de l'API : sans serveur API au moment du
+  // build, la page ne reste pas bloquée sur un appel en échec. Mais une page
+  // dont le CONTENU vient de l'API (fiche produit) est alors capturée vide.
+  // false (ou []) coupe l'interception ; le défaut implicite qui a joué est
+  // signalé dans warnings, page par page.
+  const implicitApiPatterns = options.apiPatterns === undefined;
+  const apiPatterns = implicitApiPatterns ? DEFAULT_API_PATTERNS : (options.apiPatterns || []);
+  if (!Array.isArray(apiPatterns)) throw new Error('prerender: apiPatterns must be an array of URL patterns, or false.');
   if (!Array.isArray(routes) || routes.length === 0) throw new Error('prerender requires a non-empty routes array.');
   // Les routes acceptent une chaîne ou une ligne de table portant ses
   // métadonnées SEO. Les deux formes coexistent : un appelant existant qui
@@ -72,7 +82,14 @@ async function prerender(options = {}) {
   const origin = server.resolvedUrls.local[0].replace(/\/$/, '');
   const browser = await chromium.launch();
   const context = await browser.newContext({ serviceWorkers: 'block' });
-  for (const pattern of apiPatterns) await context.route(pattern, route => route.fulfill({ status: 200, body: '{}' }));
+  const stubbed = new Map();
+  let capturing = null;
+  for (const pattern of apiPatterns) {
+    await context.route(pattern, (route) => {
+      if (capturing) stubbed.set(capturing, (stubbed.get(capturing) || 0) + 1);
+      return route.fulfill({ status: 200, contentType: 'application/json', body: '{}' });
+    });
+  }
   await context.route('**/socket.io/**', route => route.abort());
   const pages = [];
   try {
@@ -90,6 +107,8 @@ async function prerender(options = {}) {
       let lastError;
       for (let attempt = 0; attempt <= retries; attempt++) {
         const page = await context.newPage();
+        capturing = route;
+        stubbed.delete(route);
         try {
           await page.goto(`${origin}${route}`, { waitUntil: 'networkidle', timeout: 15000 });
           // state: 'attached' (pas la valeur par défaut 'visible') : le README
@@ -119,6 +138,12 @@ async function prerender(options = {}) {
     for (const { route, html } of pages) writeRoute(output, route, html);
 
     const warnings = [...report.warnings];
+    if (implicitApiPatterns) {
+      for (const { route } of pages) {
+        const count = stubbed.get(route);
+        if (count) warnings.push(`${route} made ${count} API call(s) answered with {} by the default apiPatterns ['**/api/**'] — if this page's content comes from the API, it was captured empty. Pass apiPatterns: false to let the calls through, or list your patterns explicitly.`);
+      }
+    }
     let sitemapPath = null;
 
     if (sitemap) {

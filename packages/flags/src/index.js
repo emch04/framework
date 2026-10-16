@@ -120,7 +120,8 @@ function matchesTarget(target, context) {
 
 function resolve(config, key, context, type) {
   const flag = config.flags[key];
-  if (!flag) return { value: type === 'boolean' ? false : undefined, reason: 'FLAG_NOT_FOUND', variant: undefined, flagKey: key };
+  // Valeur indéfinie : evaluate() la remplace par la valeur par défaut de l'appelant.
+  if (!flag) return { value: undefined, reason: 'FLAG_NOT_FOUND', variant: undefined, flagKey: key };
   if (flag.type !== type) return { value: flag.default, reason: 'ERROR', variant: undefined, flagKey: key };
   if (!matchesTarget(flag.target, context)) return { value: flag.default, reason: 'TARGETING_MISMATCH', variant: undefined, flagKey: key };
   const identity = context.targetingKey;

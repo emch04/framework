@@ -13,6 +13,23 @@
  * day.
  */
 
+const XML_ENTITIES = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' };
+
+/** A URL with `&` (a query string) written raw makes the whole sitemap invalid XML. */
+function escapeXml(value) {
+  return String(value).replace(/[&<>"']/g, (char) => XML_ENTITIES[char]);
+}
+
+function unescapeXml(value) {
+  return String(value).replace(/&(amp|lt|gt|quot|apos);/g, (entity) =>
+    Object.keys(XML_ENTITIES).find((char) => XML_ENTITIES[char] === entity));
+}
+
+/** "--" ends an XML comment early, and the rest of the label would be read as markup. */
+function commentText(value) {
+  return String(value).replace(/-{2,}/g, '-').replace(/[<>]/g, '').replace(/-$/, '');
+}
+
 /** A route entry may be a bare path or a table row carrying its SEO metadata. */
 function normalizeRoute(route) {
   return typeof route === 'string' ? { path: route } : { ...route };
@@ -38,12 +55,12 @@ function buildSitemap(routes, { siteUrl, defaultLastmod } = {}) {
   const listed = normalizeRoutes(routes).filter((route) => route.sitemap !== false);
 
   const urls = listed.map((route) => [
-    route.label ? `  <!-- ${route.label} -->` : null,
+    route.label ? `  <!-- ${commentText(route.label)} -->` : null,
     '  <url>',
-    `    <loc>${base}${route.path}</loc>`,
-    `    <lastmod>${route.lastmod || today}</lastmod>`,
-    route.changefreq ? `    <changefreq>${route.changefreq}</changefreq>` : null,
-    route.priority ? `    <priority>${route.priority}</priority>` : null,
+    `    <loc>${escapeXml(`${base}${route.path}`)}</loc>`,
+    `    <lastmod>${escapeXml(route.lastmod || today)}</lastmod>`,
+    route.changefreq ? `    <changefreq>${escapeXml(route.changefreq)}</changefreq>` : null,
+    route.priority ? `    <priority>${escapeXml(route.priority)}</priority>` : null,
     '  </url>'
   ].filter(Boolean).join('\n'));
 
@@ -60,7 +77,7 @@ function buildSitemap(routes, { siteUrl, defaultLastmod } = {}) {
 function sitemapPaths(xml, siteUrl) {
   const base = String(siteUrl).replace(/\/$/, '');
   return [...String(xml).matchAll(/<loc>([^<]+)<\/loc>/g)]
-    .map((match) => match[1].replace(base, ''))
+    .map((match) => unescapeXml(match[1].trim()).replace(base, ''))
     .map((path) => (path === '' ? '/' : path));
 }
 
@@ -79,4 +96,4 @@ function auditSitemap(xml, renderedPaths, siteUrl) {
     .map((path) => `${path} is announced in the sitemap but was not prerendered — that URL would serve the home page to crawlers`);
 }
 
-module.exports = { buildSitemap, sitemapPaths, auditSitemap, normalizeRoutes };
+module.exports = { buildSitemap, sitemapPaths, auditSitemap, normalizeRoutes, escapeXml };

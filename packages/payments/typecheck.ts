@@ -20,6 +20,7 @@ import type {
   PlanAction,
   PollDecision,
   EventLog,
+  LegacyEventLog,
   HandlerContext,
   Outcome,
   OutcomeStatus,
@@ -36,7 +37,9 @@ interface StripeEvent {
   data: { object: Record<string, unknown> };
 }
 
-const log: EventLog = createMemoryEventLog({ limit: 5000 });
+const log: EventLog = createMemoryEventLog({ limit: 5000, claimTtlMs: 60_000 });
+const legacyLog: LegacyEventLog = { seen: () => false, record: () => undefined };
+createWebhookHandler({ verify: () => ({ id: 'e', type: 't' }), events: { t: () => undefined }, eventLog: legacyLog });
 
 const webhook: WebhookHandler = createWebhookHandler<StripeEvent>({
   verify: ({ payload, headers, secret }) => {

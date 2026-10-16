@@ -157,6 +157,9 @@ export const webhook = createWebhookHandler({
     throw new Error('Branche ici stripe.webhooks.constructEvent (ou équivalent).');
   },
   secret: () => process.env.PAYMENT_WEBHOOK_SECRET,
+  // Mémoire : un seul processus, perdu au redémarrage. En production, un store
+  // partagé qui réserve l'événement avant le traitement (claim / release /
+  // record, voir le README de @astratra/payments).
   eventLog: createMemoryEventLog(),
   events: {
     'checkout.session.completed': async (event, { sideEffect, unrelated }) => {

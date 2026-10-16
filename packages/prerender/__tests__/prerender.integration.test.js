@@ -1,6 +1,6 @@
 /* global window -- ces arrow functions s'exécutent dans le navigateur, via
    page.evaluate()/page.waitForFunction(), pas dans ce process Node. */
-const { execFileSync } = require('child_process');
+const { execFileSync, spawnSync } = require('child_process');
 const { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } = require('fs');
 const { tmpdir } = require('os');
 const { resolve } = require('path');
@@ -392,6 +392,25 @@ describe('astratra-prerender — binaire CLI', () => {
     execFileSync('node', [CLI_BIN, '--config', 'custom.cjs'], { cwd: cliFixture, stdio: 'pipe' });
 
     expect(existsSync(resolve(cliFixture, 'dist', 'index.html'))).toBe(true);
+  }, 30000);
+
+  // L'usage documenté en premier est la CLI : un avertissement que seul
+  // l'appel programmatique peut lire (result.warnings) n'est vu par personne.
+  test('affiche les avertissements sur la sortie d\'erreur sans faire échouer le build', () => {
+    writeFileSync(resolve(cliFixture, 'astratra.prerender.config.cjs'), `
+      module.exports = {
+        routes: ['/'],
+        siteUrl: 'https://example.com',
+        distDir: 'dist',
+        waitFor: 'meta[name="description"]',
+        isReady: (page) => page.waitForFunction(() => window.__apiFetchOutcome !== undefined, { timeout: 5000 }),
+      };
+    `);
+
+    const run = spawnSync('node', [CLI_BIN], { cwd: cliFixture, encoding: 'utf8' });
+
+    expect(run.status).toBe(0);
+    expect(run.stderr).toMatch(/apiPatterns/);
   }, 30000);
 
   test('sort avec un code d\'erreur non-zéro si le prérendu échoue', () => {

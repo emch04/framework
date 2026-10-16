@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { EVENEMENTS_MAX_PAR_ENVOI, MIETTES_MAX, TAILLE_MAX_ENVOI } from '../src/envoi.ts';
 import type { EvenementErreur, EvenementIA, EvenementSession, EvenementUsage, EvenementVue } from '../src/envoi.ts';
-import { creerCentrale } from '../src/coeur.ts';
+import { creerCentrale, VERSION_SDK } from '../src/coeur.ts';
 import type { ReglagesInternes } from '../src/coeur.ts';
 import { CONFIG, horloge, transportFactice } from './aides.ts';
 
@@ -21,7 +21,7 @@ test('envoi : adresse, en-têtes, enveloppe conforme au contrat', async () => {
   assert.equal(r.entetes['Content-Type'], 'application/json');
   const envoi = t.envois()[0];
   assert.equal(envoi.version, 1);
-  assert.deepEqual(envoi.sdk, { nom: '@astratra/centrale', version: '1.4.0' });
+  assert.deepEqual(envoi.sdk, { nom: '@astratra/centrale', version: VERSION_SDK });
   assert.equal(envoi.contexte.environnement, 'developpement');
   assert.equal(envoi.contexte.version, '1.2.3');
   assert.equal(envoi.contexte.plateforme, 'serveur');
@@ -441,4 +441,10 @@ test('contexte : definirContexte complète et masque, sans toucher à l\'utilisa
   assert.equal(ctx.environnement, 'developpement');
   assert.equal(ctx.utilisateur, undefined);
   assert.equal(ctx.appareil, 'Mac de [email]');
+});
+
+test('VERSION_SDK suit la version du paquet : le tableau de bord sait quelle version a envoyé', async () => {
+  const { readFileSync } = await import('node:fs');
+  const paquet = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as { version: string };
+  assert.equal(VERSION_SDK, paquet.version);
 });

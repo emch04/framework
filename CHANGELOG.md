@@ -24,6 +24,15 @@ Chaque package Astratra est versionné indépendamment.
 ### Modifié
 - `create-astratra-app` 1.11.1 : les projets générés demandent les versions que l'espace de travail publie : `@astratra/payments` ^1.0.1 (rejeux atomiques), `@astratra/privacy` ^1.0.1, `@astratra/saas-kit` ^2.0.1, `@astratra/prerender` ^1.0.1, et `@astratra/ai` ^1.11.0, `@astratra/security` ^1.13.0, `@astratra/notify` ^1.1.0 (ces trois planchers n'avaient pas suivi la livraison du 11/10 : 4 tests de cohérence échouaient). La brique `payments` générée rappelle que le journal en mémoire ne sert qu'au développement (en production : un store partagé avec claim / release / record). Le test de cohérence des briques couvre aussi le modèle fullstack, seul à accepter les briques navigateur (le plancher de `prerender` dérivait sans être vu).
 
+## 2026-10-15 — `@astratra/centrale` 1.5.0 : moins de fausses alertes
+
+### Modifié
+- Navigateur : un navigateur piloté par un robot (`navigator.webdriver` : Playwright, Selenium, Puppeteer) ne collecte rien, sauf option `robots: true` (57 fausses erreurs venaient des tests Playwright d'une app).
+- Gardien du fil principal : un retard de la minuterie de plus de 60 s est une pause de l'app (téléphone verrouillé, onglet endormi), pas un blocage : seulement une miette, sans `AppBloquee` (option `plafondMs` de `surveillerBlocages`) ; sur Expo, l'état `inactive` met aussi le gardien en pause (59 « blocages » sur iPhone, jusqu'à 2 181 s).
+- Requêtes `fetch` : les vérifications de connexion (`generate_204`, `captive.apple.com`, `msftconnecttest.com`, `detectportal.firefox.com`…) restent dans le fil d'Ariane mais ne sont plus signalées (`estVerificationDeConnexion`, 83 fausses erreurs).
+- `VERSION_SDK` passe à 1.5.0 (il était resté à 1.4.0) ; un test vérifie qu'il suit la version du paquet.
+- Nouveau `packages/centrale/CHANGELOG.md` (publié avec le paquet) ; README français et anglais à jour ; tableau des versions de la racine à jour.
+
 ## 2026-10-11 — `@astratra/notify` 1.1.0, `@astratra/ai` 1.11.0, `@astratra/security` 1.13.0 : ce qu'il manquait à Palabre
 
 ### Ajouté

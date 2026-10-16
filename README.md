@@ -159,7 +159,7 @@ package is in [CHANGELOG.md](CHANGELOG.md).
 
 | Package | Version | What it does |
 |---|---|---|
-| [`@astratra/centrale`](packages/centrale/README.md) | 1.4.0 | Collection package for a self-hosted monitoring dashboard: errors, crashes, views, usage, AI calls; masked at the source, sent in batches; no dependencies |
+| [`@astratra/centrale`](packages/centrale/README.md) | 1.5.0 | Collection package for a self-hosted monitoring dashboard: errors, crashes, views, usage, AI calls; masked at the source, sent in batches; no dependencies |
 | [`@astratra/centrale-cli`](packages/centrale-cli/README.md) | 1.0.1 | Command-line tool for the same dashboard: debug IDs and source maps, deployment declaration |
 | [`@astratra/tooling`](packages/tooling/README.md) | 1.5.0 | Workspace audit (secrets, routes, translations), test runner, deployment with rollback, app publishing, AI evaluation |
 | [`@astratra/testkit`](packages/testkit/README.md) | 1.1.0 | Disposable MongoDB or PostgreSQL test databases, reproducible per-country fake data, guard against production databases |

@@ -163,6 +163,81 @@ describe('replays', () => {
     expect(log.size()).toBe(0);
   });
 
+  test('two SIMULTANEOUS deliveries of the same event act once', async () => {
+    let charges = 0;
+    let unblock;
+    const gate = new Promise((resolve) => { unblock = resolve; });
+    const handler = createWebhookHandler({
+      verify: verifier(), secret: 'whsec_test', eventLog: createMemoryEventLog(),
+      events: { 'checkout.session.completed': async () => { charges += 1; await gate; } }
+    });
+
+    const first = send(handler, event('checkout.session.completed', 'evt_9'));
+    const second = send(handler, event('checkout.session.completed', 'evt_9'));
+    unblock();
+    const statuses = (await Promise.all([first, second])).map((r) => r.body.status).sort();
+
+    expect(charges).toBe(1);
+    expect(statuses).toEqual([DUPLICATE, HANDLED].sort());
+  });
+
+  test('a failed event releases its claim, even when a concurrent delivery was turned away', async () => {
+    let attempts = 0;
+    const log = createMemoryEventLog();
+    const handler = createWebhookHandler({
+      verify: verifier(), secret: 'whsec_test', eventLog: log,
+      events: {
+        'checkout.session.completed': async () => {
+          attempts += 1;
+          if (attempts === 1) throw new Error('database unavailable');
+        }
+      }
+    });
+
+    expect((await send(handler, event('checkout.session.completed', 'evt_10'))).status).toBe(500);
+    expect(await log.seen('evt_10')).toBe(false);
+    expect((await send(handler, event('checkout.session.completed', 'evt_10'))).body.status).toBe(HANDLED);
+    expect(await log.seen('evt_10')).toBe(true);
+  });
+
+  test('an event type with no handler takes no claim', async () => {
+    const log = createMemoryEventLog();
+    const handler = createWebhookHandler({
+      verify: verifier(), secret: 'whsec_test', eventLog: log,
+      events: { 'checkout.session.completed': async () => {} }
+    });
+
+    await send(handler, event('customer.created', 'evt_11'));
+
+    expect(log.size()).toBe(0);
+  });
+
+  test('a legacy { seen, record } log still works, with a warning that it is not atomic', async () => {
+    const ids = new Set();
+    const warnings = [];
+    let charges = 0;
+    const handler = createWebhookHandler({
+      verify: verifier(), secret: 'whsec_test',
+      eventLog: { seen: async (id) => ids.has(id), record: async (id) => { ids.add(id); } },
+      logger: { info() {}, warn: (m) => warnings.push(m), error() {} },
+      events: { 'checkout.session.completed': async () => { charges += 1; } }
+    });
+
+    await send(handler, event('checkout.session.completed', 'evt_12'));
+    const second = await send(handler, event('checkout.session.completed', 'evt_12'));
+
+    expect(charges).toBe(1);
+    expect(second.body.status).toBe(DUPLICATE);
+    expect(warnings.join(' ')).toMatch(/claim/);
+  });
+
+  test('an event log with neither claim nor seen/record is refused at creation', () => {
+    expect(() => createWebhookHandler({
+      verify: verifier(), secret: 'whsec_test', eventLog: {},
+      events: { 'checkout.session.completed': async () => {} }
+    })).toThrow(/claim/);
+  });
+
   test('without an event log, nothing is remembered — and that is visible', async () => {
     let charges = 0;
     const handler = createWebhookHandler({

@@ -11,9 +11,9 @@ génériques auth, users, settings, notifications et dashboard. Il assemble :
 - `@astratra/security` pour les primitives JWT/RBAC, le rate limiting, une
   CSP restrictive par défaut, le WAF heuristique et le service WebAuthn
   optionnel.
-- `@astratra/ai` en dépendance du package pour qu'un projet puisse composer
-  des fonctionnalités IA à côté du starter, sans que le kit n'impose de
-  routes IA métier.
+
+Le kit n'embarque pas `@astratra/ai` : un projet qui veut de l'IA à côté du
+starter l'installe lui-même (`create-astratra-app` le fait déjà).
 
 ## Démarrage rapide
 

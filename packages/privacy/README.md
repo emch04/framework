@@ -349,12 +349,16 @@ list(subject)       -> records
 remove(subject, scope?) -> nombre supprimé
 ```
 
-`createMemoryConsentStore()` sert aux tests. Un adaptateur réel prouve qu'il
-se comporte pareil :
+`createMemoryConsentStore()` sert aux tests ; c'est **le seul store fourni**.
+Pour une vraie base, tu écris ton adaptateur (quatre méthodes ci-dessus), puis
+tu prouves qu'il se comporte comme le store de référence avec
+`runConsentStoreContract`. Dans l'exemple, `createPostgresConsentStore` et
+`tableNeuve` sont **les tiens**, pas des exports de ce package :
 
 ```js
 const { runConsentStoreContract } = require('@astratra/privacy');
-runConsentStoreContract(async () => createMongoConsentStore(await collectionNeuve()));
+// createPostgresConsentStore : ton adaptateur, à écrire selon le contrat.
+runConsentStoreContract(async () => createPostgresConsentStore(await tableNeuve()));
 ```
 
 ## Ce que ce package ne fait pas

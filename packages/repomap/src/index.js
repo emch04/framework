@@ -54,10 +54,12 @@ function makeGrammarResolver(wasmDirectory) {
 async function createParser(language, resolver, parserCache) {
   if (parserCache.has(language)) return parserCache.get(language);
   let promise = (async () => {
-    const { Parser, Language } = await import('web-tree-sitter');
+    // Version CommonJS de web-tree-sitter : pas d'import() dynamique, donc pas de --experimental-vm-modules sous Jest.
+    const { Parser, Language } = require('web-tree-sitter');
     await Parser.init();
     const parser = new Parser();
-    const wasm = await Language.load(resolver(GRAMMARS[language]));
+    // Octets plutôt que chemin : Language.load(chemin) ferait lui-même un import() dynamique.
+    const wasm = await Language.load(await fs.readFile(resolver(GRAMMARS[language])));
     parser.setLanguage(wasm);
     return parser;
   })();

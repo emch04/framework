@@ -33,12 +33,36 @@ export function unrelated(reason?: string): Outcome;
 /** Already acted on. */
 export function duplicate(reason?: string): Outcome;
 
+/**
+ * Atomic replay protection: the event is reserved before it is handled, so two
+ * concurrent deliveries of one event cannot both be handled.
+ */
 export interface EventLog {
+  /** true: reserved now, handle it. false: already handled or being handled. A claim must expire. */
+  claim(eventId: string | number, meta?: Record<string, unknown>): Promise<boolean> | boolean;
+  /** The handler failed or the event was not ours: free the claim (never undoes a recorded event). */
+  release(eventId: string | number): Promise<void> | void;
+  /** Handled: the claim becomes permanent. */
+  record(eventId: string | number, meta?: Record<string, unknown>): Promise<void> | void;
+  /** Handled (a claim in progress is not). */
+  seen?(eventId: string | number): Promise<boolean> | boolean;
+}
+
+/**
+ * @deprecated Not atomic: two concurrent deliveries of one event can both be
+ * handled. Still accepted, with a warning; add claim() and release().
+ */
+export interface LegacyEventLog {
   seen(eventId: string | number): Promise<boolean> | boolean;
   record(eventId: string | number, meta?: Record<string, unknown>): Promise<void> | void;
 }
 
-export function createMemoryEventLog(options?: { limit?: number }): EventLog & { size(): number };
+export function createMemoryEventLog(options?: {
+  limit?: number;
+  /** How long an unfinished claim blocks retries (a crashed process never releases it). Default 15 min. */
+  claimTtlMs?: number;
+  now?: () => number;
+}): EventLog & { seen(eventId: string | number): Promise<boolean>; size(): number };
 
 export interface WebhookLogger {
   info?(message: string): void;
@@ -75,7 +99,7 @@ export function createWebhookHandler<Event = Record<string, unknown>>(options: {
   /** A value, or a function read on every call so the secret can rotate without a restart. */
   secret?: unknown | (() => unknown | Promise<unknown>);
   events: Record<string, EventHandler<Event>>;
-  eventLog?: EventLog;
+  eventLog?: EventLog | LegacyEventLog;
   eventId?: (event: Event) => string | undefined;
   logger?: WebhookLogger;
 }): WebhookHandler;

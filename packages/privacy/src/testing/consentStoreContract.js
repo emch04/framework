@@ -1,9 +1,12 @@
 /**
- * The consent store contract, as a test suite. An adapter for a real database
- * proves it behaves like the reference store:
+ * The consent store contract, as a test suite. The only store this package
+ * ships is the in-memory one; an adapter for a real database is yours to write
+ * (get, put, list, remove), and this suite proves it behaves like the reference
+ * store. `createPostgresConsentStore` and `freshTable` below are YOUR code, not
+ * exports of @astratra/privacy:
  *
  *   const { runConsentStoreContract } = require('@astratra/privacy');
- *   runConsentStoreContract(async () => createMongoConsentStore(await freshCollection()));
+ *   runConsentStoreContract(async () => createPostgresConsentStore(await freshTable()));
  *
  * It uses the test runner's describe/test/expect (jest or a compatible one);
  * pass them explicitly when they are not globals.

@@ -122,3 +122,12 @@ test('les anciennes règles égalité et listes conservent leur comportement', a
   expect((await p.resolveBoolean('f', false, { attributes: { country: 'BE', role: 'admin' } })).value).toBe(true);
   expect((await p.resolveBoolean('f', false, { attributes: { country: 'US', role: 'admin' } })).reason).toBe('TARGETING_MISMATCH');
 });
+
+test('un drapeau absent renvoie la valeur par défaut de l appelant, avec la raison FLAG_NOT_FOUND', async () => {
+  const p = createFlagProvider({ source: createMemorySource(rules({})) });
+  expect(await p.resolveBoolean('absent', true)).toMatchObject({ value: true, reason: 'FLAG_NOT_FOUND', flagKey: 'absent' });
+  expect(await p.resolveBoolean('absent', false)).toMatchObject({ value: false, reason: 'FLAG_NOT_FOUND' });
+  expect(await p.resolveBoolean('absent')).toMatchObject({ value: false, reason: 'FLAG_NOT_FOUND' });
+  expect(await p.resolveString('absent', 'secours')).toMatchObject({ value: 'secours', reason: 'FLAG_NOT_FOUND' });
+  expect(await p.resolveNumber('absent', 7)).toMatchObject({ value: 7, reason: 'FLAG_NOT_FOUND' });
+});

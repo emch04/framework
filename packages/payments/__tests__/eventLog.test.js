@@ -40,4 +40,52 @@ describe('memory event log', () => {
 
     expect(log.size()).toBe(1);
   });
+
+  test('claim reserves an event once, atomically', async () => {
+    const log = createMemoryEventLog();
+
+    const results = await Promise.all([log.claim('evt_1'), log.claim('evt_1')]);
+
+    expect(results.sort()).toEqual([false, true]);
+    expect(await log.claim('evt_1')).toBe(false);
+  });
+
+  test('release frees a claim so the event can be handled again', async () => {
+    const log = createMemoryEventLog();
+    await log.claim('evt_1');
+    await log.release('evt_1');
+
+    expect(await log.seen('evt_1')).toBe(false);
+    expect(await log.claim('evt_1')).toBe(true);
+  });
+
+  test('release never undoes an event already recorded as handled', async () => {
+    const log = createMemoryEventLog();
+    await log.claim('evt_1');
+    await log.record('evt_1');
+    await log.release('evt_1');
+
+    expect(await log.claim('evt_1')).toBe(false);
+  });
+
+  test('a claim abandoned by a crashed process expires; a handled event never does', async () => {
+    let now = 0;
+    const log = createMemoryEventLog({ claimTtlMs: 1000, now: () => now });
+    await log.claim('stuck');
+    await log.claim('done');
+    await log.record('done');
+
+    now = 999;
+    expect(await log.claim('stuck')).toBe(false);
+    now = 2500;
+    expect(await log.claim('stuck')).toBe(true);
+    expect(await log.claim('done')).toBe(false);
+  });
+
+  test('a claimed but unfinished event is not yet "seen"', async () => {
+    const log = createMemoryEventLog();
+    await log.claim('evt_1');
+
+    expect(await log.seen('evt_1')).toBe(false);
+  });
 });

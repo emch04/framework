@@ -84,7 +84,7 @@ const webhook = createWebhookHandler({
   // interface sans redémarrage. Se marie avec @astratra/credentials.
   secret: () => vault.get('STRIPE_WEBHOOK_SECRET'),
 
-  eventLog,   // protection contre les rejeux
+  eventLog,   // protection contre les rejeux : claim / release / record (voir « Les rejeux »)
 
   events: {
     'checkout.session.completed': async (event, { sideEffect, unrelated }) => {
@@ -149,17 +149,45 @@ Les prestataires renvoient les événements, volontairement : ils ne peuvent pas
 distinguer une réponse perdue d'une réponse lente. Sans mémoire, la seconde
 livraison reconfirme la commande, renvoie le reçu, recrédite le compte.
 
+Et ils renvoient **en même temps** : une relance peut arriver pendant que la
+première livraison tourne encore. « Déjà vu ? » puis « je m'en souviens » laisse
+une fenêtre où les deux livraisons répondent non, et la commande est confirmée
+deux fois. L'événement est donc **réservé de façon atomique avant le
+traitement** :
+
 ```
-seen(eventId)          -> boolean
-record(eventId, meta)  -> void
+claim(eventId, meta)   -> boolean   vrai : réservé maintenant, à traiter.
+                                    faux : déjà traité ou en cours → 200 « duplicate ».
+release(eventId)       -> void      le handler a échoué : réservation libérée,
+                                    la relance du prestataire pourra passer.
+record(eventId, meta)  -> void      traité : la réservation devient définitive.
+seen(eventId)          -> boolean   traité (une réservation en cours ne compte pas).
 ```
+
+En SQL, `claim` tient en une instruction sur une clé unique :
+
+```sql
+INSERT INTO webhook_events (id, status, claimed_at) VALUES ($1, 'pending', now())
+ON CONFLICT (id) DO UPDATE SET claimed_at = now()
+  WHERE webhook_events.status = 'pending'
+    AND webhook_events.claimed_at < now() - interval '15 minutes'
+RETURNING id;  -- une ligne renvoyée = réservé
+```
+
+Une réservation **doit expirer** : un processus qui plante en plein traitement ne
+la libère jamais (`createMemoryEventLog({ claimTtlMs })`, 15 min par défaut).
+
+Un ancien journal `{ seen, record }` est encore accepté, mais **il n'est pas
+atomique** : deux livraisons simultanées passent toutes les deux. Un
+avertissement est journalisé à la création ; ajoute `claim` et `release`.
 
 `createMemoryEventLog()` sert aux tests et au développement. **Il n'est pas sûr
 en production multi-instances** : chaque processus a sa propre mémoire, donc un
 rejeu qui arrive sur l'autre passe. Utilise un store partagé.
 
-Un événement **en échec n'est pas enregistré** : la relance doit pouvoir
-fonctionner. Un événement déclaré `unrelated` non plus.
+Un événement **en échec n'est pas enregistré** : sa réservation est libérée et
+la relance doit pouvoir fonctionner. Un événement déclaré `unrelated` non plus.
+Un type d'événement sans handler ne prend aucune réservation.
 
 ## Ce que ce package ne fait pas
 

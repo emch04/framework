@@ -141,6 +141,83 @@ Changements réversibles ci-dessous).
   constat) est écrite au journal d'audit avant d'être rendue :
   `listAudit({ organisationId })`.
 
+### Politique d'outils, budget calendaire, arrêt d'urgence des outils (1.3.0)
+
+Le reste du gouverneur décide des changements qu'un agent propose pour
+lui-même. `createToolPolicy` décide d'**un appel d'un outil**, par code, hors
+de tout modèle. Il ne sait pas ce que fait un outil : familles, niveaux,
+plafonds et chaque mot rendu viennent de votre configuration.
+
+```js
+const { createToolPolicy, createPostgresGovernorStore, createPostgresToolBudgetStore,
+  postgresToolBudgetSchema } = require('@astratra/conscience/governor');
+
+await pool.query(postgresToolBudgetSchema());           // une fois, idempotent
+const policy = createToolPolicy({
+  store: createPostgresGovernorStore(pool),             // journal d'audit + interrupteur
+  tools: [
+    { name: 'lire_elements', family: 'catalogue', level: 'read', maxPerRun: 5 },
+    { name: 'modifier_element', family: 'catalogue', level: 'controlled',
+      validate: (input) => Number.isInteger(input?.amount),
+      overThreshold: (input, settings) => input.amount > settings.maxAmount },
+    { name: 'supprimer_element', family: 'catalogue', level: 'sensitive' }
+  ],
+  // Lu avant CHAQUE appel (une ligne en base, un tableau de bord...). S'il échoue, l'appel est refusé.
+  settings: async ({ organisationId }) => ({ enabled: true, families: { catalogue: true }, budgetLimit: 15000, maxCallsPerRun: 12, maxAmount: 500 }),
+  budget: { period: 'month', timeZone: 'Europe/Paris', store: createPostgresToolBudgetStore(pool) },
+  emergency: { activateRoles: ['owner', 'support'], releaseRoles: ['owner'] }
+});
+
+const run = policy.createRun();                         // compteurs d'une conversation / d'une tâche
+const decision = await policy.decide({ tool: 'modifier_element', input: { amount: 40 }, run, actor: { kind: 'model', id: 'assistant' } });
+// { allowed, decision: 'allowed' | 'pending' | 'refused', code, level, input, budget, auditId, ... }
+
+const done = await policy.execute({ tool: 'lire_elements', input: {}, run }, (input, { signal }) => lireElements(input, { signal }));
+// N'exécute que si l'appel est autorisé. done.executed, done.result, done.interrupted.
+await policy.recordSpend({ id: 'appel-42', amount: 120 }); // unités entières (centimes), idempotent par id
+```
+
+- **Niveaux** (`TOOL_LEVELS`) : `read` s'exécute ; `controlled` s'exécute sauf au-delà
+  de son `overThreshold(input, settings)` ou si le tour a lu un contenu non fiable
+  (`run.markUntrusted()` ou `untrusted: true` sur l'appel) : il est alors `pending` ;
+  `sensitive` est toujours `pending`. La politique n'exécute jamais un appel en attente :
+  l'application le garde et une personne décide.
+- **Codes de refus** (`TOOL_REASONS`) : `emergency_stop`, `disabled`, `unknown_tool`,
+  `family_disabled`, `invalid_input`, `budget_exceeded`, `cap_reached` (appels par tour
+  ou `maxPerRun` de l'outil), et `settings_unavailable` quand les réglages, l'interrupteur
+  ou le budget sont illisibles. Codes d'attente : `sensitive_tool`, `untrusted_context`,
+  `over_threshold`. Ordre : arrêt, désactivé, inconnu, famille, entrée, budget, plafonds,
+  niveau. Les appels demandés ensemble sont comptés tout de suite : ils ne passent pas
+  tous sous un plafond.
+- **Vos mots** : `labels: { levels, decisions, codes }` renomme ce que vous recevez
+  (`{ decisions: { pending: 'en_attente' } }`) ; les outils déclarent alors leur niveau
+  avec votre mot.
+- **Budget calendaire** (`createCalendarBudget`, utilisable seul) : consommation comptée
+  par `'month'` ou `'day'` (ou votre fonction) d'un fuseau horaire (`calendarPeriodKey`),
+  plafond et montants en unités entières, jamais en flottants (prenez une unité plus
+  petite pour les fractions de centime). `check()` est lu avant chaque appel et teste
+  aussi le `estimatedCost` de l'outil ; une consommation tombe dans la période de son
+  propre instant : un appel à 23 h 30 le 31 octobre à Paris compte pour octobre là-bas
+  et pour novembre en UTC. Magasins : mémoire (`createMemoryToolBudgetStore`),
+  PostgreSQL (`createPostgresToolBudgetStore` : une seule requête atomique et
+  idempotente, bigint), ou le vôtre `{ getSpent(scope, period), addSpend({ scope,
+  period, id, amount, at }) }` (idempotent par id). La portée est `organisationId`
+  par défaut. Le plafond est atteint quand `spent >= limit` ; la mesure se faisant après
+  l'appel, le dernier appel peut le dépasser.
+- **Arrêt d'urgence** : `halt({ by, reason, organisationId? })` est lu avant chaque
+  appel et pendant l'exécution d'un outil. `execute()` donne à l'outil un `AbortSignal`
+  qui s'annule aussitôt pour un arrêt dans ce processus, et sous `pollMs` (1 s par défaut)
+  pour un arrêt tiré par un autre processus ; l'appel est aussi abandonné si l'outil
+  ignore le signal (`interrupted: true`). `activateRoles` le tirent (par défaut : toute
+  personne identifiée), `releaseRoles` le lèvent (par défaut : tout humain ; un acteur
+  `model` ou `engine` jamais). L'option `governor` fait aussi arrêter les outils par
+  l'interrupteur du gouverneur.
+- **Audit** : chaque décision est écrite dans le journal du gouverneur avant d'être
+  rendue (`tool_decision` : qui, outil, famille, niveau, décision, motifs, empreinte de
+  l'entrée, jamais l'entrée brute), plus `tool_outcome`, `tool_halt`, `tool_resume` et
+  leurs refus. Si le journal ne peut pas être écrit, l'appel ne s'exécute pas.
+  `onEvent` reçoit les mêmes enregistrements.
+
 ### Approbations (matrice, double approbation, expiration)
 
 L'approbation est décidée par la politique, pas par celui qui propose :
@@ -403,6 +480,7 @@ vérifié.
 ```js
 postgresConscienceSchema({ prefix: 'astratra_conscience' }) // table <prefix>_records
 postgresGovernorSchema({ prefix: 'astratra_governor' })     // <prefix>_proposals, _audit, _spend, _controls, _objects, _versions, _findings
+postgresToolBudgetSchema({ prefix: 'astratra_tools' })       // <prefix>_budget_totals, _budget_entries (tool budget, 1.3.0)
 ```
 
 ### Écrire son propre magasin (MongoDB, ...)

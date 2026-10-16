@@ -3,6 +3,15 @@
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Chaque package Astratra est versionné indépendamment.
 
+## 2026-10-16 — `@astratra/conscience` 1.3.0 : politique d'outils, budget calendaire, arrêt d'urgence des outils
+
+### Ajouté
+- `@astratra/conscience/governor` : `createToolPolicy`, la décision par code d'**un appel d'outil** (hors modèle, générique : familles, niveaux, plafonds et vocabulaire viennent de la configuration). Chaque outil déclare une famille, un niveau (`TOOL_LEVELS` : `read`, `controlled`, `sensitive`) et des plafonds facultatifs (`maxPerRun`, `overThreshold`, `estimatedCost`) ; un appel est `allowed`, `refused` (`TOOL_REASONS` : `emergency_stop`, `disabled`, `unknown_tool`, `family_disabled`, `invalid_input`, `budget_exceeded`, `cap_reached`, `settings_unavailable`) ou `pending` (outil sensible, hors plafond, ou contexte non fiable signalé par l'appelant après une lecture web). Réglages relus avant chaque appel ; tout ce qui est illisible refuse. Mots renommables (`labels`). `execute` n'exécute que les appels autorisés. `availableTools` donne les outils à offrir au modèle.
+- `createCalendarBudget`, `calendarPeriodKey`, `createMemoryToolBudgetStore`, `createPostgresToolBudgetStore`, `postgresToolBudgetSchema` : budget compté par mois civil ou par jour dans un fuseau horaire (période personnalisable), montants et plafond en entiers, test de dépassement avant chaque appel, consommation idempotente par identifiant ; PostgreSQL en une seule requête atomique. Interface de magasin documentée pour d'autres bases (pas de magasin MongoDB pour ce budget).
+- Arrêt d'urgence applicable aux outils : interrupteur lu avant chaque appel, `AbortSignal` qui coupe un outil en cours (aussitôt dans le processus, au plus tard à `pollMs` pour un arrêt tiré ailleurs, et appel abandonné même si l'outil ignore le signal) ; activation par `emergency.activateRoles`, levée par `emergency.releaseRoles` (un acteur `model` ou `engine` ne lève jamais) ; l'interrupteur du gouverneur arrête aussi les outils (option `governor`).
+- Audit : chaque décision (`tool_decision`), issue (`tool_outcome`), arrêt et reprise (et leurs refus) est écrit dans le journal du gouverneur avant d'être rendu, avec l'empreinte de l'entrée et jamais l'entrée brute ; sans journal écrit, l'outil ne s'exécute pas.
+- Types, tests (politique, budget à cheval sur deux mois dans deux fuseaux, arrêt d'urgence d'un outil lent, audit, contrat de magasin joué sur la mémoire et PostgreSQL réel), README anglais et français.
+
 
 ## 2026-10-16 — `@astratra/centrale` 1.6.0 : journal des agents
 

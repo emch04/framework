@@ -3,7 +3,8 @@ const { test, after, before } = require('node:test');
 const assert = require('node:assert/strict');
 const { randomUUID } = require('node:crypto');
 const { postgresConscienceSchema, createPostgresConscienceStore } = require('../src');
-const { postgresGovernorSchema, createPostgresGovernorStore } = require('../src/governor');
+const { postgresGovernorSchema, createPostgresGovernorStore, postgresToolBudgetSchema, createPostgresToolBudgetStore } = require('../src/governor');
+const { toolBudgetContract } = require('./toolBudgetContract');
 const { governorContract } = require('./governorContract');
 const { conscienceContract } = require('./conscienceContract');
 const { advancedContract } = require('./advancedContract');
@@ -125,3 +126,34 @@ test('postgres: concurrent identical records give one row', { skip }, async (t) 
 
 const { evaluationContract } = require('./evaluationContract');
 evaluationContract('postgres', freshStores, { skip });
+
+/* ---- tool budget store ---- */
+
+test('tool budget schema takes a checked prefix; its values travel as parameters', async () => {
+  assert.match(postgresToolBudgetSchema(), /CREATE TABLE IF NOT EXISTS "astratra_tools_budget_totals"/);
+  for (const prefix of ['x; DROP TABLE y', 'a"b', '1abc']) {
+    assert.throws(() => postgresToolBudgetSchema({ prefix }));
+    assert.throws(() => createPostgresToolBudgetStore(recorder(), { prefix }));
+  }
+  assert.throws(() => createPostgresToolBudgetStore(null));
+  const hostile = "x'); DROP TABLE users; --";
+  const db = { calls: [], async query(sql, params) { this.calls.push({ sql, params }); return { rows: [{ added: 1, spent: '5' }] }; } };
+  const store = createPostgresToolBudgetStore(db);
+  await store.getSpent(hostile, hostile);
+  await store.addSpend({ scope: hostile, period: hostile, id: hostile, amount: 5, at: new Date(0).toISOString() });
+  for (const call of db.calls) assert.doesNotMatch(call.sql, /DROP TABLE users/);
+  assert.equal(db.calls.length, 2);
+});
+
+async function freshToolBudgetStore() {
+  if (unavailable) return { unavailable };
+  const db = getPool();
+  const prefix = `t_${randomUUID().replaceAll('-', '').slice(0, 16)}`;
+  await db.query(postgresToolBudgetSchema({ prefix }));
+  await db.query(postgresToolBudgetSchema({ prefix }));
+  return {
+    store: createPostgresToolBudgetStore(db, { prefix }),
+    async cleanup() { for (const table of ['budget_totals', 'budget_entries']) await db.query(`DROP TABLE IF EXISTS "${prefix}_${table}"`); }
+  };
+}
+toolBudgetContract('postgres', freshToolBudgetStore, { skip });

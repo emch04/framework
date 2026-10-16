@@ -111,7 +111,7 @@ export interface ChangeProposal {
 
 export interface AuditEntry {
   id: string; at: string; policyVersion: string; organisationId: string | null; proposalId: string | null;
-  action: 'evaluate' | 'approve' | 'decline' | 'approval_expired' | 'expire' | 'halt' | 'resume' | 'spend' | 'spend_refused' | 'register' | 'stage' | 'deploy' | 'promote' | 'rollback' | 'emergency_revert' | 'finding';
+  action: 'evaluate' | 'approve' | 'decline' | 'approval_expired' | 'expire' | 'halt' | 'resume' | 'spend' | 'spend_refused' | 'register' | 'stage' | 'deploy' | 'promote' | 'rollback' | 'emergency_revert' | 'finding' | ToolAuditAction;
   decision: string; reasons: string[]; actor: Actor | null; [key: string]: unknown;
 }
 
@@ -391,3 +391,172 @@ export interface MongoStoreOptions { prefix?: string; client?: MongoSessionClien
 /** Requires a replica set or sharded cluster for atomic spending. */
 export function createMongoGovernorStore(db: MongoDatabase, options?: MongoStoreOptions): GovernorStore;
 export function mongoGovernorIndexes(db: MongoDatabase, options?: { prefix?: string }): Promise<void>;
+
+/* ---- Tool policy and calendar budget (generic: families, levels, caps and vocabulary are yours) ---- */
+
+export type ToolAuditAction = 'tool_decision' | 'tool_outcome' | 'tool_halt' | 'tool_halt_denied' | 'tool_resume' | 'tool_resume_denied';
+export const TOOL_LEVELS: { readonly READ: 'read'; readonly CONTROLLED: 'controlled'; readonly SENSITIVE: 'sensitive' };
+export const TOOL_DECISIONS: { readonly ALLOWED: 'allowed'; readonly PENDING: 'pending'; readonly REFUSED: 'refused' };
+export const TOOL_REASONS: {
+  readonly HALTED: 'emergency_stop'; readonly DISABLED: 'disabled'; readonly UNAVAILABLE: 'settings_unavailable'; readonly UNKNOWN_TOOL: 'unknown_tool';
+  readonly FAMILY_DISABLED: 'family_disabled'; readonly INVALID_INPUT: 'invalid_input'; readonly BUDGET: 'budget_exceeded'; readonly CAP: 'cap_reached';
+  readonly SENSITIVE: 'sensitive_tool'; readonly UNTRUSTED: 'untrusted_context'; readonly THRESHOLD: 'over_threshold';
+};
+export type ToolLevel = 'read' | 'controlled' | 'sensitive';
+export type ToolDecisionWord = 'allowed' | 'pending' | 'refused';
+export type ToolReasonCode = typeof TOOL_REASONS[keyof typeof TOOL_REASONS];
+
+/** An actor of a tool call or of the kill switch. `roles` are checked against emergency.activateRoles / releaseRoles. */
+export interface ToolActor { kind: string; id: string; roles?: string[] }
+
+export interface ToolDefinition {
+  /** Letters, digits, _ . : - ; starts with a letter. */
+  name: string;
+  family: string;
+  /** One of the level words (the canonical ones, or yours when labels.levels renames them). */
+  level: string;
+  /** Returns false, { ok: false }, or { ok: true, value } (the value replaces the input). May throw: invalid. */
+  validate?(input: any): boolean | { ok: boolean; value?: unknown };
+  /** Controlled tools only: true sends the call to a person (an amount over your own threshold, for instance). Throwing counts as true. */
+  overThreshold?(input: any, settings: ToolSettings): boolean;
+  /** At most this many calls of the tool in one run; the next ones are refused (cap_reached). */
+  maxPerRun?: number;
+  /** Whole units this call is expected to consume: refused up front when it cannot fit in the budget. */
+  estimatedCost?: number;
+  /** Stays callable when the budget is exhausted (read-only state, for instance). */
+  budgetExempt?: boolean;
+}
+
+/** Settings read before EACH call; anything else you put in is handed back to your validate and overThreshold functions. */
+export interface ToolSettings {
+  /** false: every call is refused (disabled). */
+  enabled?: boolean;
+  /** family -> on/off. A family that is not listed is on. */
+  families?: Record<string, boolean>;
+  /** Cap of the calendar budget, whole units. Overrides the default limit of the budget. */
+  budgetLimit?: number | null;
+  /** Calls of all tools in one run. */
+  maxCallsPerRun?: number | null;
+  [key: string]: unknown;
+}
+
+export interface ToolRun { calls: number; byTool: Record<string, number>; untrusted: boolean; /** Call after the run read content from outside (a web page, a file...). */ markUntrusted(): void }
+
+export interface ToolCall {
+  tool: string;
+  input?: unknown;
+  /** The counters of the run (createRun()). Without it each call is a run of its own. */
+  run?: ToolRun;
+  actor?: ToolActor | null;
+  organisationId?: string | null;
+  /** The caller flags this call as made in an untrusted context. */
+  untrusted?: boolean;
+  /** Budget scope; defaults to organisationId, then "default". */
+  budgetScope?: string;
+  /** execute() only: the caller's own abort signal. */
+  signal?: AbortSignal;
+}
+
+export interface ToolDecision {
+  allowed: boolean;
+  /** 'allowed' | 'pending' | 'refused', or your word. */
+  decision: string;
+  /** Why it is not allowed (a TOOL_REASONS value, or your word); null when allowed. */
+  code: string | null;
+  reasons: string[];
+  tool: string; family: string | null; level: string | null;
+  /** The input after validate(). */
+  input: unknown;
+  budget: BudgetStanding | null;
+  /** Rank of this call in its run. */
+  rank: number;
+  /** Id of the audit record of this decision. */
+  auditId: string;
+}
+export interface ToolExecution<T = unknown> extends ToolDecision { executed: boolean; interrupted: boolean; result?: T }
+
+export interface ToolPolicyOptions {
+  tools: ToolDefinition[];
+  /** When given, every tool's family must be in the list. */
+  families?: string[];
+  /** Static settings under what settings() returns. */
+  defaults?: ToolSettings;
+  /** Read before every call. May throw: the call is refused (settings_unavailable). */
+  settings?(context: { organisationId: string | null; actor: ToolActor | null }): ToolSettings | Promise<ToolSettings>;
+  /** A calendar budget (createCalendarBudget) or its options. */
+  budget?: CalendarBudget | CalendarBudgetOptions;
+  /** Levels whose calls wait for a person after an untrusted read (default: only the controlled level). */
+  untrustedPendingLevels?: string[];
+  emergency?: {
+    /** Roles allowed to pull the kill switch (default: any actor with an id). */
+    activateRoles?: string[];
+    /** Roles allowed to release it (default: any human). A model or an engine never can. */
+    releaseRoles?: string[];
+  };
+  /** Rename the words you get back: canonical word -> your word. Tools declare their level in your word. */
+  labels?: { levels?: Partial<Record<ToolLevel, string>>; decisions?: Partial<Record<ToolDecisionWord, string>>; codes?: Partial<Record<ToolReasonCode, string>> };
+  /** Audit journal and kill switch keys (default: memory). Use the store of your governor. */
+  store?: Pick<GovernorStore, 'appendAudit' | 'listAudit' | 'getControl' | 'setControl'>;
+  /** A governor whose kill switch also stops the tools. */
+  governor?: Governor;
+  version?: string;
+  /** How often a running tool looks at the kill switch pulled by another process (default 1000, 0 = off). */
+  pollMs?: number;
+  now?(): number;
+  idFactory?(): string;
+  onEvent?(event: { type: 'tool_policy' } & AuditEntry): void | Promise<void>;
+}
+
+export interface ToolPolicy {
+  readonly version: string;
+  createRun(): ToolRun;
+  /** The decision for one call; audited. Throws only when the journal cannot be written. */
+  decide(call: ToolCall): Promise<ToolDecision>;
+  /** Decides, then runs fn only when allowed, and cuts it at once on an emergency stop (signal + abandon). */
+  execute<T>(call: ToolCall, fn: (input: any, context: { signal: AbortSignal; decision: ToolDecision }) => T | Promise<T>): Promise<ToolExecution<Awaited<T>>>;
+  /** Names of the tools to offer the model now (none when stopped or disabled). */
+  availableTools(context?: { organisationId?: string | null }): Promise<string[]>;
+  listTools(): Array<{ name: string; family: string; level: string; maxPerRun: number | null; estimatedCost: number; budgetExempt: boolean }>;
+  halt(options: { by: ToolActor; reason?: string; organisationId?: string }): Promise<unknown>;
+  resume(options: { by: ToolActor; organisationId?: string }): Promise<unknown>;
+  isHalted(organisationId?: string | null): Promise<boolean>;
+  /** Counts what a call really consumed (whole units, idempotent by id), in the period of `at` (default now). */
+  recordSpend(spend: { id: string; amount: number; organisationId?: string; scope?: string; at?: number }): Promise<{ added: boolean; scope: string; period: string; spent: number }>;
+  budgetStatus(query?: { organisationId?: string; scope?: string; at?: number; estimate?: number }): Promise<BudgetStanding>;
+  listAudit: GovernorStore['listAudit'];
+}
+export function createToolPolicy(options: ToolPolicyOptions): ToolPolicy;
+
+export interface BudgetStanding {
+  /** false when the cap is reached (or the estimate does not fit). */
+  allowed: boolean; exceeded: boolean; scope: string; period: string; spent: number; limit: number | null; remaining: number | null;
+}
+/** spent/limit/remaining are whole units of your choice (cents, thousandths of cents, tokens...). No fractions. */
+export interface ToolBudgetStore {
+  getSpent(scope: string, period: string): Promise<number>;
+  /** Idempotent by (scope, id): a replay adds nothing and returns added: false. */
+  addSpend(entry: { scope: string; period: string; id: string; amount: number; at: string }): Promise<{ added: boolean; spent: number }>;
+}
+export interface CalendarBudgetOptions {
+  /** 'month' (default), 'day', or a function (instant, timeZone) => key. */
+  period?: 'month' | 'day' | ((at: Date, timeZone: string) => string);
+  /** IANA time zone (default UTC). */
+  timeZone?: string;
+  /** Default cap in whole units; absent: no cap. */
+  limit?: number | null;
+  scope?: string;
+  store?: ToolBudgetStore;
+  now?(): number;
+}
+export interface CalendarBudget {
+  check(query?: { scope?: string; limit?: number | null; estimate?: number; at?: number | Date }): Promise<BudgetStanding>;
+  record(spend: { id: string; amount: number; scope?: string; at?: number | Date }): Promise<{ added: boolean; scope: string; period: string; spent: number }>;
+  periodKey(at?: number | Date): string;
+  readonly period: string; readonly timeZone: string;
+}
+export function createCalendarBudget(options?: CalendarBudgetOptions): CalendarBudget;
+/** "2026-10" (month) or "2026-10-31" (day) of an instant, in a time zone. */
+export function calendarPeriodKey(at: number | Date, options?: { period?: CalendarBudgetOptions['period']; timeZone?: string }): string;
+export function createMemoryToolBudgetStore(): ToolBudgetStore;
+export function createPostgresToolBudgetStore(db: Queryable, options?: { prefix?: string }): ToolBudgetStore;
+export function postgresToolBudgetSchema(options?: { prefix?: string }): string;

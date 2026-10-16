@@ -1,6 +1,6 @@
 {
   "name": "@astratra/agent",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Budgeted, verifiable and durable task execution with injected models and tools, plus user feedback (thumbs up/down) on runs that the agent learns from.",
   "engines": {
     "node": ">=20"

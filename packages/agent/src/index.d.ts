@@ -77,3 +77,85 @@ export function usageOf(request: unknown, response: TurnResponse, pricing?: Agen
 export function budgetReason(task: Pick<Task, 'turns' | 'elapsedMs' | 'usage'>, budget: ReturnType<typeof normalizeBudget>): string | null;
 export function contextBoundary(messages: Message[], options?: ContextSummaryOptions): number;
 export function summarizeContext(messages: Message[], plan: PlanStep[], options: ContextSummaryOptions, summarize: (input: { messages: Message[]; plan: PlanStep[] }) => Promise<string> | string): Promise<boolean>;
+
+// Scheduler: timed tasks, one run at a time, injectable lock and state store.
+export type Schedule =
+  | { type: 'daily'; at: string }
+  | { type: 'weekly'; at: string; day: number | string; days?: never }
+  | { type: 'weekly'; at: string; days: Array<number | string>; day?: never }
+  | { type: 'interval'; everyMs: number };
+export interface ScheduledRunContext { id: string; signal: AbortSignal; manual: boolean; scheduledFor: number | null; previous: unknown; now: number }
+export interface ScheduledTask { id: string; label?: string; schedule: Schedule; timeZone?: string; enabled?: boolean; maxLateMs?: number; run(context: ScheduledRunContext): unknown }
+export interface Lock { acquire(key: string): Promise<{ release(): Promise<void> } | null> }
+export interface ScheduleState {
+  id: string; status: 'scheduled' | 'running' | 'ok' | 'error' | 'skipped'; nextRunAt: number | null; lastStartedAt: number | null; lastRunAt: number | null;
+  lastResult: unknown; lastError: { message: string; at: number } | null; skipReason: string | null; lastManual: boolean;
+}
+export interface ScheduleStateStore { get(id: string): Promise<Record<string, unknown> | null>; set(id: string, state: Record<string, unknown>): Promise<void> }
+export interface SchedulerEvent { type: 'start' | 'done' | 'error' | 'skipped'; id: string; manual?: boolean; reason?: string; error?: string }
+export interface SchedulerOptions {
+  tasks: ScheduledTask[]; timeZone?: string; lock?: Lock; store?: ScheduleStateStore; now?(): number | Date;
+  tickMs?: number; maxLateMs?: number; stopCheckMs?: number; shouldStop?(): boolean | Promise<boolean>;
+  onEvent?(event: SchedulerEvent): void | Promise<void>; onError?(error: unknown, taskId: string): void;
+}
+export type RunOutcome = { id: string; status: 'ok' | 'error' | 'skipped' | 'scheduled' | 'locked' | 'already_done'; result?: unknown; error?: string; reason?: string };
+export type TaskView = ScheduleState & { label: string; enabled: boolean; timeZone: string };
+export interface Scheduler {
+  tick(): Promise<RunOutcome[]>; start(): void; stop(): void; readonly started: boolean; abortAll(reason?: unknown): void;
+  run(id: string, options?: { signal?: AbortSignal }): Promise<RunOutcome>;
+  state(): Promise<TaskView[]>;
+  state(id: string): Promise<TaskView>;
+}
+export class SchedulerError extends Error { code: 'unknown_task' | 'stopped' | 'running' | (string & {}); constructor(code: string, message?: string) }
+export function createScheduler(options: SchedulerOptions): Scheduler;
+export function createMemoryLock(): Lock;
+export function createMemoryScheduleStore(): ScheduleStateStore;
+export function nextRun(schedule: Schedule, after: number, timeZone?: string): number;
+export function zonedTime(date: string, hour: number, minute: number, timeZone: string): number;
+
+// Approval queue: proposed actions decided later by an authenticated person (the caller authenticates).
+export type ApprovalStatus = 'pending' | 'approved' | 'rejected' | 'expired';
+export const APPROVAL_STATUSES: readonly ApprovalStatus[];
+export interface ApprovalAction<I = unknown, R = unknown> {
+  id: string; type: string; input: I; requestedBy: string; meta: unknown; status: ApprovalStatus; createdAt: number; expiresAt: number | null;
+  decidedBy: string | null; decidedAt: number | null; executedAt: number | null; result: R | null; reason: string | null;
+  refusal: { reason: string; details: unknown; at: number; by: string } | null;
+}
+export interface ApprovalFilter { status?: ApprovalStatus; type?: string; requestedBy?: string; limit?: number; before?: number }
+export interface ApprovalStore {
+  create(action: ApprovalAction): Promise<ApprovalAction>; get(id: string): Promise<ApprovalAction | null>;
+  list(filter?: ApprovalFilter): Promise<ApprovalAction[]>;
+  reserve(id: string, decidedBy: string, at: number): Promise<ApprovalAction | null>;
+  finish(id: string, result: unknown, at: number): Promise<ApprovalAction | null>;
+  revert(id: string, decidedBy: string, refusal: unknown): Promise<ApprovalAction | null>;
+  reject(id: string, decidedBy: string, reason: string | null, at: number): Promise<ApprovalAction | null>;
+  expire(at: number): Promise<ApprovalAction[]>;
+}
+export type Decider = string | { id: string; [key: string]: unknown };
+export interface ExecutorContext<I = any> { action: ApprovalAction<I>; input: I; decider: Decider; idempotencyKey: string; signal: AbortSignal }
+export type Executor = (context: ExecutorContext) => unknown;
+export interface ApprovalEvent { type: 'proposed' | 'approved' | 'rejected' | 'refused' | 'failed' | 'expired'; action: ApprovalAction; result?: unknown; reason?: string; error?: string }
+export interface ApprovalQueueOptions {
+  store?: ApprovalStore; now?(): number | Date; executors?: Executor | Record<string, Executor>; executionTimeoutMs?: number;
+  authorize?(input: { action: ApprovalAction; decider: Decider; decision: 'approve' | 'reject' }): boolean | void | Promise<boolean | void>;
+  beforeExecute?(input: { action: ApprovalAction; decider: Decider }): void | Promise<void>;
+  onEvent?(event: ApprovalEvent): void | Promise<void>;
+}
+export interface ApprovalQueue {
+  propose(input: { type: string; input?: unknown; requestedBy: string; ttlMs?: number; expiresAt?: number | Date; meta?: unknown; id?: string }): Promise<ApprovalAction>;
+  get(id: string): Promise<ApprovalAction | null>; list(filter?: ApprovalFilter): Promise<ApprovalAction[]>; expire(): Promise<ApprovalAction[]>;
+  approve(id: string, options: { decider: Decider; signal?: AbortSignal }): Promise<{ action: ApprovalAction; result: unknown }>;
+  reject(id: string, options: { decider: Decider; reason?: string }): Promise<ApprovalAction>;
+}
+export class ApprovalError extends Error { code: 'not_found' | 'expired' | 'already_decided' | 'forbidden' | 'no_executor' | 'execution_failed' | 'invalid' | (string & {}); constructor(code: string, message?: string, options?: { cause?: unknown }) }
+export class ApprovalRefused extends Error { reason: string; details: unknown; constructor(reason: string, details?: unknown) }
+export function createApprovalQueue(options?: ApprovalQueueOptions): ApprovalQueue;
+export function createMemoryApprovalStore(): ApprovalStore;
+
+// PostgreSQL implementations.
+export interface PgPool extends Queryable { connect(): Promise<Queryable & { release(): void }> }
+export function createPostgresLock(pool: PgPool, options?: { prefix?: string }): Lock;
+export function postgresScheduleSchema(options?: { table?: string }): string;
+export function createPostgresScheduleStore(db: Queryable, options?: { table?: string }): ScheduleStateStore;
+export function postgresApprovalSchema(options?: { table?: string }): string;
+export function createPostgresApprovalStore(db: Queryable, options?: { table?: string }): ApprovalStore;

@@ -4,6 +4,13 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Chaque package Astratra est versionné indépendamment.
 
 
+## 2026-10-16 — `@astratra/agent` 1.2.0 : ordonnanceur de tâches et file d'actions en attente d'approbation
+
+### Ajouté
+- `createScheduler` : tâches programmées à heure fixe (`daily`, `weekly` jour(s) + heure, `interval`) dans un fuseau IANA, changements d'heure gérés (une heure inexistante part après le trou, une heure double part une fois). Un verrou injectable par tâche (`createMemoryLock`, `createPostgresLock` sur `pg_try_advisory_lock`) empêche deux passages en parallèle, l'état étant relu sous le verrou. Passages manqués sautés au-delà de `maxLateMs`. Arrêt global `shouldStop` consulté avant et pendant le passage (`AbortSignal` transmis à la tâche), `abortAll()`, lancement manuel `run(id)`, état lisible `state()` (dernier passage, prochain, statut, résultat, erreur), `start()` / `stop()` explicites (jamais au chargement du module), horloge `now` injectable. Stockage de l'état : `createMemoryScheduleStore`, `createPostgresScheduleStore` + `postgresScheduleSchema`. `nextRun` et `zonedTime` exportées.
+- `createApprovalQueue` : file d'actions proposées (type, entrée, demandeur, expiration) décidées plus tard par une personne authentifiée par l'appelant (`authorize` facultatif). `approve` réserve l'action de façon atomique puis lance l'exécuteur fourni : une seule exécution même en concurrence, résultat enregistré, `idempotencyKey` transmise ; un refus (`ApprovalRefused`) ou une erreur de l'exécuteur remet l'action en attente avec la raison. `reject`, `list`, `expire` (aussi appelée à chaque opération), `beforeExecute` (dernier contrôle), `onEvent`. Stockage : `createMemoryApprovalStore`, `createPostgresApprovalStore` + `postgresApprovalSchema` (chaque transition est un `UPDATE` conditionnel). Erreurs `ApprovalError` (`not_found`, `expired`, `already_decided`, `forbidden`, `no_executor`, `execution_failed`, `invalid`).
+- Tests (fuseau et changement d'heure, verrou concurrent, passage manqué, arrêt pendant une tâche, approbations concurrentes, expiration, refus de l'exécuteur, PostgreSQL réel), types et `typecheck.ts`, README français et anglais.
+
 ## 2026-10-16 — correctifs : `@astratra/payments` 1.0.1, `@astratra/flags` 1.0.2, `@astratra/prerender` 1.0.1, `@astratra/privacy` 1.0.1, `@astratra/saas-kit` 2.0.1, `@astratra/repomap` 1.0.1, `@astratra/voice` 1.1.1, `create-astratra-app` 1.11.1
 
 ### Sécurité

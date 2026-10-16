@@ -42,18 +42,18 @@ export interface OptionsRequetes {
   maintenant?: () => number;
 }
 
-/** Remplace `cible.fetch` par une version suivie. Rend de quoi la remettre. */
+const VERIFICATIONS_DE_CONNEXION = /^(https?:\/\/)?(clients\d*\.google\.com\/generate_204|connectivitycheck\.(gstatic|android)\.com\/generate_204|www\.google\.com\/generate_204|captive\.apple\.com|www\.apple\.com\/library\/test\/success\.html|www\.msftconnecttest\.com|detectportal\.firefox\.com)/i;
+
 /**
  * Les vérifications de connexion des systèmes et des bibliothèques (« ai-je Internet ? ») : leur échec dit seulement
  * que le réseau manque, jamais une erreur de l'app (15/10/2026 : 83 fausses erreurs de Scolaris sur
  * clients3.google.com/generate_204). Elles restent dans le fil d'Ariane, sans signalement.
  */
-const VERIFICATIONS_DE_CONNEXION = /^(https?:\/\/)?(clients\d*\.google\.com\/generate_204|connectivitycheck\.(gstatic|android)\.com\/generate_204|www\.google\.com\/generate_204|captive\.apple\.com|www\.apple\.com\/library\/test\/success\.html|www\.msftconnecttest\.com|detectportal\.firefox\.com)/i;
-
 export function estVerificationDeConnexion(adresse: string): boolean {
   return VERIFICATIONS_DE_CONNEXION.test(adresse.trim());
 }
 
+/** Remplace `cible.fetch` par une version suivie. Rend de quoi la remettre. */
 export function suivreRequetes(centrale: Centrale, cible: { fetch?: unknown }, options: OptionsRequetes): Nettoyage {
   const originale = cible.fetch as ((entree: unknown, init?: { method?: string }) => Promise<{ status: number }>) | undefined;
   if (typeof originale !== 'function') return () => undefined;

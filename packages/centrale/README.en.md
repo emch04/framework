@@ -57,6 +57,17 @@ Only `cle`, `adresse` and `environnement` are required.
 | `strict` | No user, no precise device. |
 | `desactive` | Turns everything off: the instance does nothing. |
 | `debug` | Prints internal errors with `console.warn`. |
+| `robots` | Browser only. `false` by default: a browser driven by a robot (`navigator.webdriver`, i.e. Playwright, Selenium, Puppeteer) collects nothing. `true` to collect anyway (to test the collection itself). |
+
+### Automated tests: nothing is sent
+
+Since 1.5.0, `demarrer` from `/navigateur` returns an inactive instance (`centrale.actif === false`) when
+`navigator.webdriver` is `true`: end-to-end tests run against a deployment no longer fill the dashboard with false
+errors. To check the collection in a Playwright test, ask for it:
+
+```ts
+const centrale = demarrer({ ...config, robots: true });
+```
 
 ## The 6 entry points
 
@@ -65,7 +76,7 @@ Only `cle`, `adresse` and `environnement` are required.
 | `@astratra/centrale` | `creerCentrale(config, transport?)`: `erreur(e, extra?)`, `vue(nom)`, `usage(nom, props?)`, `ia({…})`, `session(etat)`, `miette(categorie, message, donnees?)`, `definirUtilisateur(id)`, `vider()`. The transport (fetch by default) can be injected. |
 | `@astratra/centrale/node` | `demarrer(config)`; `app.use(centrale.intergiciel())` first, `app.use(centrale.gestionnaireErreurs())` last. |
 | `@astratra/centrale/navigateur` | `demarrer(config)` when the web app loads. |
-| `@astratra/centrale/expo` | `demarrer({ ...config, plateforme: Platform.OS, version, build, miseAJour, os, appareil, appState: AppState })`, then `centrale.ecran(nom)` from navigation. |
+| `@astratra/centrale/expo` | `demarrer({ ...config, plateforme: Platform.OS, version, build, miseAJour, os, appareil, appState: AppState, stockage })`, then `centrale.ecran(nom)` from navigation. `stockage` (AsyncStorage, expo-file-system…) keeps the state between two launches. |
 | `@astratra/centrale/ia` | `mesurerAppelIA({ fournisseur, modele, outil?, jetons?, estRepli? }, () => call())`. |
 | `@astratra/centrale/conscience` | `creerConscienceCentrale({ adresse, jeton })`: settings of an AI's conscience, morning report, human decisions (section below). |
 
@@ -109,7 +120,8 @@ Errors are `ErreurConscience`: HTTP `statut` (or `null` when offline) and `code`
 - **Reinforced monitoring** (browser and Expo, `/vigilance`, each part can be switched off):
   - `fetch` requests in the breadcrumbs (template, status, duration); no response, 5xx, 408 and 429 reported (`RequeteSansReponse`, `RequeteEchouee`); sends to the Centrale and aborted requests are ignored (`requetes`);
   - `console.error` reported (once per message every 10 s), `console.warn` in the breadcrumbs (`console`);
-  - main-thread watchdog: an interface frozen for more than 2 s is reported (`AppBloquee`, an error beyond 5 s), paused in the background (`blocages`);
+  - connectivity checks made by operating systems and libraries (Google's `generate_204`, `captive.apple.com`, `msftconnecttest.com`, `detectportal.firefox.com`…) stay in the breadcrumbs but are never reported: their failure only means the network is missing (`estVerificationDeConnexion(adresse)`);
+  - main-thread watchdog: an interface frozen for more than 2 s is reported (`AppBloquee`, an error beyond 5 s), paused in the background and, on Expo, as soon as the state is `inactive` (control centre, app switcher, locking in progress) (`blocages`). A timer delay of more than 60 s is not a freeze but an **app pause** (phone locked, tab asleep: JavaScript was suspended before it learned it went to the background): only a breadcrumb « Pause de l'app N s », no error. This ceiling is set with `plafondMs` when calling `surveillerBlocages(centrale, { plafondMs })` from `@astratra/centrale/vigilance`;
   - Expo: unhandled promise rejections (Hermes, `promesses`), iOS memory warning (`MemoireSaturee`, at most once a minute), foreground, background and launch in the breadcrumbs;
   - with a `stockage`: breadcrumbs, screen and open session are kept as they change; on the next launch, a session left open is closed as `anormal` (or `plantage` after a fatal error), and a close while in the foreground is reported (`FermetureInattendue`, with breadcrumbs and screen). Browser: only for apps used in a single tab.
 - **AI**: provider, model, tool, duration, tokens, outcome (`ok`, `erreur`, `quota`, `repli`). **Never the content.**

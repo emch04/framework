@@ -70,6 +70,17 @@ const config = {
 | `strict` | Ni utilisateur, ni appareil précis. |
 | `desactive` | Coupe tout : l'instance ne fait rien. |
 | `debug` | Affiche les erreurs internes avec `console.warn`. |
+| `robots` | Navigateur seulement. `false` par défaut : un navigateur piloté par un robot (`navigator.webdriver`, c'est-à-dire Playwright, Selenium, Puppeteer) ne collecte rien. `true` pour collecter quand même (tester la collecte elle-même). |
+
+### Tests automatisés : rien n'est envoyé
+
+Depuis la 1.5.0, `demarrer` de `/navigateur` rend une instance inactive (`centrale.actif === false`) quand
+`navigator.webdriver` vaut `true` : les tests de bout en bout lancés contre un déploiement ne remplissent plus le
+tableau de bord de fausses erreurs. Pour vérifier la collecte dans un test Playwright, demande-la :
+
+```ts
+const centrale = demarrer({ ...config, robots: true });
+```
 
 ## Les 6 entrées
 
@@ -146,7 +157,8 @@ Les erreurs sont des `ErreurConscience` : `statut` HTTP (ou `null` hors ligne) e
 - **Surveillance renforcée** (navigateur et Expo, `/vigilance`, désactivable option par option) :
   - requêtes `fetch` dans le fil d'Ariane (gabarit, statut, durée) ; pas de réponse, 5xx, 408 et 429 signalés (`RequeteSansReponse`, `RequeteEchouee`) ; les envois à la Centrale et les annulations ne comptent pas (`requetes`) ;
   - `console.error` signalé (une fois par message toutes les 10 s), `console.warn` dans le fil d'Ariane (`console`) ;
-  - gardien du fil principal : interface bloquée plus de 2 s signalée (`AppBloquee`, erreur au-delà de 5 s), en pause en arrière-plan (`blocages`) ;
+  - les vérifications de connexion des systèmes et des bibliothèques (`generate_204` de Google, `captive.apple.com`, `msftconnecttest.com`, `detectportal.firefox.com`…) restent dans le fil d'Ariane mais ne sont jamais signalées : leur échec dit seulement que le réseau manque (`estVerificationDeConnexion(adresse)`) ;
+  - gardien du fil principal : interface bloquée plus de 2 s signalée (`AppBloquee`, erreur au-delà de 5 s), en pause en arrière-plan et, sur Expo, dès l'état `inactive` (centre de contrôle, sélecteur d'apps, verrouillage en cours) (`blocages`). Un retard de la minuterie de plus de 60 s n'est pas un blocage mais une **pause de l'app** (téléphone verrouillé, onglet endormi : JavaScript a été suspendu avant d'apprendre le passage en arrière-plan) : seulement une miette « Pause de l'app N s », sans erreur. Ce plafond se règle par `plafondMs` en appelant `surveillerBlocages(centrale, { plafondMs })` de `@astratra/centrale/vigilance` ;
   - Expo : promesses rejetées sans `catch` (Hermes, `promesses`), alerte mémoire d'iOS (`MemoireSaturee`, au plus une fois par minute), premier plan, arrière-plan et lancement dans le fil d'Ariane ;
   - avec un `stockage` : le fil d'Ariane, l'écran et la session ouverte sont gardés au fil de l'eau ; au lancement suivant, une session restée ouverte est close « anormale » (ou « plantage » après une erreur fatale), et une fermeture au premier plan est signalée (`FermetureInattendue`, avec le fil d'Ariane et l'écran). Navigateur : à réserver aux apps ouvertes dans un seul onglet.
 - **IA** : fournisseur, modèle, outil, durée, jetons, résultat (`ok`, `erreur`, `quota`, `repli`). **Jamais le contenu.**

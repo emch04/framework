@@ -133,7 +133,7 @@ est dans [CHANGELOG.md](CHANGELOG.md).
 | Paquet | Version | Rôle |
 |---|---|---|
 | [`@astratra/payments`](packages/payments/README.md) | 1.1.0 | Tuyau des webhooks de paiement : signature sur corps brut, protection contre les rejeux, réponses adaptées aux prestataires |
-| [`@astratra/shipping`](packages/shipping/README.md) | 1.0.0 | Étiquettes d'expédition sans les pièges : contrat de transporteur, adaptateur Sendcloud (étiquettes, points relais, suivi), webhook de suivi signé et protégé contre les rejeux, mode test sans frais |
+| [`@astratra/shipping`](packages/shipping/README.md) | 1.1.0 | Étiquettes d'expédition sans les pièges : contrat de transporteur, adaptateur Sendcloud (étiquettes, points relais, suivi), webhook de suivi signé et protégé contre les rejeux, mode test sans frais |
 | [`@astratra/ledger`](packages/ledger/README.md) | 1.0.0 | Comptabilité en partie double : écritures équilibrées et immuables, numérotation sans trou, clôture, rapprochement, plans OHADA |
 | [`@astratra/booking`](packages/booking/README.md) | 1.0.0 | Moteur de créneaux sans base imposée : disponibilités, exceptions, fuseaux, capacité, réservation atomique par magasin injecté |
 | [`@astratra/collab`](packages/collab/README.md) | 1.0.0 | Édition collaborative en temps réel : serveur Hocuspocus branché sur ton authentification, instantanés Yjs, versions nommées |

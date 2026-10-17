@@ -64,12 +64,28 @@ const envoi = await carrier.createLabel({
 // envoi.label : le PDF de l'étiquette, revenu avec l'envoi (un seul colis) — pas de seconde demande
 
 const { content } = await carrier.downloadLabel({ parcelId: envoi.parcelId, format: 'a4' }); // A4, A5 ou A6 (par défaut)
+// Pas de « commencer à la case N » sur une planche A4 : l'API v3 de Sendcloud ne le propose pas.
 await carrier.cancelLabel({ shipmentId: envoi.shipmentId }); // { status: 'cancelled' | 'requested' }
 ```
 
 - **L'expéditeur** (`sender`) : l'identifiant d'une adresse enregistrée chez
   Sendcloud avec son pays, ou l'adresse complète (`name`, `line1`, `city`,
   `postalCode`, `country`…). Sans lui, `status()` signale `sender` manquant.
+- **Réglages relus à chaque appel** (1.1.0) : `sender` et `testMode` acceptent
+  une valeur ou une fonction (éventuellement asynchrone), comme les clés. La
+  boutique change son adresse d'expédition ou passe en mode test depuis son
+  administration, sans recréer le transporteur :
+
+  ```js
+  const carrier = createSendcloudCarrier({
+    publicKey, secretKey,
+    sender: async () => (await lireReglages()).adresseExpedition, // { addressId, country } ou l'adresse complète
+    testMode: async () => (await lireReglages()).modeTest
+  });
+  ```
+
+  `carrier.testMode` vaut le booléen donné, ou `null` quand c'est une fonction :
+  lis alors `(await carrier.status()).testMode`.
 - **Les options d'expédition** sont des codes stables (`colissimo:home/signature`,
   `mondial_relay:point`…), jamais des numéros qui changent. `priceCents` est le
   devis de Sendcloud : tes prix restent les tiens.
@@ -154,7 +170,25 @@ app.post('/api/transporteurs/sendcloud/webhook', express.raw({ type: 'applicatio
   (`classifySendcloudStatus`). Une tentative de livraison ratée ou un retard
   reste `picked_up` : ce n'est pas un incident définitif.
 - Les notifications peuvent arriver dans le désordre : `timestamp` dit quand le
-  statut a changé, pour ne pas écraser un statut récent par un ancien.
+  statut a changé, **toujours en millisecondes** (1.1.0 : secondes, millisecondes
+  ou date ISO sont ramenées en millisecondes), pour ne pas écraser un statut
+  récent par un ancien :
+
+  ```js
+  onEvent: async (colis) => {
+    await pool.query(
+      `UPDATE colis SET statut = $2, statut_le = to_timestamp($3 / 1000.0)
+        WHERE id = $1 AND (statut_le IS NULL OR statut_le < to_timestamp($3 / 1000.0))`,
+      [colis.parcelId, colis.message, colis.timestamp]
+    );
+  }
+  ```
+- **Purge de la trace des notifications** (1.1.0) : avec un journal qui sait
+  purger (`createPostgresEventLog` de `@astratra/payments`), les événements
+  traités de plus de 90 jours sont effacés, au plus une fois par jour, après la
+  réponse à Sendcloud (jamais sur son chemin ; un échec est seulement journalisé).
+  Réglable : `pruneOlderThanMs` (`false` pour le faire toi-même) et
+  `pruneEveryMs`. `webhook.settled()` attend une purge en cours (arrêt propre).
 - La signature utilise la « Webhook Signature Key » de l'intégration
   (`webhookSecret`) quand elle existe, sinon la clé secrète.
 

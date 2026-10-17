@@ -260,3 +260,34 @@ describe('statuses and messages', () => {
     expect(messageFor('nonsense', 'en')).toBe(messageFor(CODES.UNEXPECTED_RESPONSE, 'en'));
   });
 });
+
+describe('sender and test mode read on every call (1.1.0)', () => {
+  test('a sender function is read on every call: an address change needs no new carrier', async () => {
+    let sender = { addressId: 1, country: 'FR' };
+    const { fetch, calls } = fakeSendcloud([
+      ['/shipping-options', { reply: { json: OPTIONS } }],
+      ['/shipments/announce', { reply: { status: 201, json: SHIPMENT() } }]
+    ]);
+    const carrier = createSendcloudCarrier({ publicKey: 'p', secretKey: 's', sender: async () => sender, fetch, ...fast });
+    await carrier.createLabel({ orderNumber: 'R', recipient: RECIPIENT, weightGrams: 500, method: { id: 'x' } });
+    sender = { addressId: 2, country: 'BE' };
+    await carrier.createLabel({ orderNumber: 'R2', recipient: RECIPIENT, weightGrams: 500, method: { id: 'x' } });
+    await carrier.shippingMethods({ country: 'FR', weightGrams: 500 });
+    expect(calls.map((c) => c.body.from_address)).toEqual([{ sender_address_id: 1 }, { sender_address_id: 2 }, { country_code: 'BE' }]);
+    sender = null;
+    expect((await carrier.status()).missing).toEqual(['sender']);
+  });
+
+  test('a testMode function is read on every call; the testMode getter is null for a function', async () => {
+    let test = false;
+    const { fetch, calls } = fakeSendcloud([['/shipments/announce', { reply: { status: 201, json: SHIPMENT() } }]]);
+    const carrier = createSendcloudCarrier({ ...KEYS, testMode: () => test, fetch, ...fast });
+    expect(carrier.testMode).toBeNull();
+    expect(createSendcloudCarrier({ ...KEYS, testMode: true }).testMode).toBe(true);
+    const first = await carrier.createLabel({ orderNumber: 'R', recipient: RECIPIENT, weightGrams: 500, method: { id: 'colissimo:home/signature' } });
+    test = true;
+    const second = await carrier.createLabel({ orderNumber: 'R2', recipient: RECIPIENT, weightGrams: 500, method: { id: 'colissimo:home/signature' } });
+    expect(calls.map((c) => c.body.ship_with.properties.shipping_option_code)).toEqual(['colissimo:home/signature', 'sendcloud:letter']);
+    expect([first.testMode, second.testMode, (await carrier.status()).testMode]).toEqual([false, true, true]);
+  });
+});

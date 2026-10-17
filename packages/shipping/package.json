@@ -1,6 +1,6 @@
 {
   "name": "@astratra/shipping",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Shipping labels without the traps: a carrier contract, a Sendcloud adapter (labels, service points, tracking), signed tracking webhooks with replay protection, and a free test mode.",
   "engines": {
     "node": ">=20"

@@ -3,6 +3,21 @@
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Chaque package Astratra est versionné indépendamment.
 
+## 2026-10-17 — `@astratra/shipping` 1.1.0 : réglages relus à chaque appel, heures en millisecondes, purge du journal
+
+Manques relevés en branchant Boutique Roro sur la 1.0.0.
+
+### Ajouté
+- `createSendcloudCarrier` : `sender` et `testMode` acceptent une valeur ou une fonction (éventuellement asynchrone) relue à chaque appel, comme les clés : l'adresse d'expédition et le mode test changent sans recréer le transporteur. `carrier.testMode` vaut le booléen donné, ou `null` pour une fonction (`status().testMode` donne la valeur du moment).
+- `createCarrierWebhook` : purge de la trace des notifications quand le journal sait purger (`createPostgresEventLog`) : événements traités de plus de 90 jours effacés au plus une fois par jour, après la réponse et jamais sur son chemin (`pruneOlderThanMs`, `false` pour désactiver ; `pruneEveryMs` ; `settled()` attend une purge en cours ; un échec est journalisé, jamais renvoyé à Sendcloud).
+- `toMilliseconds(valeur)` exporté.
+
+### Corrigé
+- `timestamp` des événements : toujours en millisecondes (secondes, millisecondes, chaîne numérique ou date ISO ramenées en millisecondes ; nul, négatif ou illisible : `null`). Le README annonçait des secondes et les tests utilisaient des millisecondes : une comparaison « un statut ancien n'écrase pas un récent » est maintenant sûre.
+
+### Documentation
+- `downloadLabel` : pas de « commencer à la case N » sur une planche A4, l'API v3 de Sendcloud ne le propose pas. Exemple SQL pour ne garder que le statut le plus récent.
+
 ## 2026-10-17 — `@astratra/shipping` 1.0.0, `@astratra/payments` 1.1.0, `create-astratra-app` 1.11.2 : étiquettes d'expédition, journal d'événements PostgreSQL
 
 ### Ajouté

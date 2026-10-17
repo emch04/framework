@@ -9,6 +9,7 @@ import {
   createCarrierWebhook,
   SIGNATURE_HEADER,
   TEST_SHIPPING_OPTION,
+  toMilliseconds,
   type ParcelEvent,
   type ShippingMethod,
   type Label,
@@ -19,8 +20,8 @@ const carrier: SendcloudCarrier = createSendcloudCarrier({
   publicKey: 'pub',
   secretKey: async () => 'secret',
   webhookSecret: () => 'webhook-key',
-  sender: { addressId: 12, country: 'FR' },
-  testMode: true,
+  sender: async () => ({ addressId: 12, country: 'FR' }),
+  testMode: () => false,
   servicePointsCacheSeconds: false,
   retry: { baseDelayMs: 0 },
   breaker: { failureThreshold: 3 }
@@ -71,4 +72,12 @@ const webhook = createCarrierWebhook({
   onIncident: () => undefined
 });
 void webhook.receive({ payload: Buffer.from('{}'), headers: {} });
+void webhook.settled();
+const pruned = createCarrierWebhook({ carrier, pruneOlderThanMs: false, pruneEveryMs: 3600_000, now: () => 0 });
+void pruned;
+const ms: number | null = toMilliseconds(1760000000);
+void ms;
+const fixed: boolean | null = carrier.testMode;
+void fixed;
+void createSendcloudCarrier({ publicKey: 'p', secretKey: 's', sender: { name: 'Shop', line1: '1 rue', city: 'Lyon', postalCode: '69001', country: 'FR' }, testMode: true });
 void createPostgresEventLog;

@@ -3,6 +3,16 @@
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Chaque package Astratra est versionné indépendamment.
 
+## 2026-10-17 — `@astratra/shipping` 1.0.0, `@astratra/payments` 1.1.0, `create-astratra-app` 1.11.2 : étiquettes d'expédition, journal d'événements PostgreSQL
+
+### Ajouté
+- `@astratra/shipping` 1.0.0, nouveau paquet, tiré du code des transporteurs de Boutique Roro et rendu générique : contrat `Carrier` (méthodes d'expédition, création, téléchargement et annulation d'étiquette, points relais, signature, lecture des événements) et adaptateur Sendcloud (API REST v2) `createSendcloudCarrier` : clés en option (valeur ou fonction relue à chaque appel), `fetch` injectable, disjoncteur et relances de `@astratra/resilience` sur les seules lectures (une étiquette n'est jamais créée deux fois), un 4xx n'est pas une panne ; points relais multi-transporteurs (codes Sendcloud, rayon, nombre, tri par distance, cache de 2 minutes) ; correspondance des statuts de suivi (`classifySendcloudStatus` : `picked_up`, `delivered`, `incident`) ; erreurs `ShippingError` à code stable, sans corps ni clé, phrases fr/en par `messageFor` (catalogue de `@astratra/i18n-server`) ; mode test sur la « lettre non affranchie » de Sendcloud, cherchée par son nom ; `createCarrierWebhook` sur le tuyau de `@astratra/payments` (signature HMAC-SHA256 du corps brut en temps constant, identifiant = empreinte SHA-256 du corps, réservation atomique, libération en cas d'échec). Tests sans réseau (faux Sendcloud), README en/fr, types.
+- `@astratra/payments` 1.1.0 : `createPostgresEventLog(pool, { table, claimTtlMs })` et `postgresEventLogSchema()`, le journal des événements partagé par toutes les instances (même contrat que le journal en mémoire : réservation atomique par `INSERT … ON CONFLICT`, expiration d'une réservation inachevée, `release` qui n'annule jamais un événement traité), plus `prune(olderThanMs)` ; sans dépendance à `pg`. Contrat de tests commun aux deux journaux, joué sur une vraie base avec `PAYMENTS_TEST_DATABASE_URL`.
+
+### Modifié
+- `create-astratra-app` 1.11.2 : les projets générés avec la brique paiements demandent `@astratra/payments` ^1.1.0.
+- README (anglais et français) : 45 paquets, tableau des versions à jour.
+
 ## 2026-10-16 — `@astratra/conscience` 1.3.0 : politique d'outils, budget calendaire, arrêt d'urgence des outils
 
 ### Ajouté

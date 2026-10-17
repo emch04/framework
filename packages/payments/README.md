@@ -189,6 +189,30 @@ avertissement est journalisé à la création ; ajoute `claim` et `release`.
 en production multi-instances** : chaque processus a sa propre mémoire, donc un
 rejeu qui arrive sur l'autre passe. Utilise un store partagé.
 
+### Le journal PostgreSQL (1.1.0)
+
+`createPostgresEventLog(pool, { table, claimTtlMs })` tient le même contrat dans
+une table partagée par toutes les instances : `claim` est l'instruction
+`INSERT … ON CONFLICT` ci-dessus, une réservation inachevée expire après
+`claimTtlMs` (15 min par défaut), `release` ne libère qu'une réservation en
+cours, jamais un événement déjà traité.
+
+```js
+const { Pool } = require('pg');
+const { createPostgresEventLog, postgresEventLogSchema } = require('@astratra/payments');
+
+const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+await pool.query(postgresEventLogSchema({ table: 'webhook_events' })); // une fois (migration)
+const eventLog = createPostgresEventLog(pool, { table: 'webhook_events' });
+
+// De temps en temps : les événements traités de plus de 90 jours ne reviendront plus.
+await eventLog.prune(90 * 24 * 3600_000);
+```
+
+Le paquet ne dépend pas de `pg` : `pool` est n'importe quel objet avec
+`query(texte, paramètres)`. Le nom de table (éventuellement `schéma.table`) est
+vérifié et cité ; les identifiants d'événements passent toujours en paramètres.
+
 Un événement **en échec n'est pas enregistré** : sa réservation est libérée et
 la relance doit pouvoir fonctionner. Un événement déclaré `unrelated` non plus.
 Un type d'événement sans handler ne prend aucune réservation.
@@ -206,6 +230,11 @@ Un type d'événement sans handler ne prend aucune réservation.
 ```bash
 npm test --workspace @astratra/payments
 ```
+
+Les tests du journal PostgreSQL tournent sur une vraie base quand
+`PAYMENTS_TEST_DATABASE_URL` désigne une base dont le nom finit par `_test`
+(sinon ils sont sautés) : le même contrat que le journal en mémoire, plus deux
+instances sur une même table et la purge.
 
 Un test traverse une vraie pile Express avec CSRF et analyseur JSON, et vérifie
 que les octets signés arrivent intacts — puis que sans l'exemption, le CSRF

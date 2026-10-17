@@ -94,3 +94,17 @@ const accountId: string = readEntityId({ _id: 'acct-1' });
 const renewal: Date | null = readRenewalDate(1790000000);
 
 void [action, decision, payUrl, accountId, renewal, flow.canPay(accountId), flow.isConfirmed('stripe', {}), flow.intervalMs];
+
+import { createPostgresEventLog, postgresEventLogSchema } from './src';
+const pgLog = createPostgresEventLog({ query: async () => ({ rows: [], rowCount: 0 }) }, { table: 'shop.webhook_events', claimTtlMs: 60_000 });
+async function exercisePostgresLog() {
+  const claimed: boolean = await pgLog.claim('evt', { type: 'x' });
+  await pgLog.release('evt');
+  await pgLog.record('evt');
+  const seen: boolean = await pgLog.seen('evt');
+  const pruned: number = await pgLog.prune(90 * 24 * 3600_000);
+  void claimed; void seen; void pruned;
+  const sql: string = postgresEventLogSchema({ table: 'webhook_events' });
+  void sql;
+}
+void exercisePostgresLog;

@@ -64,6 +64,29 @@ export function createMemoryEventLog(options?: {
   now?: () => number;
 }): EventLog & { seen(eventId: string | number): Promise<boolean>; size(): number };
 
+/** Anything with query(text, params): a pg Pool, a pg client. */
+export interface QueryablePool {
+  query(text: string, params?: unknown[]): Promise<{ rows: unknown[]; rowCount?: number | null }>;
+}
+
+/** The CREATE TABLE IF NOT EXISTS behind createPostgresEventLog (default table: webhook_events). */
+export function postgresEventLogSchema(options?: { table?: string }): string;
+
+/**
+ * Event log in PostgreSQL, shared by every instance: same contract as the memory log, claim is
+ * one INSERT … ON CONFLICT on the primary key, an unfinished claim expires after claimTtlMs.
+ */
+export function createPostgresEventLog(pool: QueryablePool, options?: {
+  table?: string;
+  /** How long an unfinished claim blocks retries. Default 15 min. */
+  claimTtlMs?: number;
+  now?: () => number;
+}): EventLog & {
+  seen(eventId: string | number): Promise<boolean>;
+  /** Deletes handled events older than olderThanMs; returns how many. */
+  prune(olderThanMs: number): Promise<number>;
+};
+
 export interface WebhookLogger {
   info?(message: string): void;
   warn?(message: string): void;

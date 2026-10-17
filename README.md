@@ -90,7 +90,7 @@ options and what it does not do. The table below links to them.
 
 ## Packages
 
-The 44 packages in [`packages/`](packages/) are all published under the
+The 45 packages in [`packages/`](packages/) are all published under the
 `@astratra` scope, except `create-astratra-app`, which is published under its
 own name. Versions are the ones in each `package.json`; the history of every
 package is in [CHANGELOG.md](CHANGELOG.md).
@@ -127,7 +127,8 @@ package is in [CHANGELOG.md](CHANGELOG.md).
 
 | Package | Version | What it does |
 |---|---|---|
-| [`@astratra/payments`](packages/payments/README.md) | 1.0.1 | Payment webhook pipeline: raw-body signature checks, replay protection, provider-safe responses |
+| [`@astratra/payments`](packages/payments/README.md) | 1.1.0 | Payment webhook pipeline: raw-body signature checks, replay protection, provider-safe responses |
+| [`@astratra/shipping`](packages/shipping/README.md) | 1.0.0 | Shipping labels without the traps: carrier contract, Sendcloud adapter (labels, service points, tracking), signed tracking webhook with replay protection, free test mode |
 | [`@astratra/ledger`](packages/ledger/README.md) | 1.0.0 | Double-entry accounting: balanced, immutable entries, sequential numbering, period closing, reconciliation, OHADA charts of accounts |
 | [`@astratra/booking`](packages/booking/README.md) | 1.0.0 | Appointment slot engine without a database: availability, exceptions, time zones, capacity, atomic booking through an injected store |
 | [`@astratra/collab`](packages/collab/README.md) | 1.0.0 | Real-time collaborative editing: Hocuspocus server wired to your authentication, Yjs snapshots, named versions |
@@ -153,7 +154,7 @@ package is in [CHANGELOG.md](CHANGELOG.md).
 | [`@astratra/native`](packages/native/README.md) | 1.0.0 | Mobile plumbing: keychain session, biometric gate, push registration, payment return |
 | [`@astratra/native-ui`](packages/native-ui/README.md) | 1.2.0 | UI kit for React Native and Expo, with pure logic testable in Node, 👍/👎 feedback bar |
 | [`@astratra/app-version`](packages/app-version/README.md) | 1.0.0 | Announcements of new mobile builds: public version route, one announcement per version |
-| [`create-astratra-app`](packages/create-astratra-app/README.md) | 1.11.1 | Project generator: full stack, API only, or Expo app, with optional building blocks |
+| [`create-astratra-app`](packages/create-astratra-app/README.md) | 1.11.2 | Project generator: full stack, API only, or Expo app, with optional building blocks |
 
 ### Monitoring and tooling
 

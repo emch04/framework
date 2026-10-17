@@ -1,0 +1,43 @@
+{
+  "name": "@astratra/shipping",
+  "version": "1.0.0",
+  "description": "Shipping labels without the traps: a carrier contract, a Sendcloud adapter (labels, service points, tracking), signed tracking webhooks with replay protection, and a free test mode.",
+  "engines": {
+    "node": ">=20"
+  },
+  "main": "src/index.js",
+  "types": "src/index.d.ts",
+  "type": "commonjs",
+  "files": [
+    "src"
+  ],
+  "scripts": {
+    "test": "jest"
+  },
+  "jest": {
+    "testMatch": [
+      "**/__tests__/**/*.test.js"
+    ]
+  },
+  "keywords": [
+    "astratra",
+    "shipping",
+    "sendcloud",
+    "labels",
+    "service-points",
+    "tracking",
+    "webhook"
+  ],
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
+  "dependencies": {
+    "@astratra/i18n-server": "^1.0.0",
+    "@astratra/payments": "^1.1.0",
+    "@astratra/resilience": "^1.1.0"
+  },
+  "devDependencies": {
+    "jest": "30.4.2"
+  }
+}

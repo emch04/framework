@@ -40,6 +40,7 @@ ORDER=(
   "@astratra/conscience"
   "@astratra/models"
   "@astratra/i18n-server"
+  "@astratra/shipping"
   "@astratra/pdf"
   "@astratra/loyalty"
   "@astratra/wallet"

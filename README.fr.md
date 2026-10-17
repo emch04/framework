@@ -95,7 +95,7 @@ liens.
 
 ## Paquets
 
-Les 44 paquets de [`packages/`](packages/) sont publiés sous le périmètre
+Les 45 paquets de [`packages/`](packages/) sont publiés sous le périmètre
 `@astratra`, sauf `create-astratra-app`, publié sous son propre nom. Les
 versions sont celles de chaque `package.json` ; l'historique de chaque paquet
 est dans [CHANGELOG.md](CHANGELOG.md).
@@ -132,7 +132,8 @@ est dans [CHANGELOG.md](CHANGELOG.md).
 
 | Paquet | Version | Rôle |
 |---|---|---|
-| [`@astratra/payments`](packages/payments/README.md) | 1.0.1 | Tuyau des webhooks de paiement : signature sur corps brut, protection contre les rejeux, réponses adaptées aux prestataires |
+| [`@astratra/payments`](packages/payments/README.md) | 1.1.0 | Tuyau des webhooks de paiement : signature sur corps brut, protection contre les rejeux, réponses adaptées aux prestataires |
+| [`@astratra/shipping`](packages/shipping/README.md) | 1.0.0 | Étiquettes d'expédition sans les pièges : contrat de transporteur, adaptateur Sendcloud (étiquettes, points relais, suivi), webhook de suivi signé et protégé contre les rejeux, mode test sans frais |
 | [`@astratra/ledger`](packages/ledger/README.md) | 1.0.0 | Comptabilité en partie double : écritures équilibrées et immuables, numérotation sans trou, clôture, rapprochement, plans OHADA |
 | [`@astratra/booking`](packages/booking/README.md) | 1.0.0 | Moteur de créneaux sans base imposée : disponibilités, exceptions, fuseaux, capacité, réservation atomique par magasin injecté |
 | [`@astratra/collab`](packages/collab/README.md) | 1.0.0 | Édition collaborative en temps réel : serveur Hocuspocus branché sur ton authentification, instantanés Yjs, versions nommées |
@@ -158,7 +159,7 @@ est dans [CHANGELOG.md](CHANGELOG.md).
 | [`@astratra/native`](packages/native/README.md) | 1.0.0 | Plomberie mobile : session dans le trousseau, verrou biométrique, enregistrement des notifications, retour de paiement |
 | [`@astratra/native-ui`](packages/native-ui/README.md) | 1.2.0 | Kit d'interface React Native et Expo, dont la logique pure se teste dans Node, barre de retours 👍/👎 |
 | [`@astratra/app-version`](packages/app-version/README.md) | 1.0.0 | Annonces de nouvelles versions d'applications mobiles : route publique des versions, une annonce par version |
-| [`create-astratra-app`](packages/create-astratra-app/README.md) | 1.11.1 | Générateur de projets : pile complète, API seule ou application Expo, briques optionnelles |
+| [`create-astratra-app`](packages/create-astratra-app/README.md) | 1.11.2 | Générateur de projets : pile complète, API seule ou application Expo, briques optionnelles |
 
 ### Supervision et outillage
 

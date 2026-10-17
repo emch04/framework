@@ -30,7 +30,7 @@ npm install @astratra/shipping
 - **« Étiquette créée » n'est pas « colis pris en charge ».** Seul un scan du
   transporteur fait passer un colis à `picked_up`.
 
-## Le transporteur Sendcloud
+## Le transporteur Sendcloud (API v3)
 
 ```js
 const { createSendcloudCarrier, messageFor } = require('@astratra/shipping');
@@ -38,56 +38,62 @@ const { createSendcloudCarrier, messageFor } = require('@astratra/shipping');
 const carrier = createSendcloudCarrier({
   publicKey: () => coffre.lire('SENDCLOUD_PUBLIC_KEY'),
   secretKey: () => coffre.lire('SENDCLOUD_SECRET_KEY'),
+  webhookSecret: () => coffre.lire('SENDCLOUD_WEBHOOK_KEY'), // si l'intégration a une « Webhook Signature Key »
+  sender: { addressId: 12345, country: 'FR' },              // adresse d'expédition enregistrée chez Sendcloud
   testMode: process.env.NODE_ENV !== 'production'
 });
 
-await carrier.status(); // { configured, missing: ['secretKey'], testMode } — jamais une valeur
+await carrier.status(); // { configured, missing: ['secretKey', 'sender'], testMode } — jamais une valeur
 
-const methodes = await carrier.shippingMethods({ country: 'FR', weightGrams: 1250 });
-// [{ id, name, carrier, servicePointRequired, priceCents }]
+const options = await carrier.shippingMethods({ country: 'FR', postalCode: '69003', weightGrams: 1250 });
+// [{ id: 'colissimo:home/signature', name, carrier, servicePointRequired, priceCents }]
 
 const points = await carrier.servicePoints({
   country: 'FR', postalCode: '13002', carriers: ['mondial_relay', 'colissimo'], limit: 10
 });
-const methodesRelais = await carrier.shippingMethods({ country: 'FR', weightGrams: 1250, servicePointId: points[0].id });
+const optionsRelais = await carrier.shippingMethods({ country: 'FR', weightGrams: 1250, servicePointId: points[0].id });
 
-const etiquette = await carrier.createLabel({
+const envoi = await carrier.createLabel({
   orderNumber: 'R-1042',
+  reference: 'commande-R-1042', // unique : la renvoyer rend le premier envoi, sans racheter d'étiquette
   recipient: { name: 'Awa Diallo', line1: '12 rue des Lilas', city: 'Lyon', postalCode: '69003', country: 'FR', email: 'awa@example.com' },
   weightGrams: 1250,
-  method: methodes[0]
+  method: options[0]
 });
-// { parcelId, trackingNumber, trackingUrl, carrier, service, testMode }
+// { shipmentId, parcelId, trackingNumber, trackingUrl, carrier, service, label, alreadyExisted, testMode }
+// envoi.label : le PDF de l'étiquette, revenu avec l'envoi (un seul colis) — pas de seconde demande
 
-const { content } = await carrier.downloadLabel({ parcelId: etiquette.parcelId, format: 'a6' }); // PDF
-await carrier.cancelLabel({ parcelId: etiquette.parcelId }); // { status: 'cancelled' | 'requested' }
+const { content } = await carrier.downloadLabel({ parcelId: envoi.parcelId, format: 'a4' }); // A4, A5 ou A6 (par défaut)
+await carrier.cancelLabel({ shipmentId: envoi.shipmentId }); // { status: 'cancelled' | 'requested' }
 ```
 
-- `servicePoints` : par code postal et/ou ville, ou par coordonnées ; un ou
-  plusieurs transporteurs (codes Sendcloud : `mondial_relay`, `colissimo`,
-  `chronopost`…), tous par défaut ; rayon (`radiusMeters`, 10 km) et nombre
-  (`limit`, 15) en option ; du plus proche au plus loin. Les résultats sont
-  gardés 2 minutes (`servicePointsCacheSeconds`, `false` pour couper).
-- `priceCents` est le tarif indicatif donné par Sendcloud : tes prix restent les
-  tiens.
-- Une annulation `requested` veut dire que Sendcloud a transmis la demande au
-  transporteur, qui peut encore la refuser ; un 410 est déjà annulé.
+- **L'expéditeur** (`sender`) : l'identifiant d'une adresse enregistrée chez
+  Sendcloud avec son pays, ou l'adresse complète (`name`, `line1`, `city`,
+  `postalCode`, `country`…). Sans lui, `status()` signale `sender` manquant.
+- **Les options d'expédition** sont des codes stables (`colissimo:home/signature`,
+  `mondial_relay:point`…), jamais des numéros qui changent. `priceCents` est le
+  devis de Sendcloud : tes prix restent les tiens.
+- **La référence** (`reference`, unique par compte) protège contre le double
+  achat : la même référence annoncée deux fois rend le premier envoi
+  (`alreadyExisted: true`).
+- **Un refus du transporteur** (code postal invalide…) revient de Sendcloud avec
+  un statut 201 et une erreur : le paquet en fait une erreur `rejected`.
+- **L'annulation** porte sur l'envoi (`shipmentId`). `requested` : Sendcloud
+  surveille l'envoi et l'annule s'il ne bouge pas. Refusée si le colis est livré
+  ou annoncé depuis plus de 42 jours ; « déjà en cours d'annulation » compte
+  comme annulé.
+- `servicePoints` : par code postal et/ou ville, ou par coordonnées ; les
+  transporteurs choisis (codes Sendcloud), sinon ceux activés sur ton
+  intégration ; rayon (`radiusMeters`, 10 km, de 100 m à 50 km) et nombre
+  (`limit`, 15) ; du plus proche au plus loin ; gardés 2 minutes
+  (`servicePointsCacheSeconds`, `false` pour couper).
 
 ### Mode test
 
-`testMode: true` crée chaque étiquette sur la méthode « Unstamped letter »
-(lettre non affranchie) de Sendcloud, cherchée **par son nom** dans les méthodes
-du pays : son identifiant change d'un compte à l'autre et Sendcloud demande de
-ne pas le garder. Rien n'est posté et aucun port n'est facturé (Sendcloud peut
-compter des frais de traitement : voir sa documentation). Le point relais
-demandé est ignoré en mode test, et `label.testMode` vaut `true`.
-
-### API v2 et v3
-
-L'adaptateur utilise l'API REST v2 de Sendcloud, celle de Boutique Roro en
-production. Sendcloud la passe en maintenance et conseille la v3 aux nouveaux
-comptes (`ship_with`, code `sendcloud:letter` pour la lettre de test) : un
-adaptateur v3 pourra s'ajouter derrière le même contrat.
+`testMode: true` crée chaque étiquette avec l'option `sendcloud:letter` (lettre
+non affranchie) : rien n'est posté et aucun port n'est facturé (Sendcloud peut
+compter des frais de traitement : voir sa documentation). L'option et le point
+relais demandés sont ignorés, et `testMode` vaut `true` dans la réponse.
 
 ## Les erreurs
 
@@ -137,7 +143,7 @@ const webhook = createCarrierWebhook({
 app.post('/api/transporteurs/sendcloud/webhook', express.raw({ type: 'application/json', limit: '1mb' }), webhook.middleware);
 ```
 
-- En-tête `sendcloud-signature` : HMAC-SHA256 du corps brut avec la clé secrète.
+- En-tête `sendcloud-signature` : HMAC-SHA256 du corps brut, en hexadécimal.
 - Signature fausse, corps déjà analysé ou illisible : **400**, pour que Sendcloud
   ne renvoie pas indéfiniment. Sans clé secrète, tout est refusé.
 - Un autre type d'événement que `parcel_status_changed` : **200**, ignoré.
@@ -147,6 +153,10 @@ app.post('/api/transporteurs/sendcloud/webhook', express.raw({ type: 'applicatio
 - `stage` de l'événement : `picked_up`, `delivered`, `incident` ou `null`
   (`classifySendcloudStatus`). Une tentative de livraison ratée ou un retard
   reste `picked_up` : ce n'est pas un incident définitif.
+- Les notifications peuvent arriver dans le désordre : `timestamp` dit quand le
+  statut a changé, pour ne pas écraser un statut récent par un ancien.
+- La signature utilise la « Webhook Signature Key » de l'intégration
+  (`webhookSecret`) quand elle existe, sinon la clé secrète.
 
 ## Écrire un autre transporteur
 

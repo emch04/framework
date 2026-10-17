@@ -8,6 +8,7 @@ import {
   classifySendcloudStatus,
   createCarrierWebhook,
   SIGNATURE_HEADER,
+  TEST_SHIPPING_OPTION,
   type ParcelEvent,
   type ShippingMethod,
   type Label,
@@ -17,6 +18,8 @@ import {
 const carrier: SendcloudCarrier = createSendcloudCarrier({
   publicKey: 'pub',
   secretKey: async () => 'secret',
+  webhookSecret: () => 'webhook-key',
+  sender: { addressId: 12, country: 'FR' },
   testMode: true,
   servicePointsCacheSeconds: false,
   retry: { baseDelayMs: 0 },
@@ -29,13 +32,16 @@ async function exercise() {
   const methods: ShippingMethod[] = await carrier.shippingMethods({ country: 'FR', weightGrams: 500 });
   const label: Label = await carrier.createLabel({
     orderNumber: 'R-1',
+    reference: 'order-R-1',
     recipient: { name: 'A', line1: 'B', city: 'C', postalCode: '75001', country: 'FR' },
     weightGrams: 500,
     method: methods[0]
   });
-  const pdf = await carrier.downloadLabel({ parcelId: label.parcelId, format: 'a6' });
+  const inline: Buffer | null = label.label;
+  void inline; void label.alreadyExisted;
+  const pdf = await carrier.downloadLabel({ parcelId: label.parcelId, format: 'a4' });
   void pdf.content.length;
-  const cancelled: 'cancelled' | 'requested' = (await carrier.cancelLabel({ parcelId: label.parcelId })).status;
+  const cancelled: 'cancelled' | 'requested' = (await carrier.cancelLabel({ shipmentId: label.shipmentId })).status;
   void cancelled;
   const points: ServicePoint[] = await carrier.servicePoints({ country: 'FR', postalCode: '13002', carriers: ['mondial_relay'], limit: 10 });
   void points;
@@ -52,6 +58,8 @@ const error = new ShippingError(CODES.NOT_CONFIGURED);
 const sentence: string = messageFor(error, 'en');
 void sentence;
 void SIGNATURE_HEADER;
+const letter: 'sendcloud:letter' = TEST_SHIPPING_OPTION;
+void letter;
 
 const webhook = createCarrierWebhook({
   carrier,

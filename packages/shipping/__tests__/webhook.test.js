@@ -3,7 +3,7 @@ const { createMemoryEventLog } = require('@astratra/payments');
 const { createSendcloudCarrier, createCarrierWebhook } = require('../src');
 
 const SECRET = 'sec_test';
-const carrier = createSendcloudCarrier({ publicKey: 'pub_test', secretKey: SECRET, fetch: async () => { throw new Error('no network in tests'); } });
+const carrier = createSendcloudCarrier({ publicKey: 'pub_test', secretKey: SECRET, sender: { addressId: 1, country: 'FR' }, fetch: async () => { throw new Error('no network in tests'); } });
 const sign = (raw, secret = SECRET) => createHmac('sha256', secret).update(raw).digest('hex');
 const body = (message, extra = {}) => Buffer.from(JSON.stringify({
   action: 'parcel_status_changed', timestamp: 1760000000,
@@ -83,5 +83,17 @@ describe('carrier webhook (Sendcloud, on @astratra/payments)', () => {
     const raw = body('Delivered');
     expect((await webhook.receive({ payload: raw, headers: { 'sendcloud-signature': sign(raw) } })).status).toBe(400);
     expect(() => createCarrierWebhook({})).toThrow(TypeError);
+  });
+});
+
+describe('webhook signature key and event order', () => {
+  test('a dedicated webhook signature key is used when given; the timestamp is passed on', async () => {
+    const withKey = createSendcloudCarrier({ publicKey: 'p', secretKey: 'api-secret', webhookSecret: () => 'webhook-key', sender: { addressId: 1, country: 'FR' } });
+    const received = [];
+    const webhook = createCarrierWebhook({ carrier: withKey, onEvent: async (event) => { received.push(event.timestamp); } });
+    const raw = body('Delivered');
+    expect((await webhook.receive({ payload: raw, headers: { 'sendcloud-signature': sign(raw, 'api-secret') } })).status).toBe(400);
+    expect((await webhook.receive({ payload: raw, headers: { 'sendcloud-signature': sign(raw, 'webhook-key') } })).status).toBe(200);
+    expect(received).toEqual([1760000000]);
   });
 });

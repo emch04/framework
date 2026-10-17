@@ -31,7 +31,7 @@ npm install @astratra/shipping
 - **"Label created" is not "parcel picked up".** Only a carrier scan moves a
   parcel to `picked_up`.
 
-## The Sendcloud carrier
+## The Sendcloud carrier (API v3)
 
 ```js
 const { createSendcloudCarrier, messageFor } = require('@astratra/shipping');
@@ -39,36 +39,41 @@ const { createSendcloudCarrier, messageFor } = require('@astratra/shipping');
 const carrier = createSendcloudCarrier({
   publicKey: () => vault.read('SENDCLOUD_PUBLIC_KEY'),
   secretKey: () => vault.read('SENDCLOUD_SECRET_KEY'),
+  webhookSecret: () => vault.read('SENDCLOUD_WEBHOOK_KEY'), // when the integration has a "Webhook Signature Key"
+  sender: { addressId: 12345, country: 'FR' },             // a sender address saved in Sendcloud
   testMode: process.env.NODE_ENV !== 'production'
 });
 
-await carrier.status(); // { configured, missing: ['secretKey'], testMode } — never a value
+await carrier.status(); // { configured, missing, testMode } — never a value
 
-const methods = await carrier.shippingMethods({ country: 'FR', weightGrams: 1250 });
+const options = await carrier.shippingMethods({ country: 'FR', postalCode: '69003', weightGrams: 1250 });
 const points = await carrier.servicePoints({ country: 'FR', postalCode: '13002', carriers: ['mondial_relay', 'colissimo'], limit: 10 });
-const label = await carrier.createLabel({
+const shipment = await carrier.createLabel({
   orderNumber: 'R-1042',
+  reference: 'order-R-1042', // unique: announcing it again returns the first shipment, no second label
   recipient: { name: 'Awa Diallo', line1: '12 rue des Lilas', city: 'Lyon', postalCode: '69003', country: 'FR' },
   weightGrams: 1250,
-  method: methods[0]
+  method: options[0]
 });
-const { content } = await carrier.downloadLabel({ parcelId: label.parcelId, format: 'a6' }); // PDF
-await carrier.cancelLabel({ parcelId: label.parcelId }); // { status: 'cancelled' | 'requested' }
+// shipment.label: the label PDF, returned with the shipment (one parcel) — no second request
+const { content } = await carrier.downloadLabel({ parcelId: shipment.parcelId, format: 'a4' }); // A4, A5 or A6 (default)
+await carrier.cancelLabel({ shipmentId: shipment.shipmentId }); // { status: 'cancelled' | 'requested' }
 ```
 
-- `servicePoints`: by postal code and/or city, or by coordinates; one or more
-  carriers (Sendcloud codes such as `mondial_relay`, `colissimo`,
-  `chronopost`), all by default; `radiusMeters` (10 km) and `limit` (15);
-  nearest first; cached 2 minutes (`servicePointsCacheSeconds`, `false` to
-  disable).
-- `priceCents` is Sendcloud's indicative price: your prices stay yours.
-- **Test mode** (`testMode: true`) puts every label on Sendcloud's "Unstamped
-  letter", found **by name** (its id differs between accounts and must not be
-  stored): nothing is posted and no postage is charged (Sendcloud may charge a
-  processing fee). The requested service point is ignored in test mode.
-- **API v2 and v3.** The adapter targets Sendcloud's REST API v2, the one Boutique
-  Roro runs in production. Sendcloud puts v2 in maintenance and recommends v3 to
-  new accounts; a v3 adapter can be added behind the same contract.
+- Shipping options are stable codes (`colissimo:home/signature`), never ids that
+  change. `priceCents` is Sendcloud's quote: your prices stay yours.
+- `reference` (unique per account) guards against buying twice: the same
+  reference announced again returns the first shipment (`alreadyExisted`).
+- A carrier refusal comes back as 201 with an error: it becomes `rejected`.
+- Cancelling works on the shipment. `requested`: Sendcloud watches it and
+  cancels it if nothing moves. Refused once delivered or 42 days after
+  announcement; "already being cancelled" counts as cancelled.
+- `servicePoints`: by postal code and/or city, or coordinates; the chosen
+  carriers, otherwise those enabled on the integration; `radiusMeters`
+  (10 km, 100 m to 50 km) and `limit` (15); nearest first; cached 2 minutes.
+- **Test mode** (`testMode: true`) ships with the option `sendcloud:letter`
+  (unstamped letter): nothing is posted and no postage is charged (Sendcloud
+  may charge a processing fee).
 
 ## Errors
 
@@ -101,6 +106,9 @@ const webhook = createCarrierWebhook({
 app.post('/webhooks/sendcloud', express.raw({ type: 'application/json', limit: '1mb' }), webhook.middleware);
 ```
 
+The signature is the HMAC-SHA256 of the raw body (hex), with the integration's
+"Webhook Signature Key" (`webhookSecret`) when it has one, else the secret key.
+Webhooks can arrive out of order: `timestamp` says when the status changed.
 Wrong signature, parsed or unreadable body: 400 (no endless retries). Another
 event type: 200, ignored. The same body again: 200 `duplicate`. An error in your
 handlers: 500 and the event is released, so Sendcloud's resend is handled.

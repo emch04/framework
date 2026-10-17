@@ -56,10 +56,16 @@ const shipment = await carrier.createLabel({
   method: options[0]
 });
 // shipment.label: the label PDF, returned with the shipment (one parcel) — no second request
+// No "start at box N" on an A4 sheet: Sendcloud API v3 does not offer it.
 const { content } = await carrier.downloadLabel({ parcelId: shipment.parcelId, format: 'a4' }); // A4, A5 or A6 (default)
 await carrier.cancelLabel({ shipmentId: shipment.shipmentId }); // { status: 'cancelled' | 'requested' }
 ```
 
+- **Settings read on every call** (1.1.0): `sender` and `testMode` take a value
+  or a (possibly async) function, like the keys — change the sender address or
+  switch to test mode from the shop's admin without creating a new carrier.
+  `carrier.testMode` is the boolean given, or `null` for a function (read
+  `(await carrier.status()).testMode`).
 - Shipping options are stable codes (`colissimo:home/signature`), never ids that
   change. `priceCents` is Sendcloud's quote: your prices stay yours.
 - `reference` (unique per account) guards against buying twice: the same
@@ -108,7 +114,12 @@ app.post('/webhooks/sendcloud', express.raw({ type: 'application/json', limit: '
 
 The signature is the HMAC-SHA256 of the raw body (hex), with the integration's
 "Webhook Signature Key" (`webhookSecret`) when it has one, else the secret key.
-Webhooks can arrive out of order: `timestamp` says when the status changed.
+Webhooks can arrive out of order: `timestamp` says when the status changed,
+**always in milliseconds** (1.1.0: seconds, milliseconds or an ISO date are
+converted), so an older status never overwrites a newer one.
+With an event log that can prune (`createPostgresEventLog`), handled events
+older than 90 days are deleted at most once a day, after the answer
+(`pruneOlderThanMs`, `false` to do it yourself; `pruneEveryMs`; `settled()`).
 Wrong signature, parsed or unreadable body: 400 (no endless retries). Another
 event type: 200, ignored. The same body again: 200 `duplicate`. An error in your
 handlers: 500 and the event is released, so Sendcloud's resend is handled.

@@ -15,6 +15,8 @@ const { createHash } = require('node:crypto');
 const { createWebhookHandler } = require('@astratra/payments');
 
 const SIGNATURE_HEADER = 'sendcloud-signature';
+const DEFAULT_PRUNE_OLDER_THAN_MS = 90 * 24 * 3600_000;
+const DEFAULT_PRUNE_EVERY_MS = 24 * 3600_000;
 
 /**
  * @param {object} options
@@ -26,6 +28,11 @@ const SIGNATURE_HEADER = 'sendcloud-signature';
  * @param {Function} [options.onIncident] (event, tools)
  * @param {string} [options.signatureHeader] default 'sendcloud-signature'
  * @param {object} [options.logger]
+ * @param {number|false} [options.pruneOlderThanMs] when the event log has prune(): handled events older
+ *   than this are deleted, at most once per `pruneEveryMs`, after a webhook is answered. Default 90 days;
+ *   false disables it (prune it yourself).
+ * @param {number} [options.pruneEveryMs] default 24 h
+ * @param {Function} [options.now] for tests
  */
 function createCarrierWebhook(options = {}) {
   const carrier = options.carrier;
@@ -34,9 +41,28 @@ function createCarrierWebhook(options = {}) {
   }
   const header = String(options.signatureHeader || SIGNATURE_HEADER).toLowerCase();
   const byStage = { picked_up: options.onPickedUp, delivered: options.onDelivered, incident: options.onIncident };
+  const eventLog = options.eventLog;
+  const pruneOlderThanMs = options.pruneOlderThanMs === undefined ? DEFAULT_PRUNE_OLDER_THAN_MS : options.pruneOlderThanMs;
+  const pruneEveryMs = options.pruneEveryMs || DEFAULT_PRUNE_EVERY_MS;
+  const now = options.now || Date.now;
+  const logger = options.logger || {};
+  let lastPrune = null;
+  let pruning = null;
+
+  /* The event log only grows: old handled events are deleted now and then, never on the answer's path. */
+  function maybePrune() {
+    if (!pruneOlderThanMs || !eventLog || typeof eventLog.prune !== 'function' || pruning) return null;
+    if (lastPrune !== null && now() - lastPrune < pruneEveryMs) return null;
+    lastPrune = now();
+    pruning = Promise.resolve()
+      .then(() => eventLog.prune(pruneOlderThanMs))
+      .catch((error) => { if (logger.warn) logger.warn(`[shipping] event log prune failed: ${error.message}`); })
+      .finally(() => { pruning = null; });
+    return pruning;
+  }
 
   const handler = createWebhookHandler({
-    eventLog: options.eventLog,
+    eventLog,
     logger: options.logger,
     eventId: (event) => event.id,
     async verify({ payload, headers }) {
@@ -72,7 +98,19 @@ function createCarrierWebhook(options = {}) {
       }
     }
   });
-  return handler;
+  async function receive(request) {
+    const answer = await handler.receive(request);
+    maybePrune();
+    return answer;
+  }
+  function middleware(req, res) {
+    return receive({ payload: req.body, headers: req.headers }).then(({ status, body }) => {
+      res.status(status).json(body);
+    });
+  }
+  /** Waits for a prune in progress (tests, graceful shutdown). */
+  const settled = () => pruning || Promise.resolve();
+  return { receive, middleware, sideEffect: handler.sideEffect, settled };
 }
 
 module.exports = { createCarrierWebhook, SIGNATURE_HEADER };

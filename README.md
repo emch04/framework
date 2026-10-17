@@ -128,7 +128,7 @@ package is in [CHANGELOG.md](CHANGELOG.md).
 | Package | Version | What it does |
 |---|---|---|
 | [`@astratra/payments`](packages/payments/README.md) | 1.1.0 | Payment webhook pipeline: raw-body signature checks, replay protection, provider-safe responses |
-| [`@astratra/shipping`](packages/shipping/README.md) | 1.0.0 | Shipping labels without the traps: carrier contract, Sendcloud adapter (labels, service points, tracking), signed tracking webhook with replay protection, free test mode |
+| [`@astratra/shipping`](packages/shipping/README.md) | 1.1.0 | Shipping labels without the traps: carrier contract, Sendcloud adapter (labels, service points, tracking), signed tracking webhook with replay protection, free test mode |
 | [`@astratra/ledger`](packages/ledger/README.md) | 1.0.0 | Double-entry accounting: balanced, immutable entries, sequential numbering, period closing, reconciliation, OHADA charts of accounts |
 | [`@astratra/booking`](packages/booking/README.md) | 1.0.0 | Appointment slot engine without a database: availability, exceptions, time zones, capacity, atomic booking through an injected store |
 | [`@astratra/collab`](packages/collab/README.md) | 1.0.0 | Real-time collaborative editing: Hocuspocus server wired to your authentication, Yjs snapshots, named versions |

@@ -88,7 +88,7 @@ export interface ParcelEvent {
   /** The provider's status label. */
   message: string;
   stage: ParcelStage | null;
-  /** When the status changed (seconds); webhooks can arrive out of order. */
+  /** When the status changed, ALWAYS in milliseconds since 1970 (whatever unit arrived); webhooks can arrive out of order. */
   timestamp: number | null;
 }
 
@@ -105,7 +105,7 @@ export class Carrier {
     method: { id?: string; code?: string };
     servicePointId?: number | string | null;
   }): Promise<Label>;
-  /** Paper size; default 'a6'. */
+  /** Paper size; default 'a6'. Sendcloud v3 has no "start from box N" for A4 sheets. */
   downloadLabel(input: { parcelId: number; format?: 'a4' | 'a5' | 'a6' }): Promise<{ content: Buffer; type: 'application/pdf' }>;
   cancelLabel(input: { shipmentId: string }): Promise<{ status: 'cancelled' | 'requested' }>;
   servicePoints(query: {
@@ -132,16 +132,24 @@ export const TEST_SHIPPING_OPTION: 'sendcloud:letter';
 
 type Secret = string | (() => string | Promise<string>);
 
+export type Sender = { addressId: number; country: string } | {
+  name: string; companyName?: string; line1: string; line2?: string; houseNumber?: string;
+  city: string; postalCode: string; country: string; phone?: string; email?: string;
+};
+
+/** An event time in milliseconds since 1970 from seconds, milliseconds or an ISO date; null when unreadable. */
+export function toMilliseconds(value: unknown): number | null;
+
 export interface SendcloudOptions {
   publicKey: Secret;
   secretKey: Secret;
   /** The integration's "Webhook Signature Key" when it has one; otherwise webhooks are signed with secretKey. */
   webhookSecret?: Secret;
-  /** The sender: an address saved in Sendcloud, or the full address. `country` is required in both cases. */
-  sender: { addressId: number; country: string } | {
-    name: string; companyName?: string; line1: string; line2?: string; houseNumber?: string;
-    city: string; postalCode: string; country: string; phone?: string; email?: string;
-  };
+  /**
+   * The sender: an address saved in Sendcloud, or the full address. `country` is required in both cases.
+   * A value, or a function read on every call (change the address without creating a new carrier).
+   */
+  sender: Sender | null | (() => Sender | null | undefined | Promise<Sender | null | undefined>);
   fetch?: typeof fetch;
   baseUrl?: string;
   /** Default 20 000. */
@@ -150,15 +158,16 @@ export interface SendcloudOptions {
   retry?: { attempts?: number; baseDelayMs?: number; maxDelayMs?: number; sleep?: (ms: number) => Promise<void> };
   /** Options of @astratra/resilience createCircuitBreaker. */
   breaker?: { failureThreshold?: number; recoveryMs?: number; now?: () => number };
-  /** Labels on 'sendcloud:letter' (unstamped letter): nothing is posted. */
-  testMode?: boolean;
+  /** Labels on 'sendcloud:letter' (unstamped letter): nothing is posted. A value, or a function read on every call. */
+  testMode?: boolean | (() => boolean | Promise<boolean>);
   /** Default 120; false disables the service point cache. */
   servicePointsCacheSeconds?: number | false;
 }
 
 export class SendcloudCarrier extends Carrier {
   constructor(options: SendcloudOptions);
-  readonly testMode: boolean;
+  /** The test mode as given: a boolean, or null when it is a function (read it with status()). */
+  readonly testMode: boolean | null;
   status(): Promise<{ configured: boolean; missing: string[]; testMode: boolean }>;
   verifySignature(rawBody: Buffer, signature: string | undefined): Promise<boolean>;
 }
@@ -188,4 +197,12 @@ export function createCarrierWebhook(options: {
   onIncident?: ParcelHandler;
   signatureHeader?: string;
   logger?: WebhookLogger;
-}): WebhookHandler;
+  /** With an event log that has prune(): handled events older than this are deleted, at most once per pruneEveryMs. Default 90 days; false disables it. */
+  pruneOlderThanMs?: number | false;
+  /** Default 24 h. */
+  pruneEveryMs?: number;
+  now?: () => number;
+}): WebhookHandler & {
+  /** Waits for a prune in progress (tests, graceful shutdown). */
+  settled(): Promise<void>;
+};

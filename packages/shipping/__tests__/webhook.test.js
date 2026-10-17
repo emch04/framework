@@ -94,6 +94,54 @@ describe('webhook signature key and event order', () => {
     const raw = body('Delivered');
     expect((await webhook.receive({ payload: raw, headers: { 'sendcloud-signature': sign(raw, 'api-secret') } })).status).toBe(400);
     expect((await webhook.receive({ payload: raw, headers: { 'sendcloud-signature': sign(raw, 'webhook-key') } })).status).toBe(200);
-    expect(received).toEqual([1760000000]);
+    expect(received).toEqual([1760000000000]);
+  });
+});
+
+describe('event times and event log pruning (1.1.0)', () => {
+  const { toMilliseconds } = require('../src/sendcloud');
+
+  test('readEvent always gives milliseconds, whatever unit Sendcloud sends', () => {
+    const at = (timestamp) => carrier.readEvent({ action: 'parcel_status_changed', timestamp, parcel: { id: 1, status: { message: 'Delivered' } } }).timestamp;
+    expect(at(1760000000)).toBe(1760000000000);
+    expect(at(1760000000.5)).toBe(1760000000500);
+    expect(at(1760000000123)).toBe(1760000000123);
+    expect(at('1760000000')).toBe(1760000000000);
+    expect(at('2026-10-17T12:00:00Z')).toBe(Date.parse('2026-10-17T12:00:00Z'));
+    expect(at(undefined)).toBeNull();
+    expect(at('nonsense')).toBeNull();
+    expect(toMilliseconds(0)).toBeNull();
+  });
+
+  test('handled events older than pruneOlderThanMs are pruned, at most once per pruneEveryMs, off the answer path', async () => {
+    let now = Date.parse('2026-10-17T10:00:00Z');
+    const prunes = [];
+    const eventLog = { ...createMemoryEventLog(), prune: async (olderThan) => { prunes.push(olderThan); return 0; } };
+    const webhook = createCarrierWebhook({ carrier, eventLog, now: () => now, pruneOlderThanMs: 30 * 24 * 3600_000 });
+    const send = async (raw) => { const answer = await webhook.receive({ payload: raw, headers: { 'sendcloud-signature': sign(raw) } }); await webhook.settled(); return answer; };
+    await send(body('Delivered', { timestamp: 1 }));
+    await send(body('Delivered', { timestamp: 2 }));
+    expect(prunes).toEqual([30 * 24 * 3600_000]);
+    now += 24 * 3600_000;
+    await send(body('Delivered', { timestamp: 3 }));
+    expect(prunes).toHaveLength(2);
+  });
+
+  test('pruneOlderThanMs: false disables it; a failing prune never fails the webhook', async () => {
+    const calls = [];
+    const off = createCarrierWebhook({ carrier, eventLog: { ...createMemoryEventLog(), prune: async () => { calls.push('off'); } }, pruneOlderThanMs: false });
+    const raw = body('Delivered');
+    await off.receive({ payload: raw, headers: { 'sendcloud-signature': sign(raw) } });
+    await off.settled();
+    expect(calls).toEqual([]);
+    const warnings = [];
+    const broken = createCarrierWebhook({
+      carrier, logger: { warn: (m) => warnings.push(m), info() {}, error() {} },
+      eventLog: { ...createMemoryEventLog(), prune: async () => { throw new Error('database down'); } }
+    });
+    const answer = await broken.receive({ payload: raw, headers: { 'sendcloud-signature': sign(raw) } });
+    await broken.settled();
+    expect(answer.status).toBe(200);
+    expect(warnings.join(' ')).toMatch(/prune failed/);
   });
 });

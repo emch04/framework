@@ -37,6 +37,20 @@ const cents = (value) => {
   return Number.isFinite(n) ? Math.round(n * 100) : null;
 };
 
+/**
+ * An event time in MILLISECONDS since 1970, whatever unit arrived (seconds or milliseconds, number or
+ * numeric string, ISO date): below 10^12 a number is read as seconds (10^12 ms is 2001; 10^12 s is
+ * year 33 658). null when unreadable.
+ */
+function toMilliseconds(value) {
+  if (value === null || value === undefined || value === '') return null;
+  const n = Number(value);
+  if (Number.isFinite(n)) return n > 0 ? Math.round(n < 1e12 ? n * 1000 : n) : null;
+  if (typeof value !== 'string') return null;
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
 /** Any failure turned into a ShippingError; `whenRefused` says what a 4xx means for this call. */
 function toShippingError(error, whenRefused) {
   if (error instanceof ShippingError && error.code !== CODES.REJECTED) return error;
@@ -71,13 +85,14 @@ class SendcloudCarrier extends Carrier {
    * @param {string|Function} options.publicKey
    * @param {string|Function} options.secretKey
    * @param {string|Function} [options.webhookSecret] the "Webhook Signature Key" when the integration has one; else the secret key
-   * @param {object} options.sender { addressId, country } (a sender address saved in Sendcloud) or { name, line1, city, postalCode, country, … }
+   * @param {object|Function} options.sender { addressId, country } (a sender address saved in Sendcloud) or { name, line1, city, postalCode, country, … };
+   *   a value, or a function read on every call (the shop changes its address without a restart)
    * @param {Function} [options.fetch] injectable (tests)
    * @param {string} [options.baseUrl]
    * @param {number} [options.timeoutMs] default 20 000
    * @param {object} [options.retry] options of @astratra/resilience retry (tests: { baseDelayMs: 0 })
    * @param {object} [options.breaker] options of createCircuitBreaker
-   * @param {boolean} [options.testMode] labels on "sendcloud:letter": nothing is posted
+   * @param {boolean|Function} [options.testMode] labels on "sendcloud:letter": nothing is posted (a value, or a function read on every call)
    * @param {number|false} [options.servicePointsCacheSeconds] default 120; false disables the cache
    */
   constructor(options = {}) {
@@ -85,14 +100,12 @@ class SendcloudCarrier extends Carrier {
     this.publicKey = options.publicKey;
     this.secretKey = options.secretKey;
     this.webhookSecret = options.webhookSecret;
-    this.sender = fromAddress(options.sender);
-    /* Shipping options need the departure country, also with a saved sender address. */
-    this.senderCountry = country(options.sender && options.sender.country);
+    this.senderOption = options.sender;
     this.fetchImpl = options.fetch || globalThis.fetch;
     this.baseUrl = options.baseUrl || SENDCLOUD_API_URL;
     this.timeoutMs = options.timeoutMs || DEFAULT_TIMEOUT_MS;
     this.retryOptions = options.retry || {};
-    this.testMode = Boolean(options.testMode);
+    this.testModeOption = options.testMode;
     this.breaker = createCircuitBreaker({
       name: 'sendcloud', failureThreshold: 5, recoveryMs: 30_000, ...options.breaker, isFailure: isOutage
     });
@@ -102,13 +115,28 @@ class SendcloudCarrier extends Carrier {
 
   get name() { return 'sendcloud'; }
 
+  /** The test mode as given: a boolean, or null when it is a function (read it with status()). */
+  get testMode() { return typeof this.testModeOption === 'function' ? null : Boolean(this.testModeOption); }
+
+  async #isTestMode() {
+    return Boolean(typeof this.testModeOption === 'function' ? await this.testModeOption() : this.testModeOption);
+  }
+
+  /** The sender, read on every call: { from: Sendcloud's from_address or null, country }. */
+  async #sender() {
+    const sender = typeof this.senderOption === 'function' ? await this.senderOption() : this.senderOption;
+    /* Shipping options need the departure country, also with a saved sender address. */
+    return { from: fromAddress(sender), country: country(sender && sender.country) };
+  }
+
   /** { configured, missing, testMode } — names of what is missing, never a value. */
   async status() {
     const missing = [];
     if (!(await read(this.publicKey))) missing.push('publicKey');
     if (!(await read(this.secretKey))) missing.push('secretKey');
-    if (!this.sender || !/^[A-Z]{2}$/.test(this.senderCountry)) missing.push('sender');
-    return { configured: missing.length === 0, missing, testMode: this.testMode };
+    const sender = await this.#sender();
+    if (!sender.from || !/^[A-Z]{2}$/.test(sender.country)) missing.push('sender');
+    return { configured: missing.length === 0, missing, testMode: await this.#isTestMode() };
   }
 
   async #keys() {
@@ -165,9 +193,10 @@ class SendcloudCarrier extends Carrier {
     if (!/^[A-Z]{2}$/.test(destination) || !(Number.isFinite(weightGrams) && weightGrams > 0)) {
       throw new ShippingError(CODES.INVALID_INPUT);
     }
-    if (!this.senderCountry || !/^[A-Z]{2}$/.test(this.senderCountry)) throw new ShippingError(CODES.NOT_CONFIGURED);
+    const sender = await this.#sender();
+    if (!/^[A-Z]{2}$/.test(sender.country)) throw new ShippingError(CODES.NOT_CONFIGURED);
     const body = {
-      from_address: { country_code: this.senderCountry },
+      from_address: { country_code: sender.country },
       to_address: { country_code: destination, ...(postalCode ? { postal_code: String(postalCode) } : {}) },
       parcels: [{ weight: { value: kilograms(weightGrams), unit: 'kg' } }],
       calculate_quotes: true,
@@ -204,14 +233,16 @@ class SendcloudCarrier extends Carrier {
   async createLabel({ orderNumber, reference, recipient = {}, weightGrams, method, servicePointId = null } = {}) {
     const destination = country(recipient.country);
     const code = method && (method.code ?? method.id);
+    const testMode = await this.#isTestMode();
     if (!recipient.name || !recipient.line1 || !recipient.city || !recipient.postalCode || !/^[A-Z]{2}$/.test(destination)
-      || !(Number.isFinite(weightGrams) && weightGrams > 0) || (!code && !this.testMode) || !orderNumber) {
+      || !(Number.isFinite(weightGrams) && weightGrams > 0) || (!code && !testMode) || !orderNumber) {
       throw new ShippingError(CODES.INVALID_INPUT);
     }
-    if (!this.sender) throw new ShippingError(CODES.NOT_CONFIGURED);
-    const optionCode = this.testMode ? TEST_SHIPPING_OPTION : String(code);
+    const sender = await this.#sender();
+    if (!sender.from) throw new ShippingError(CODES.NOT_CONFIGURED);
+    const optionCode = testMode ? TEST_SHIPPING_OPTION : String(code);
     const body = {
-      from_address: this.sender,
+      from_address: sender.from,
       to_address: {
         name: recipient.name,
         address_line_1: recipient.line1,
@@ -227,7 +258,7 @@ class SendcloudCarrier extends Carrier {
       parcels: [{ weight: { value: kilograms(weightGrams), unit: 'kg' } }],
       order_number: String(orderNumber),
       ...(reference ? { external_reference_id: String(reference) } : {}),
-      ...(servicePointId && !this.testMode ? { to_service_point: { id: String(servicePointId) } } : {})
+      ...(servicePointId && !testMode ? { to_service_point: { id: String(servicePointId) } } : {})
     };
     let response;
     try {
@@ -251,7 +282,7 @@ class SendcloudCarrier extends Carrier {
       /* The label itself, when Sendcloud returns it inline (one parcel): no second request needed. */
       label: typeof parcel.label_file === 'string' && parcel.label_file ? Buffer.from(parcel.label_file, 'base64') : null,
       alreadyExisted: response.status === 409,
-      testMode: this.testMode
+      testMode
     };
   }
 
@@ -362,19 +393,19 @@ class SendcloudCarrier extends Carrier {
 
   /**
    * parcel_status_changed only; anything else is null (acknowledged, nothing to do). Webhooks can
-   * arrive out of order: `timestamp` says which status is the latest.
+   * arrive out of order: `timestamp` (always milliseconds) says which status is the latest.
    */
   readEvent(json) {
     if (!json || json.action !== 'parcel_status_changed' || !json.parcel || !json.parcel.id) return null;
     const message = String(json.parcel.status?.message ?? '');
-    const timestamp = Number(json.timestamp);
+    const timestamp = toMilliseconds(json.timestamp);
     return {
       parcelId: Number(json.parcel.id),
       trackingNumber: String(json.parcel.tracking_number ?? ''),
       trackingUrl: String(json.parcel.tracking_url ?? ''),
       message,
       stage: classifySendcloudStatus(message),
-      timestamp: Number.isFinite(timestamp) ? timestamp : null
+      timestamp
     };
   }
 }
@@ -383,4 +414,4 @@ function createSendcloudCarrier(options) {
   return new SendcloudCarrier(options);
 }
 
-module.exports = { SendcloudCarrier, createSendcloudCarrier, SENDCLOUD_API_URL, TEST_SHIPPING_OPTION };
+module.exports = { SendcloudCarrier, createSendcloudCarrier, SENDCLOUD_API_URL, TEST_SHIPPING_OPTION, toMilliseconds };

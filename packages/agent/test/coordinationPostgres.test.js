@@ -86,3 +86,71 @@ test('real PostgreSQL approval store: concurrent approvals run once, refusal ret
     assert.equal((await queue.list({ requestedBy: "agent'quoted" })).length, 1);
   } finally { await pool.query(`DROP TABLE IF EXISTS "${table}"`); await pool.end(); }
 });
+
+test('mapping options are checked', () => {
+  assert.throws(() => createPostgresApprovalStore({ query() {} }, { columns: { color: 'x' } }), /unknown field/);
+  assert.throws(() => createPostgresApprovalStore({ query() {} }, { columns: { status: null } }), /cannot be null/);
+  assert.throws(() => createPostgresApprovalStore({ query() {} }, { columns: { type: 'a b' } }));
+  assert.throws(() => createPostgresApprovalStore({ query() {} }, { statuses: { pending: 'x', approved: 'x' } }), /different word/);
+  assert.throws(() => createPostgresApprovalStore({ query() {} }, { statuses: { done: 'x' } }), /only/);
+  assert.throws(() => createPostgresApprovalStore({ query() {} }, { scope: { column: 'kind' } }), /scope/);
+});
+
+test('real PostgreSQL: an old table gains decision_input, and the corrected input is kept with the decision', { skip }, async () => {
+  const { Pool } = require('pg'); const pool = new Pool({ connectionString: uri, max: 4 });
+  const table = `approvals_${randomUUID().replaceAll('-', '')}`;
+  try {
+    // The table as 1.2.0 created it, without decision_input.
+    await pool.query(postgresApprovalSchema({ table }).replace(/,\s*decision_input jsonb\s*\)/, '\n)').replace(/ALTER TABLE[^;]*;/, ''));
+    assert.equal((await pool.query(`SELECT 1 FROM information_schema.columns WHERE table_name = $1 AND column_name = 'decision_input'`, [table])).rowCount, 0);
+    await pool.query(postgresApprovalSchema({ table }));
+    const store = createPostgresApprovalStore(pool, { table });
+    const ran = [];
+    const queue = createApprovalQueue({ store, executors: { pay: async ({ input, proposedInput }) => { ran.push([input, proposedInput]); return { ok: true }; } } });
+    const action = await queue.propose({ type: 'pay', input: { amount: 30 }, requestedBy: 'agent' });
+    const { action: done } = await queue.approve(action.id, { decider: 'owner', input: { amount: 25 } });
+    assert.deepEqual(ran, [[{ amount: 25 }, { amount: 30 }]]);
+    assert.deepEqual(done.decisionInput, { amount: 25 });
+    assert.deepEqual((await queue.get(action.id)).input, { amount: 30 });
+  } finally { await pool.query(`DROP TABLE IF EXISTS "${table}"`); await pool.end(); }
+});
+
+test('real PostgreSQL: the store sits on an existing journal table (own columns, status words, other rows left alone)', { skip }, async () => {
+  const { Pool } = require('pg'); const pool = new Pool({ connectionString: uri, max: 8 });
+  const table = `journal_${randomUUID().replaceAll('-', '')}`;
+  try {
+    // A journal of every action of an app: some need approval, others ran on their own.
+    await pool.query(`CREATE TABLE "${table}" (
+      ref text PRIMARY KEY, outil text NOT NULL, entree jsonb NOT NULL, demandeur text NOT NULL,
+      statut text NOT NULL, cree_le timestamptz NOT NULL, expire_le timestamptz,
+      decide_par text, decide_le timestamptz, execute_le timestamptz, resultat jsonb, motif text,
+      entree_validee jsonb, necessite_accord boolean NOT NULL DEFAULT true)`);
+    await pool.query(`INSERT INTO "${table}" (ref, outil, entree, demandeur, statut, cree_le, necessite_accord) VALUES ('auto-1', 'lire', '{}', 'agent', 'executee', now(), false)`);
+    const store = createPostgresApprovalStore(pool, {
+      table,
+      columns: { id: 'ref', type: 'outil', input: 'entree', requestedBy: 'demandeur', status: 'statut', createdAt: 'cree_le', expiresAt: 'expire_le', decidedBy: 'decide_par', decidedAt: 'decide_le', executedAt: 'execute_le', result: 'resultat', reason: 'motif', decisionInput: 'entree_validee', meta: null, refusal: null },
+      statuses: { pending: 'en_attente', approved: 'approuvee', rejected: 'rejetee', expired: 'expiree' },
+      scope: { column: 'necessite_accord', value: true }
+    });
+    let t = Date.parse('2026-10-16T10:00:00Z'); const now = () => t; let calls = 0;
+    const queue = createApprovalQueue({ store, now, executors: { rembourser: async ({ input }) => { calls += 1; await new Promise((resolve) => setTimeout(resolve, 20)); return { rembourse: input.montant }; } } });
+    const one = await queue.propose({ type: 'rembourser', input: { montant: 40 }, requestedBy: 'agent', ttlMs: 60000, meta: { ignore: true } });
+    assert.equal(one.status, 'pending'); assert.equal(one.meta, null);
+    assert.equal((await pool.query(`SELECT statut FROM "${table}" WHERE ref = $1`, [one.id])).rows[0].statut, 'en_attente');
+    const settled = await Promise.allSettled([1, 2, 3, 4].map((n) => queue.approve(one.id, { decider: `p${n}`, input: { montant: 35 } })));
+    assert.equal(settled.filter((s) => s.status === 'fulfilled').length, 1); assert.equal(calls, 1);
+    const row = (await pool.query(`SELECT statut, entree, entree_validee, resultat FROM "${table}" WHERE ref = $1`, [one.id])).rows[0];
+    assert.deepEqual(row, { statut: 'approuvee', entree: { montant: 40 }, entree_validee: { montant: 35 }, resultat: { rembourse: 35 } });
+    const two = await queue.propose({ type: 'rembourser', input: { montant: 5 }, requestedBy: 'agent', ttlMs: 1000 });
+    const three = await queue.propose({ type: 'rembourser', input: { montant: 6 }, requestedBy: 'agent' });
+    assert.equal((await queue.reject(three.id, { decider: 'p', reason: 'non' })).reason, 'non');
+    t += 1000;
+    assert.equal((await queue.expire()).length, 1);
+    assert.equal((await pool.query(`SELECT statut FROM "${table}" WHERE ref = $1`, [two.id])).rows[0].statut, 'expiree');
+    // The row that never needed approval is outside the queue: not listed, not readable, not touched.
+    assert.deepEqual((await queue.list()).map((a) => a.input.montant).sort(), [35, 40, 5, 6].filter((n) => n !== 35).sort());
+    assert.equal(await queue.get('auto-1'), null);
+    assert.equal((await pool.query(`SELECT statut FROM "${table}" WHERE ref = 'auto-1'`)).rows[0].statut, 'executee');
+    assert.deepEqual((await queue.list({ status: 'approved' })).map((a) => a.id), [one.id]);
+  } finally { await pool.query(`DROP TABLE IF EXISTS "${table}"`); await pool.end(); }
+});

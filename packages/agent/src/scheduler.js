@@ -43,27 +43,38 @@ function createScheduler(options = {}) {
   for (const task of options.tasks) {
     if (!task || typeof task.id !== 'string' || !task.id || typeof task.run !== 'function') throw new Error('Each task needs an id and a run function.');
     if (tasks.has(task.id)) throw new Error(`Duplicate task id: ${task.id}.`);
-    normalizeSchedule(task.schedule);
-    tasks.set(task.id, { id: task.id, label: task.label ?? task.id, run: task.run, enabled: task.enabled !== false, timeZone: checkTimeZone(task.timeZone ?? defaultZone), maxLateMs: task.maxLateMs ?? maxLateMs, schedule: task.schedule });
+    // `enabled` and `schedule` may be functions (sync or async): read again before every pass, so a setting
+    // changed in an admin applies without rebuilding the scheduler. A plain value is checked right away.
+    if (typeof task.schedule !== 'function') normalizeSchedule(task.schedule);
+    if (task.enabled !== undefined && typeof task.enabled !== 'boolean' && typeof task.enabled !== 'function') throw new Error(`${task.id}: enabled must be a boolean or a function.`);
+    tasks.set(task.id, { id: task.id, label: task.label ?? task.id, run: task.run, enabled: task.enabled ?? true, timeZone: checkTimeZone(task.timeZone ?? defaultZone), maxLateMs: task.maxLateMs ?? maxLateMs, schedule: task.schedule });
   }
   const controllers = new Set();
   let timer = null;
   let ticking = null;
-  const upcoming = (task, from) => nextRun(task.schedule, from, task.timeZone);
+  /** The task as it stands now: `enabled` and `schedule` resolved, the schedule checked, plus a key that changes with it. */
+  async function live(task) {
+    const enabled = typeof task.enabled === 'function' ? await task.enabled({ id: task.id }) : task.enabled;
+    if (typeof enabled !== 'boolean') throw new Error(`${task.id}: enabled() must resolve to a boolean.`);
+    const schedule = typeof task.schedule === 'function' ? await task.schedule({ id: task.id }) : task.schedule;
+    const key = JSON.stringify({ ...normalizeSchedule(schedule), timeZone: task.timeZone });
+    return { enabled, schedule, key };
+  }
+  const upcoming = (task, from, current) => nextRun(current.schedule, from, task.timeZone);
   const stopped = async () => { try { return Boolean(await options.shouldStop?.()); } catch (_error) { return true; } }; // Fail closed.
   const blank = (task) => ({ id: task.id, status: 'scheduled', nextRunAt: null, lastStartedAt: null, lastRunAt: null, lastResult: null, lastError: null, skipReason: null, lastManual: false });
   const read = async (task) => ({ ...blank(task), ...(await store.get(task.id)) });
   const find = (id) => { const task = tasks.get(id); if (!task) throw new SchedulerError('unknown_task'); return task; };
 
-  async function skip(task, reason, state) {
-    await store.set(task.id, { ...state, status: 'skipped', skipReason: reason, nextRunAt: upcoming(task, now()) });
+  async function skip(task, reason, state, current) {
+    await store.set(task.id, { ...state, status: 'skipped', skipReason: reason, nextRunAt: upcoming(task, now(), current), scheduleKey: current.key });
     emit({ type: 'skipped', id: task.id, reason });
     return { id: task.id, status: 'skipped', reason };
   }
-  async function execute(task, { manual, signal }) {
+  async function execute(task, { manual, signal, current }) {
     if (await stopped()) {
       if (manual) throw new SchedulerError('stopped');
-      return skip(task, 'stopped', await read(task));
+      return skip(task, 'stopped', await read(task), current);
     }
     const held = await lock.acquire(task.id);
     if (!held) { if (manual) throw new SchedulerError('running'); return { id: task.id, status: 'locked' }; }
@@ -98,7 +109,8 @@ function createScheduler(options = {}) {
         ...state, status, lastStartedAt: startedAt, lastManual: manual,
         lastRunAt: status === 'skipped' ? state.lastRunAt : finished, lastResult: status === 'ok' ? result : state.lastResult,
         lastError: status === 'ok' ? null : (error ?? state.lastError), skipReason: reason,
-        nextRunAt: !manual || !state.nextRunAt ? upcoming(task, finished) : state.nextRunAt
+        nextRunAt: !manual || !state.nextRunAt ? upcoming(task, finished, current) : state.nextRunAt,
+        scheduleKey: !manual || !state.nextRunAt ? current.key : state.scheduleKey
       });
       emit({ type: status === 'ok' ? 'done' : status, id: task.id, manual, ...(error ? { error: error.message } : {}) });
       return { id: task.id, status, ...(status === 'ok' ? { result } : {}), ...(error ? { error: error.message } : {}), ...(reason ? { reason } : {}) };
@@ -112,14 +124,25 @@ function createScheduler(options = {}) {
   async function pass() {
     const results = [];
     for (const task of tasks.values()) {
-      if (!task.enabled) continue;
       try {
+        const current = await live(task);
         const at = now();
         const state = await read(task);
-        if (!state.nextRunAt) { await store.set(task.id, { ...state, nextRunAt: upcoming(task, at) }); results.push({ id: task.id, status: 'scheduled' }); continue; }
-        if (state.nextRunAt > at) continue;
-        if (at - state.nextRunAt > task.maxLateMs) { results.push(await skip(task, 'late', state)); continue; }
-        results.push(await execute(task, { manual: false }));
+        if (!current.enabled) {
+          // Forget the plan: switched back on, the task is planned afresh instead of being skipped as late.
+          if (state.nextRunAt != null) await store.set(task.id, { ...state, nextRunAt: null, scheduleKey: null });
+          continue;
+        }
+        // A state written before scheduleKey existed keeps its plan; a changed schedule is planned again.
+        const changed = state.nextRunAt != null && state.scheduleKey != null && state.scheduleKey !== current.key;
+        if (!state.nextRunAt || changed) {
+          await store.set(task.id, { ...state, nextRunAt: upcoming(task, at, current), scheduleKey: current.key });
+          results.push({ id: task.id, status: changed ? 'rescheduled' : 'scheduled' });
+          continue;
+        }
+        if (state.nextRunAt > at) { if (state.scheduleKey == null) await store.set(task.id, { ...state, scheduleKey: current.key }); continue; }
+        if (at - state.nextRunAt > task.maxLateMs) { results.push(await skip(task, 'late', state, current)); continue; }
+        results.push(await execute(task, { manual: false, current }));
       } catch (error) { try { options.onError?.(error, task.id); } catch (_ignored) { /* An observer never breaks the scheduler. */ } }
     }
     return results;
@@ -134,11 +157,15 @@ function createScheduler(options = {}) {
     get started() { return timer !== null; },
     /** Aborts every run in progress in this process (their `signal` aborts). */
     abortAll(reason = new SchedulerError('stopped')) { for (const c of controllers) c.abort(reason); },
-    /** Manual run. Throws SchedulerError: unknown_task, stopped, running. Does not move the next planned run. */
-    async run(id, { signal } = {}) { return execute(find(id), { manual: true, signal }); },
+    /** Manual run (also allowed while the task is disabled). Throws SchedulerError: unknown_task, stopped, running. Does not move the next planned run. */
+    async run(id, { signal } = {}) { const task = find(id); return execute(task, { manual: true, signal, current: await live(task) }); },
     /** State of one task, or of all of them. `nextRunAt` is computed when the task was never planned. */
     async state(id) {
-      const describe = async (task) => { const s = await read(task); return { ...s, label: task.label, enabled: task.enabled, timeZone: task.timeZone, nextRunAt: s.nextRunAt ?? (task.enabled ? upcoming(task, now()) : null) }; };
+      const describe = async (task) => {
+        const s = await read(task);
+        const current = await live(task);
+        return { ...s, label: task.label, enabled: current.enabled, schedule: copy(current.schedule), timeZone: task.timeZone, nextRunAt: current.enabled ? (s.nextRunAt ?? upcoming(task, now(), current)) : null };
+      };
       if (id !== undefined) return describe(find(id));
       return Promise.all([...tasks.values()].map(describe));
     }

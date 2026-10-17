@@ -83,13 +83,20 @@ export type Schedule =
   | { type: 'daily'; at: string }
   | { type: 'weekly'; at: string; day: number | string; days?: never }
   | { type: 'weekly'; at: string; days: Array<number | string>; day?: never }
-  | { type: 'interval'; everyMs: number };
+  | { type: 'interval'; everyMs: number; align?: boolean };
 export interface ScheduledRunContext { id: string; signal: AbortSignal; manual: boolean; scheduledFor: number | null; previous: unknown; now: number }
-export interface ScheduledTask { id: string; label?: string; schedule: Schedule; timeZone?: string; enabled?: boolean; maxLateMs?: number; run(context: ScheduledRunContext): unknown }
+/** `enabled` and `schedule` may be functions: read again before every pass (a setting changed in an admin applies at once). */
+export interface ScheduledTask {
+  id: string; label?: string; timeZone?: string; maxLateMs?: number; run(context: ScheduledRunContext): unknown;
+  schedule: Schedule | ((task: { id: string }) => Schedule | Promise<Schedule>);
+  enabled?: boolean | ((task: { id: string }) => boolean | Promise<boolean>);
+}
 export interface Lock { acquire(key: string): Promise<{ release(): Promise<void> } | null> }
 export interface ScheduleState {
   id: string; status: 'scheduled' | 'running' | 'ok' | 'error' | 'skipped'; nextRunAt: number | null; lastStartedAt: number | null; lastRunAt: number | null;
   lastResult: unknown; lastError: { message: string; at: number } | null; skipReason: string | null; lastManual: boolean;
+  /** The schedule the plan was made with; a different one is planned again. */
+  scheduleKey?: string | null;
 }
 export interface ScheduleStateStore { get(id: string): Promise<Record<string, unknown> | null>; set(id: string, state: Record<string, unknown>): Promise<void> }
 export interface SchedulerEvent { type: 'start' | 'done' | 'error' | 'skipped'; id: string; manual?: boolean; reason?: string; error?: string }
@@ -98,8 +105,8 @@ export interface SchedulerOptions {
   tickMs?: number; maxLateMs?: number; stopCheckMs?: number; shouldStop?(): boolean | Promise<boolean>;
   onEvent?(event: SchedulerEvent): void | Promise<void>; onError?(error: unknown, taskId: string): void;
 }
-export type RunOutcome = { id: string; status: 'ok' | 'error' | 'skipped' | 'scheduled' | 'locked' | 'already_done'; result?: unknown; error?: string; reason?: string };
-export type TaskView = ScheduleState & { label: string; enabled: boolean; timeZone: string };
+export type RunOutcome = { id: string; status: 'ok' | 'error' | 'skipped' | 'scheduled' | 'rescheduled' | 'locked' | 'already_done'; result?: unknown; error?: string; reason?: string };
+export type TaskView = ScheduleState & { label: string; enabled: boolean; schedule: Schedule; timeZone: string };
 export interface Scheduler {
   tick(): Promise<RunOutcome[]>; start(): void; stop(): void; readonly started: boolean; abortAll(reason?: unknown): void;
   run(id: string, options?: { signal?: AbortSignal }): Promise<RunOutcome>;
@@ -120,31 +127,37 @@ export interface ApprovalAction<I = unknown, R = unknown> {
   id: string; type: string; input: I; requestedBy: string; meta: unknown; status: ApprovalStatus; createdAt: number; expiresAt: number | null;
   decidedBy: string | null; decidedAt: number | null; executedAt: number | null; result: R | null; reason: string | null;
   refusal: { reason: string; details: unknown; at: number; by: string } | null;
+  /** The input as the person corrected it when approving; null without a correction. Undefined from a store that does not keep it. */
+  decisionInput?: I | null;
 }
 export interface ApprovalFilter { status?: ApprovalStatus; type?: string; requestedBy?: string; limit?: number; before?: number }
 export interface ApprovalStore {
   create(action: ApprovalAction): Promise<ApprovalAction>; get(id: string): Promise<ApprovalAction | null>;
   list(filter?: ApprovalFilter): Promise<ApprovalAction[]>;
-  reserve(id: string, decidedBy: string, at: number): Promise<ApprovalAction | null>;
+  /** Must keep `decisionInput` and return it on the action (null when absent). */
+  reserve(id: string, decidedBy: string, at: number, decisionInput?: unknown): Promise<ApprovalAction | null>;
   finish(id: string, result: unknown, at: number): Promise<ApprovalAction | null>;
   revert(id: string, decidedBy: string, refusal: unknown): Promise<ApprovalAction | null>;
   reject(id: string, decidedBy: string, reason: string | null, at: number): Promise<ApprovalAction | null>;
   expire(at: number): Promise<ApprovalAction[]>;
 }
 export type Decider = string | { id: string; [key: string]: unknown };
-export interface ExecutorContext<I = any> { action: ApprovalAction<I>; input: I; decider: Decider; idempotencyKey: string; signal: AbortSignal }
+/** `input`: the corrected input when the person gave one, else the proposal; `proposedInput`: always the proposal. */
+export interface ExecutorContext<I = any> { action: ApprovalAction<I>; input: I; proposedInput: I; decider: Decider; idempotencyKey: string; signal: AbortSignal }
 export type Executor = (context: ExecutorContext) => unknown;
 export interface ApprovalEvent { type: 'proposed' | 'approved' | 'rejected' | 'refused' | 'failed' | 'expired'; action: ApprovalAction; result?: unknown; reason?: string; error?: string }
 export interface ApprovalQueueOptions {
   store?: ApprovalStore; now?(): number | Date; executors?: Executor | Record<string, Executor>; executionTimeoutMs?: number;
   authorize?(input: { action: ApprovalAction; decider: Decider; decision: 'approve' | 'reject' }): boolean | void | Promise<boolean | void>;
   beforeExecute?(input: { action: ApprovalAction; decider: Decider }): void | Promise<void>;
+  /** Checks a corrected input: false (or a throw) refuses with ApprovalError invalid; { value } replaces it. */
+  validateInput?(input: { action: ApprovalAction; input: Record<string, unknown>; decider: Decider }): boolean | void | { value: unknown } | Promise<boolean | void | { value: unknown }>;
   onEvent?(event: ApprovalEvent): void | Promise<void>;
 }
 export interface ApprovalQueue {
   propose(input: { type: string; input?: unknown; requestedBy: string; ttlMs?: number; expiresAt?: number | Date; meta?: unknown; id?: string }): Promise<ApprovalAction>;
   get(id: string): Promise<ApprovalAction | null>; list(filter?: ApprovalFilter): Promise<ApprovalAction[]>; expire(): Promise<ApprovalAction[]>;
-  approve(id: string, options: { decider: Decider; signal?: AbortSignal }): Promise<{ action: ApprovalAction; result: unknown }>;
+  approve(id: string, options: { decider: Decider; signal?: AbortSignal; input?: Record<string, unknown> }): Promise<{ action: ApprovalAction; result: unknown }>;
   reject(id: string, options: { decider: Decider; reason?: string }): Promise<ApprovalAction>;
 }
 export class ApprovalError extends Error { code: 'not_found' | 'expired' | 'already_decided' | 'forbidden' | 'no_executor' | 'execution_failed' | 'invalid' | (string & {}); constructor(code: string, message?: string, options?: { cause?: unknown }) }
@@ -158,4 +171,16 @@ export function createPostgresLock(pool: PgPool, options?: { prefix?: string }):
 export function postgresScheduleSchema(options?: { table?: string }): string;
 export function createPostgresScheduleStore(db: Queryable, options?: { table?: string }): ScheduleStateStore;
 export function postgresApprovalSchema(options?: { table?: string }): string;
-export function createPostgresApprovalStore(db: Queryable, options?: { table?: string }): ApprovalStore;
+export type ApprovalField = 'id' | 'type' | 'input' | 'requestedBy' | 'meta' | 'status' | 'createdAt' | 'expiresAt' | 'decidedBy' | 'decidedAt' | 'executedAt' | 'result' | 'reason' | 'refusal' | 'decisionInput';
+/** Fields that may be mapped to null (not kept). */
+export type OptionalApprovalField = 'meta' | 'expiresAt' | 'result' | 'reason' | 'refusal' | 'decisionInput';
+export interface PostgresApprovalStoreOptions {
+  table?: string;
+  /** Column of each field on an existing table (timestamps: timestamptz; input, meta, result, refusal, decisionInput: jsonb). */
+  columns?: { [F in Exclude<ApprovalField, OptionalApprovalField>]?: string } & { [F in OptionalApprovalField]?: string | null };
+  /** Your status words for the four statuses. */
+  statuses?: Partial<Record<ApprovalStatus, string>>;
+  /** Only the rows where `column = value` belong to the queue (a journal that also holds other actions). */
+  scope?: { column: string; value: unknown };
+}
+export function createPostgresApprovalStore(db: Queryable, options?: PostgresApprovalStoreOptions): ApprovalStore;

@@ -410,3 +410,72 @@ test('a budget given as a ready-made object works too, and the policy needs a bu
   const without = build().toolPolicy;
   assert.throws(() => without.recordSpend({ id: 'x', amount: 1 }), { code: 'budget_invalid' });
 });
+
+/* ---- 1.4.0: async threshold and validator, application stop, read-only budget ---- */
+
+test('an async threshold reads its cap elsewhere and receives the scope and the actor; a rejection waits for a person', async () => {
+  const seen = [];
+  const caps = { 'org-a': 50, 'org-b': 500 };
+  const { toolPolicy } = build({ tools: [
+    { name: 'pay', family: 'f', level: 'controlled', overThreshold: async (input, _settings, context) => { seen.push(context); await sleep(1); return input.amount > caps[context.organisationId]; } },
+    { name: 'broken', family: 'f', level: 'controlled', overThreshold: async () => { throw new Error('db down'); } }
+  ] });
+  assert.equal((await toolPolicy.decide(call('pay', { amount: 60 }))).code, 'over_threshold');
+  assert.equal((await toolPolicy.decide(call('pay', { amount: 60 }, { organisationId: 'org-b' }))).decision, 'allowed');
+  assert.deepEqual([seen[0].organisationId, seen[0].actor.id, seen[0].actor.kind], ['org-a', 'assistant', 'model']);
+  assert.deepEqual([(await toolPolicy.decide(call('broken'))).decision, (await toolPolicy.decide(call('broken'))).code], ['pending', 'over_threshold']);
+});
+
+test('an async validator may normalise or refuse the input', async () => {
+  const { toolPolicy } = build({ tools: [{ name: 'tag', family: 'f', level: 'read',
+    validate: async (input) => { await sleep(1); return typeof input.name === 'string' ? { ok: true, value: { name: input.name.trim() } } : { ok: false }; } }] });
+  const ok = await toolPolicy.decide(call('tag', { name: ' a ' }));
+  assert.deepEqual([ok.decision, ok.input], ['allowed', { name: 'a' }]);
+  assert.equal((await toolPolicy.decide(call('tag', { name: 1 }))).code, 'invalid_input');
+});
+
+test('isHalted kept by the application: a boolean or a function per organisation, a wrong answer refuses as unavailable', async () => {
+  assert.equal((await build({ isHalted: true }).toolPolicy.decide(call('read_item'))).code, 'emergency_stop');
+  assert.equal((await build({ isHalted: false }).toolPolicy.decide(call('read_item'))).decision, 'allowed');
+  const stopped = new Set(['org-b']);
+  const asked = [];
+  const { toolPolicy } = build({ isHalted: async (organisationId) => { asked.push(organisationId); return stopped.has(organisationId); } });
+  assert.equal((await toolPolicy.decide(call('read_item'))).decision, 'allowed');
+  const refused = await toolPolicy.decide(call('read_item', {}, { organisationId: 'org-b' }));
+  assert.equal(refused.code, 'emergency_stop');
+  assert.ok(asked.includes('org-a') && asked.includes('org-b'));
+  assert.equal((await build({ isHalted: () => 'yes' }).toolPolicy.decide(call('read_item'))).code, 'settings_unavailable');
+  assert.equal((await build({ isHalted: () => { throw new Error('db down'); } }).toolPolicy.decide(call('read_item'))).code, 'settings_unavailable');
+  assert.throws(() => build({ isHalted: 'no' }), { code: 'tool_policy_invalid' });
+});
+
+test('isHalted of the application is polled while a tool runs and cuts it', async () => {
+  let halted = false;
+  const { toolPolicy } = build({ isHalted: () => halted, pollMs: 10 });
+  const running = toolPolicy.execute(call('read_item'), (_input, { signal }) => new Promise((resolve, reject) => {
+    signal.addEventListener('abort', () => reject(signal.reason));
+    setTimeout(() => resolve('done'), 3000).unref();
+  }));
+  await sleep(30);
+  halted = true;
+  const outcome = await running;
+  assert.deepEqual([outcome.interrupted, outcome.code], [true, 'emergency_stop']);
+});
+
+test('read-only budget: a store with getSpent() only reads a consumption kept elsewhere; record() refuses', async () => {
+  const costs = new Map([['org-a|2026-10', 1000]]);
+  const store = { getSpent: async (scope, period) => costs.get(`${scope}|${period}`) ?? 0 };
+  const clock = makeClock(Date.parse('2026-10-17T12:00:00.000Z'));
+  const budget = createCalendarBudget({ store, limit: 1000, now: clock });
+  assert.equal(budget.readOnly, true);
+  const { toolPolicy } = build({ budget, now: clock });
+  assert.equal((await toolPolicy.decide(call('read_item'))).code, 'budget_exceeded');
+  assert.equal((await toolPolicy.decide(call('read_item', {}, { organisationId: 'org-b' }))).decision, 'allowed');
+  costs.set('org-a|2026-10', 10);
+  assert.equal((await toolPolicy.decide(call('read_item'))).decision, 'allowed', 'the next call reads the new total');
+  await assert.rejects(budget.record({ id: 'x', amount: 1 }), { code: 'budget_read_only' });
+  await assert.rejects(async () => toolPolicy.recordSpend({ id: 'x', amount: 1, organisationId: 'org-a' }), { code: 'budget_read_only' });
+  assert.equal(createCalendarBudget({}).readOnly, false);
+  assert.equal(createCalendarBudget({ store, readOnly: true }).readOnly, true);
+  assert.throws(() => createCalendarBudget({ store: createMemoryToolBudgetStore(), readOnly: true }), { code: 'budget_invalid' });
+});

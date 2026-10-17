@@ -28,10 +28,10 @@ function createMemoryApprovalStore() {
         .sort((a, b) => b.createdAt - a.createdAt || (a.id < b.id ? -1 : 1)).slice(0, limit).map(out);
     },
     // Each transition below is one atomic step: it returns the action, or null when the condition no longer holds.
-    async reserve(id, decidedBy, at) {
+    async reserve(id, decidedBy, at, decisionInput = null) {
       const a = actions.get(id);
       if (!a || a.status !== 'pending' || (a.expiresAt != null && a.expiresAt <= at)) return null;
-      Object.assign(a, { status: 'approved', decidedBy, decidedAt: at, executedAt: null }); return out(a);
+      Object.assign(a, { status: 'approved', decidedBy, decidedAt: at, executedAt: null, decisionInput: copy(decisionInput) }); return out(a);
     },
     async finish(id, result, at) {
       const a = actions.get(id);
@@ -41,7 +41,7 @@ function createMemoryApprovalStore() {
     async revert(id, decidedBy, refusal) {
       const a = actions.get(id);
       if (!a || a.status !== 'approved' || a.decidedBy !== decidedBy || a.executedAt != null) return null;
-      Object.assign(a, { status: 'pending', decidedBy: null, decidedAt: null, refusal: copy(refusal) }); return out(a);
+      Object.assign(a, { status: 'pending', decidedBy: null, decidedAt: null, decisionInput: null, refusal: copy(refusal) }); return out(a);
     },
     async reject(id, decidedBy, reason, at) {
       const a = actions.get(id);
@@ -60,7 +60,7 @@ function createApprovalQueue(options = {}) {
   const now = () => toMs((options.now ?? Date.now)());
   const executors = options.executors;
   if (executors != null && typeof executors !== 'function' && (typeof executors !== 'object' || Object.values(executors).some((f) => typeof f !== 'function'))) throw new Error('executors must be a function or an object of functions by action type.');
-  for (const name of ['authorize', 'beforeExecute', 'onEvent']) if (options[name] != null && typeof options[name] !== 'function') throw new Error(`${name} must be a function.`);
+  for (const name of ['authorize', 'beforeExecute', 'onEvent', 'validateInput']) if (options[name] != null && typeof options[name] !== 'function') throw new Error(`${name} must be a function.`);
   const executionTimeoutMs = options.executionTimeoutMs ?? 30000;
   const emit = (type, action, extra) => { try { void Promise.resolve(options.onEvent?.({ type, action, ...extra })).catch(() => {}); } catch (_error) { /* An observer never breaks the queue. */ } };
   const executorFor = (type) => typeof executors === 'function' ? executors : executors?.[type];
@@ -93,7 +93,7 @@ function createApprovalQueue(options = {}) {
       const at = now();
       const expiry = expiresAt != null ? toMs(expiresAt) : ttlMs != null ? at + ttlMs : null;
       if (expiry != null && (!Number.isFinite(expiry) || expiry <= at)) throw new ApprovalError('invalid', 'The expiry must be in the future.');
-      const action = await store.create({ id, type, input: copy(input), requestedBy, meta: copy(meta), status: 'pending', createdAt: at, expiresAt: expiry, decidedBy: null, decidedAt: null, executedAt: null, result: null, reason: null, refusal: null });
+      const action = await store.create({ id, type, input: copy(input), requestedBy, meta: copy(meta), status: 'pending', createdAt: at, expiresAt: expiry, decidedBy: null, decidedAt: null, executedAt: null, result: null, reason: null, refusal: null, decisionInput: null });
       emit('proposed', action);
       return action;
     },
@@ -104,23 +104,44 @@ function createApprovalQueue(options = {}) {
     expire,
     /**
      * Approves and executes. The action is reserved atomically first, so concurrent approvals run it once.
-     * The executor (`({ action, input, decider, signal, idempotencyKey })`) may throw ApprovalRefused or any error:
+     * `input` (optional): the action as the person read and corrected it; checked by `validateInput`, recorded as
+     * `decisionInput` before the execution and given to the executor as `input` (the proposal stays as `proposedInput`).
+     * The executor (`({ action, input, proposedInput, decider, signal, idempotencyKey })`) may throw ApprovalRefused or any error:
      * the action then goes back to `pending` with `refusal` set and the error is rethrown. Resolves `{ action, result }`.
      */
-    async approve(id, { decider, signal } = {}) {
+    async approve(id, { decider, signal, input } = {}) {
       await expire();
       const pending = await pendingOrThrow(id);
-      await authorize(pending, decider, 'approve');
+      // `input`: the action as the person read and corrected it. Checked here, recorded with the decision before
+      // anything runs, then given to the executor in place of the proposed input (kept intact for the record).
+      const hasDecisionInput = input !== undefined;
+      let decisionInput = null;
+      if (hasDecisionInput) {
+        if (input === null || typeof input !== 'object' || Array.isArray(input)) throw new ApprovalError('invalid', 'input must be an object.');
+        decisionInput = copy(input);
+        if (options.validateInput) {
+          let verdict;
+          try { verdict = await options.validateInput({ action: pending, input: decisionInput, decider }); } catch (error) { throw new ApprovalError('invalid', 'The corrected input is not valid.', { cause: error }); }
+          if (verdict === false) throw new ApprovalError('invalid', 'The corrected input is not valid.');
+          if (verdict && typeof verdict === 'object' && 'value' in verdict) decisionInput = copy(verdict.value);
+        }
+      }
+      await authorize(hasDecisionInput ? { ...pending, decisionInput } : pending, decider, 'approve');
       const execute = executorFor(pending.type);
       if (!execute) throw new ApprovalError('no_executor', `No executor for ${pending.type}.`);
       const by = who(decider);
-      const action = await store.reserve(id, by, now());
+      const action = await store.reserve(id, by, now(), decisionInput);
       if (!action) { await pendingOrThrow(id); throw new ApprovalError('already_decided'); } // Lost the race: say why.
       const back = async (refusal) => { await store.revert(id, by, { ...refusal, at: now(), by }); };
+      if (hasDecisionInput && action.decisionInput === undefined) {
+        // A store written before decision inputs: it would run the action without keeping what was approved.
+        await back({ reason: 'store_without_decision_input', details: null });
+        throw new ApprovalError('invalid', 'This approval store does not record a decision input (reserve() must store its 4th argument).');
+      }
       let result;
       try {
         await options.beforeExecute?.({ action, decider });
-        result = copy(await execute({ action, input: action.input, decider, idempotencyKey: action.id, signal: signal ?? globalThis.AbortSignal.timeout(executionTimeoutMs) }));
+        result = copy(await execute({ action, input: action.decisionInput ?? action.input, proposedInput: action.input, decider, idempotencyKey: action.id, signal: signal ?? globalThis.AbortSignal.timeout(executionTimeoutMs) }));
       } catch (error) {
         if (error instanceof ApprovalRefused) { await back({ reason: error.reason, details: error.details }); emit('refused', action, { reason: error.reason }); throw error; }
         if (error instanceof ApprovalError) { await back({ reason: error.code, details: null }); throw error; }

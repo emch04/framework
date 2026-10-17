@@ -353,6 +353,15 @@ scheduler.stop();                               // stops the periodic pass
   `'monday'`), `{ type: 'interval', everyMs }`. `timeZone` is global or per task. Daylight saving is handled: 07:00
   stays 07:00 on the wall clock. A time that does not exist (02:30 when clocks go forward) runs right after the gap; a
   time that happens twice runs once, at the first occurrence. `nextRun(schedule, afterMs, timeZone)` is exported.
+- **Aligned interval (1.3.0)**: `{ type: 'interval', everyMs: 3600000, align: true }` runs on the round marks of the
+  local day (07:00, 08:00…; every 15 min: :00, :15, :30, :45), counted from local midnight, whatever the start time.
+  `everyMs` must be whole seconds and at most one day.
+- **Live settings (1.3.0)**: a task's `enabled` (boolean or `async () => boolean`) and `schedule` (object or
+  `async () => schedule`) are read at each pass, so a dashboard can switch a task off or move it without a restart. A
+  disabled task has `nextRunAt: null`; a changed schedule is replanned at the next pass (outcome `'rescheduled'`, the
+  task does not run in that pass). A function that throws or gives a wrong value is reported to `onError`; the task is left out of
+  that pass (its plan is kept) and the other tasks go on. `state()` shows the
+  current `enabled` and `schedule`.
 - **Never twice at once**: each run takes a `lock` (`acquire(key)` → `{ release() }` or `null`). The default is an
   in-process lock; with several processes pass `createPostgresLock(pool)` (`pg_try_advisory_lock`, held on one pooled
   connection until released, freed if the process dies). The run state is re-read under the lock, so a process that
@@ -393,6 +402,7 @@ const queue = createApprovalQueue({
 const action = await queue.propose({ type: 'publish', input: { title: 'Hello' }, requestedBy: 'assistant', ttlMs: 3 * 24 * 3600 * 1000 });
 await queue.list({ status: 'pending' });
 await queue.approve(action.id, { decider: { id: 'user-1', role: 'owner' } });   // → { action, result }
+await queue.approve(action.id, { decider, input: { title: 'Hello, world' } });   // the action as the person corrected it
 await queue.reject(action.id, { decider: { id: 'user-1', role: 'owner' }, reason: 'not now' });
 await queue.expire();                                                            // also done by list/approve/reject
 ```
@@ -408,11 +418,43 @@ await queue.expire();                                                           
 - **Expiry**: `ttlMs` or `expiresAt` at `propose`. An expired action cannot be approved or rejected
   (`ApprovalError('expired')`), even if the sweep has not run yet. `expire()` marks them `expired`; call it from a
   timer or from a scheduler task.
+- **Corrected input (1.3.0)**: `approve(id, { decider, input })` approves the action *as the person read and edited
+  it*. `input` must be an object; `validateInput({ action, input, decider })` (option) may refuse it (`false` or a
+  throw: `ApprovalError('invalid')`) or normalise it (`{ value }`). It is recorded as `decisionInput` in the same atomic
+  reservation, before anything runs, and the executor receives it as `input` (the proposal stays as
+  `proposedInput`). `authorize` sees it too. A refusal or failure clears it with the reservation.
 - **Errors** (`ApprovalError.code`): `not_found`, `expired`, `already_decided`, `forbidden`, `no_executor`,
   `execution_failed`, `invalid`.
-- **Store**: memory by default; `createPostgresApprovalStore(db)` with `postgresApprovalSchema()`. Custom stores
-  implement `create/get/list/reserve/finish/revert/reject/expire`, each transition atomic and returning `null` when
-  its condition no longer holds.
+- **PostgreSQL store**: `createPostgresApprovalStore(db)` with `postgresApprovalSchema()` (it also adds the
+  `decision_input` column to an older table). On **your own table** (1.3.0), map it:
+  ```js
+  createPostgresApprovalStore(db, {
+    table: 'journal_actions',
+    columns: { id: 'ref', type: 'outil', input: 'entree', requestedBy: 'demandeur', status: 'statut',
+      createdAt: 'cree_le', expiresAt: 'expire_le', decidedBy: 'decide_par', decidedAt: 'decide_le',
+      executedAt: 'execute_le', result: 'resultat', reason: 'motif', decisionInput: 'entree_validee',
+      meta: null, refusal: null },                              // null: not kept
+    statuses: { pending: 'en_attente', approved: 'approuvee', rejected: 'rejetee', expired: 'expiree' },
+    scope: { column: 'necessite_accord', value: true }         // only these rows belong to the queue
+  });
+  ```
+  Timestamps are `timestamptz`; `input`, `meta`, `result`, `refusal`, `decision_input` are `jsonb`. Names are checked
+  (plain identifiers: letters, digits, `_`, at most 48 characters); all values are bound parameters. Rows outside `scope` are never read or
+  changed. Without a `decisionInput` column, `approve` with `input` is refused (nothing runs).
+- **Your own store (contract)**: memory by default; any object with these methods works. Each transition is one atomic
+  step that returns the updated action, or `null` when its condition no longer holds (never throws for that):
+  - `create(action)` stores a new action (all fields, `status: 'pending'`); `get(id)` → action or `null`;
+  - `list({ status?, type?, requestedBy?, limit = 50, before? })` → most recent first (`createdAt` desc, then `id`);
+  - `reserve(id, decidedBy, at, decisionInput)`: `pending` and not expired at `at` → `approved`, sets `decidedBy`,
+    `decidedAt`, `executedAt: null`, and **stores `decisionInput`** (returns it, `null` when absent; a store that
+    returns `undefined` is refused when an input is given);
+  - `finish(id, result, at)`: `approved` and `executedAt` null → sets `result`, `executedAt`;
+  - `revert(id, decidedBy, refusal)`: `approved` by this decider and not executed → `pending`, clears `decidedBy`,
+    `decidedAt`, `decisionInput`, sets `refusal`;
+  - `reject(id, decidedBy, reason, at)`: `pending` and not expired → `rejected`;
+  - `expire(at)`: every `pending` with `expiresAt <= at` → `expired` (`decidedAt: at`), returns them.
+  Times are milliseconds. With several processes the conditions must be checked in the same statement as the
+  change (a conditional `UPDATE … WHERE status = 'pending'`), not read then written.
 - Persisted inputs and results must be JSON.
 
 ## Tests

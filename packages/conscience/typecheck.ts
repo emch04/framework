@@ -179,5 +179,16 @@ async function toolTypes() {
   void createToolPolicy({ tools: [{ name: 'x', level: 'read' }] });
   // @ts-expect-error The period is a day, a month or a function.
   void createCalendarBudget({ period: 'week' });
+  /* 1.4.0: async threshold with its context, application stop, read-only budget. */
+  const readOnly = createCalendarBudget({ limit: 100, readOnly: true, store: { getSpent: async () => 0 } });
+  const appPolicy = createToolPolicy({
+    tools: [{ name: 'pay', family: 'a', level: 'controlled', validate: async (input) => ({ ok: typeof input?.n === 'number' }),
+      overThreshold: async (input, _settings, { organisationId, actor }) => input.n > (organisationId ? 10 : 0) && actor.kind === 'model' }],
+    isHalted: async (organisationId) => organisationId === 'stopped',
+    budget: readOnly
+  });
+  void [readOnly.readOnly, appPolicy, createToolPolicy({ tools: [], isHalted: false })];
+  // @ts-expect-error isHalted is a boolean or a function.
+  void createToolPolicy({ tools: [], isHalted: 'no' });
 }
 void toolTypes;

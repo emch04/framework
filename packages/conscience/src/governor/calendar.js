@@ -62,13 +62,16 @@ function createMemoryToolBudgetStore() {
 /**
  * Calendar budget over a store { getSpent(scope, period), addSpend({ scope,
  * period, id, amount, at }) }. `limit` is the default cap; a call may pass its own.
+ * A store with getSpent() only is a supported case: the budget reads a consumption kept elsewhere.
  */
 function createCalendarBudget(options = {}) {
   const { period = 'month', timeZone = 'UTC', scope: defaultScope = 'default', limit: defaultLimit } = options;
   const store = options.store ?? createMemoryToolBudgetStore();
-  for (const method of ['getSpent', 'addSpend']) {
-    if (typeof store[method] !== 'function') throw new GovernorError('budget_invalid', `The budget store is missing ${method}().`);
-  }
+  if (typeof store.getSpent !== 'function') throw new GovernorError('budget_invalid', 'The budget store is missing getSpent().');
+  /* A store with getSpent() only is read-only: the consumption is counted elsewhere (your own table of costs),
+     the budget only reads it before each call. record() then refuses with budget_read_only. */
+  const readOnly = typeof store.addSpend !== 'function';
+  if (!readOnly && options.readOnly === true) throw new GovernorError('budget_invalid', 'readOnly: true but the store has addSpend().');
   if (defaultLimit !== undefined && defaultLimit !== null && !isAmount(defaultLimit)) throw new GovernorError('budget_invalid', 'limit must be an integer >= 0.');
   const now = options.now ?? Date.now;
   calendarPeriodKey(now(), { period, timeZone }); // fails now, not at the first call, on a wrong period or time zone
@@ -87,6 +90,7 @@ function createCalendarBudget(options = {}) {
 
   /** Counts a consumption in the period of its instant. `id` makes the call safe to repeat. */
   async function record({ scope = defaultScope, amount, id, at } = {}) {
+    if (readOnly) throw new GovernorError('budget_read_only', 'This budget reads a consumption counted elsewhere: record it in your own store.');
     if (!isAmount(amount)) throw new GovernorError('budget_invalid', 'amount must be an integer >= 0 (whole units, no fractions).');
     if (!isNonEmptyString(id)) throw new GovernorError('budget_invalid', 'A consumption needs a stable id (idempotency).');
     const instant = at ?? now();
@@ -95,7 +99,7 @@ function createCalendarBudget(options = {}) {
     return { added: result.added, scope, period: key, spent: result.spent };
   }
 
-  return Object.freeze({ check, record, periodKey: keyOf, period: typeof period === 'function' ? 'custom' : period, timeZone });
+  return Object.freeze({ check, record, readOnly, periodKey: keyOf, period: typeof period === 'function' ? 'custom' : period, timeZone });
 }
 
 module.exports = { PERIODS, calendarPeriodKey, createMemoryToolBudgetStore, createCalendarBudget, isAmount };

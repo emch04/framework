@@ -257,3 +257,89 @@ test('invalid configuration is refused', () => {
   assert.throws(() => createScheduler({ timeZone: 'Nowhere/Land', tasks: [{ id: 'a', schedule, run }] }), /time zone/);
   assert.throws(() => createScheduler({ lock: {}, tasks: [{ id: 'a', schedule, run }] }), /lock/);
 });
+
+test('an aligned interval falls on the clock: every hour on the hour, every 10 minutes on the 10, across the time change', () => {
+  const hourly = { type: 'interval', everyMs: 3600000, align: true };
+  assert.equal(iso(nextRun(hourly, at('2026-10-16T12:34:56Z'), PARIS)), '2026-10-16T13:00:00.000Z'); // 15:00 Paris
+  assert.equal(iso(nextRun(hourly, at('2026-10-16T13:00:00Z'), PARIS)), '2026-10-16T14:00:00.000Z'); // strictly after
+  assert.equal(iso(nextRun({ type: 'interval', everyMs: 600000, align: true }, at('2026-10-16T12:30:00Z'), PARIS)), '2026-10-16T12:40:00.000Z');
+  // 25 October: 02:00-03:00 happens twice in Paris; the slots stay on the hour, one per real hour.
+  assert.equal(iso(nextRun(hourly, at('2026-10-25T00:30:00Z'), PARIS)), '2026-10-25T01:00:00.000Z');
+  assert.equal(iso(nextRun(hourly, at('2026-10-25T01:00:00Z'), PARIS)), '2026-10-25T02:00:00.000Z');
+  // A step that does not divide the day restarts at local midnight: 7 h -> 00:00, 07:00, 14:00, 21:00, then 00:00.
+  assert.equal(iso(nextRun({ type: 'interval', everyMs: 7 * 3600000, align: true }, at('2026-10-16T21:30:00Z'), PARIS)), '2026-10-16T22:00:00.000Z');
+  // A half-hour zone: 90 minutes counted from midnight in Kolkata.
+  assert.equal(iso(nextRun({ type: 'interval', everyMs: 5400000, align: true }, at('2026-10-16T12:00:00Z'), 'Asia/Kolkata')), '2026-10-16T12:30:00.000Z');
+  // Without align, the delay is still counted from the end of the run.
+  assert.equal(nextRun({ type: 'interval', everyMs: 3600000, align: false }, 1234), 3601234);
+  for (const bad of [{ type: 'interval', everyMs: 2 * 86400000, align: true }, { type: 'interval', everyMs: 1500, align: true }, { type: 'interval', everyMs: 60000, align: 'yes' }]) assert.throws(() => nextRun(bad, 0, PARIS), undefined, JSON.stringify(bad));
+});
+
+test('an aligned task runs on the hour and stays on the hour, however long its run lasts', async () => {
+  const now = clock('2026-10-16T12:20:00Z');
+  const runs = [];
+  const scheduler = createScheduler({ now, timeZone: PARIS, tasks: [{ id: 'hourly', schedule: { type: 'interval', everyMs: 3600000, align: true }, run: async () => { runs.push(iso(now())); now.add(17 * 60000); return null; } }] });
+  await scheduler.tick();
+  assert.equal(iso((await scheduler.state('hourly')).nextRunAt), '2026-10-16T13:00:00.000Z');
+  now.set('2026-10-16T13:00:05Z');
+  await scheduler.tick();
+  assert.deepEqual(runs, ['2026-10-16T13:00:05.000Z']);
+  assert.equal(iso((await scheduler.state('hourly')).nextRunAt), '2026-10-16T14:00:00.000Z'); // not 14:17
+});
+
+test('enabled and schedule are read again at every pass: a setting changed in an admin applies without rebuilding', async () => {
+  const now = clock('2026-10-16T04:00:00Z');
+  const settings = { on: true, at: '07:00' };
+  const runs = [];
+  const scheduler = createScheduler({
+    now, timeZone: PARIS,
+    tasks: [{ id: 'report', enabled: async () => settings.on, schedule: async () => ({ type: 'daily', at: settings.at }), run: async () => { runs.push(iso(now())); return { n: runs.length }; } }]
+  });
+  assert.deepEqual(await scheduler.tick(), [{ id: 'report', status: 'scheduled' }]);
+  assert.equal(iso((await scheduler.state('report')).nextRunAt), '2026-10-16T05:00:00.000Z');
+  settings.at = '09:30';
+  assert.deepEqual(await scheduler.tick(), [{ id: 'report', status: 'rescheduled' }]);
+  const state = await scheduler.state('report');
+  assert.equal(iso(state.nextRunAt), '2026-10-16T07:30:00.000Z');
+  assert.deepEqual(state.schedule, { type: 'daily', at: '09:30' });
+  now.set('2026-10-16T05:00:30Z'); // the old time: nothing
+  assert.deepEqual(await scheduler.tick(), []);
+  settings.on = false;
+  now.set('2026-10-16T07:30:30Z');
+  assert.deepEqual(await scheduler.tick(), []); // switched off at its time: does not run
+  assert.equal((await scheduler.state('report')).enabled, false);
+  assert.equal((await scheduler.state('report')).nextRunAt, null);
+  now.set('2026-10-17T12:00:00Z'); // switched back on a day later: planned afresh, not skipped as late
+  settings.on = true;
+  assert.deepEqual(await scheduler.tick(), [{ id: 'report', status: 'scheduled' }]);
+  assert.equal(iso((await scheduler.state('report')).nextRunAt), '2026-10-18T07:30:00.000Z');
+  assert.equal(runs.length, 0);
+  assert.equal((await scheduler.run('report')).status, 'ok'); // a manual run still works
+});
+
+test('a schedule function that fails or gives a bad schedule is reported and skipped; the other tasks go on', async () => {
+  const now = clock('2026-10-16T04:00:00Z');
+  const errors = [];
+  const scheduler = createScheduler({
+    now, onError: (error, id) => errors.push([id, error.message]),
+    tasks: [
+      { id: 'broken', schedule: async () => { throw new Error('settings down'); }, run: async () => null },
+      { id: 'bad', schedule: () => ({ type: 'daily', at: '99:00' }), run: async () => null },
+      { id: 'flag', enabled: async () => 'yes', schedule: { type: 'daily', at: '07:00' }, run: async () => null },
+      { id: 'fine', schedule: { type: 'daily', at: '07:00' }, run: async () => null }
+    ]
+  });
+  assert.deepEqual(await scheduler.tick(), [{ id: 'fine', status: 'scheduled' }]);
+  assert.deepEqual(errors.map(([id]) => id), ['broken', 'bad', 'flag']);
+  assert.throws(() => createScheduler({ tasks: [{ id: 'x', enabled: 'no', schedule: { type: 'daily', at: '07:00' }, run: async () => null }] }), /enabled/);
+});
+
+test('a state saved before schedule keys existed keeps its plan', async () => {
+  const now = clock('2026-10-16T04:00:00Z');
+  const store = createMemoryScheduleStore();
+  await store.set('old', { id: 'old', status: 'scheduled', nextRunAt: at('2026-10-16T06:00:00Z') });
+  const scheduler = createScheduler({ now, store, tasks: [{ id: 'old', schedule: { type: 'daily', at: '07:00' }, run: async () => null }] });
+  assert.deepEqual(await scheduler.tick(), []);
+  assert.equal(iso((await store.get('old')).nextRunAt), '2026-10-16T06:00:00.000Z');
+  assert.ok((await store.get('old')).scheduleKey);
+});

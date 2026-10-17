@@ -3,6 +3,22 @@
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Chaque package Astratra est versionné indépendamment.
 
+## 2026-10-17 — `@astratra/agent` 1.3.0, `@astratra/conscience` 1.4.0 : réglages à chaud, entrée corrigée à l'approbation, file sur sa propre table, budget en lecture seule
+
+Manques relevés en branchant l'assistant de Boutique Roro sur ces deux paquets.
+
+### Ajouté
+- `@astratra/agent` : intervalle aligné `{ type: 'interval', everyMs, align: true }` (marques rondes de la journée locale, comptées depuis minuit local, changement d'heure compris ; `everyMs` en secondes entières, un jour au plus).
+- `@astratra/agent` : `enabled` et `schedule` d'une tâche acceptent une fonction (éventuellement asynchrone) relue à chaque passage ; une tâche coupée n'a plus de prochain passage, une programmation changée est replanifiée (`'rescheduled'`) ; un état enregistré avant cette version garde son plan. `state()` montre `enabled` et `schedule` en vigueur.
+- `@astratra/agent` : `approve(id, { decider, input })`, l'action telle que la personne l'a corrigée : vérifiée par `validateInput` (option), enregistrée en `decisionInput` dans la même réservation atomique avant toute exécution, donnée à l'exécuteur en `input` (la proposition reste en `proposedInput`), effacée par un refus. Un stockage maison qui ne garde pas `decisionInput` est refusé sans rien exécuter.
+- `@astratra/agent` : `createPostgresApprovalStore(db, { table, columns, statuses, scope })` sur une table existante (noms de colonnes, mots de statut, `scope` pour une table qui contient aussi d'autres actions, colonnes facultatives à `null`) ; `postgresApprovalSchema()` ajoute la colonne `decision_input` à une table plus ancienne. Contrat d'un stockage maison documenté (create/get/list/reserve/finish/revert/reject/expire).
+- `@astratra/conscience` : `overThreshold(input, settings, { organisationId, actor })` et `validate` peuvent être asynchrones (seuil lu en base ; une erreur ou un rejet met l'appel en attente d'une personne).
+- `@astratra/conscience` : option `isHalted` de `createToolPolicy` (booléen ou fonction par organisation, éventuellement asynchrone), un arrêt d'urgence tenu par l'application, lu avant chaque appel et pendant l'exécution ; toute autre valeur refuse l'appel (`settings_unavailable`).
+- `@astratra/conscience` : `createCalendarBudget` sur un magasin qui n'a que `getSpent()` (consommation comptée ailleurs) : `readOnly: true`, `record()` et `recordSpend()` lèvent `budget_read_only`.
+
+### Modifié
+- README (anglais et français) : tableau des versions à jour.
+
 ## 2026-10-17 — `@astratra/shipping` 1.1.0 : réglages relus à chaque appel, heures en millisecondes, purge du journal
 
 Manques relevés en branchant Boutique Roro sur la 1.0.0.

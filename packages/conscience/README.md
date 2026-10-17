@@ -172,7 +172,9 @@ await policy.recordSpend({ id: 'call-42', amount: 120 }); // whole units (cents)
 ```
 
 - **Levels** (`TOOL_LEVELS`): `read` runs; `controlled` runs unless it is over its
-  own `overThreshold(input, settings)`, or the run read untrusted content
+  own `overThreshold(input, settings, { organisationId, actor })` (sync or
+  async, so a cap can be read from your database; a throw or a rejection
+  counts as over), or the run read untrusted content
   (`run.markUntrusted()` or `untrusted: true` on the call), then it is `pending`;
   `sensitive` is always `pending`. The policy never runs a pending call: the
   application keeps it and a person decides.
@@ -198,6 +200,10 @@ await policy.recordSpend({ id: 'call-42', amount: 120 }); // whole units (cents)
   period), addSpend({ scope, period, id, amount, at }) }` (idempotent by id).
   The scope is `organisationId` by default. The cap is reached when
   `spent >= limit`; with the measure after the call, the last call may pass it.
+  **Read-only (1.4.0)**: a store with `getSpent()` only reads a consumption you
+  already count elsewhere (your own table of costs); the budget then only
+  checks it before each call, `budget.readOnly` is `true`, and `record()` /
+  `recordSpend()` throw `budget_read_only`. `readOnly: true` asserts it.
 - **Emergency stop**: `halt({ by, reason, organisationId? })` is read before
   each call and while a tool runs. `execute()` gives the tool an `AbortSignal`
   that aborts at once on a stop in this process, and within `pollMs` (default
@@ -205,7 +211,11 @@ await policy.recordSpend({ id: 'call-42', amount: 120 }); // whole units (cents)
   tool ignores the signal (`interrupted: true`). `activateRoles` pull it
   (default: anyone with an id), `releaseRoles` lift it (default: any human; a
   `model` or `engine` actor never can). A `governor` option makes the governor
-  kill switch stop the tools too.
+  kill switch stop the tools too. **`isHalted` (1.4.0)**: an emergency stop kept
+  by your application (a column of its settings), a boolean or a function
+  `(organisationId) => boolean`, sync or async, read before each call and
+  polled while a tool runs; anything but a boolean, or a throw, refuses the
+  call (`settings_unavailable`). `validate` may be async too.
 - **Audit**: every decision is written to the governor journal before it is
   returned (`tool_decision`: who, tool, family, level, decision, reasons, input
   fingerprint, never the raw input), plus `tool_outcome`, `tool_halt`,

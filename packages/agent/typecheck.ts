@@ -21,4 +21,8 @@ const db = { query: async () => ({ rows: [] }), connect: async () => ({ query: a
 void createScheduler({ tasks: [], lock: createPostgresLock(db), store: createPostgresScheduleStore(db) });
 const queue = createApprovalQueue({ store: createPostgresApprovalStore(db), executors: { send: async ({ input, idempotencyKey, signal }) => { void input; void idempotencyKey; signal.throwIfAborted(); throw new ApprovalRefused('incomplete', { missing: [] }); } }, authorize: ({ decider }) => typeof decider !== 'string' && decider.role === 'owner', onEvent: (e) => { void e.type; } });
 void queue.propose({ type: 'send', input: {}, requestedBy: 'agent', ttlMs: 1000 }).then((a) => queue.approve(a.id, { decider: { id: 'u', role: 'owner' } }));
+void createScheduler({ tasks: [{ id: 'hourly', schedule: { type: 'interval', everyMs: 3600000, align: true }, enabled: async () => true, run: () => {} }, { id: 'live', schedule: async () => ({ type: 'daily', at: '08:00' }), run: () => {} }] });
+const mapped = createPostgresApprovalStore(db, { table: 'journal', columns: { id: 'ref', status: 'statut', meta: null, decisionInput: 'entree_validee' }, statuses: { pending: 'en_attente' }, scope: { column: 'necessite_accord', value: true } });
+const corrected = createApprovalQueue({ store: mapped, validateInput: ({ input }) => ({ value: input }), executors: async ({ input, proposedInput }) => { void proposedInput; return input; } });
+void corrected.approve('id', { decider: 'owner', input: { amount: 25 } }).then(({ action }) => { void action.decisionInput; });
 void queue.list({ status: 'pending' }); void queue.expire(); void queue.reject('id', { decider: 'u', reason: 'no' });

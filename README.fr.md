@@ -118,9 +118,9 @@ est dans [CHANGELOG.md](CHANGELOG.md).
 | Paquet | Version | Rôle |
 |---|---|---|
 | [`@astratra/ai`](packages/ai/README.md) | 1.11.0 | Routage multi-fournisseur avec quotas et repli, registre d'outils, boucle d'agent, niveaux de risque avec confirmation, fournisseur llama.cpp local |
-| [`@astratra/agent`](packages/agent/README.md) | 1.2.0 | Tâches durables, budgets, plans, vérifications de fin, résumés de contexte, suivi de la consommation, retours utilisateur (👍/👎), ordonnanceur de tâches à heure fixe et file d'actions en attente d'approbation |
+| [`@astratra/agent`](packages/agent/README.md) | 1.3.0 | Tâches durables, budgets, plans, vérifications de fin, résumés de contexte, suivi de la consommation, retours utilisateur (👍/👎), ordonnanceur de tâches à heure fixe et file d'actions en attente d'approbation |
 | [`@astratra/models`](packages/models/README.md) | 1.1.0 | Service local de modèles sur CPU (vecteurs, reclassement, NLI, entités, transcription) et son client Node ; catalogue des prix et calcul du coût |
-| [`@astratra/conscience`](packages/conscience/README.md) | 1.3.0 | Mémoire documentée des décisions d'un agent (résultats, corrections, leçons avec preuves, modèle de soi, traçabilité, effacement) sous un gouverneur déterministe sans aucun modèle de langage |
+| [`@astratra/conscience`](packages/conscience/README.md) | 1.4.0 | Mémoire documentée des décisions d'un agent (résultats, corrections, leçons avec preuves, modèle de soi, traçabilité, effacement) sous un gouverneur déterministe sans aucun modèle de langage |
 | [`@astratra/memory`](packages/memory/README.md) | 2.0.0 | Souvenirs par personne pour un assistant : rappel hybride, fusion des doublons, corrections annulables, magasin PostgreSQL |
 | [`@astratra/rag`](packages/rag/README.md) | 1.0.0 | Recherche dans des documents : découpage, vecteurs injectés, recherche mixte, vérification des sources, lecture de documents par un service optionnel |
 | [`@astratra/voice`](packages/voice/README.md) | 1.1.1 | Synthèse vocale côté serveur (Piper, ffmpeg), caches versionnés, chaîne de fournisseurs avec rotation des clés, transcription locale |

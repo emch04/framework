@@ -416,9 +416,10 @@ export interface ToolDefinition {
   /** One of the level words (the canonical ones, or yours when labels.levels renames them). */
   level: string;
   /** Returns false, { ok: false }, or { ok: true, value } (the value replaces the input). May throw: invalid. */
-  validate?(input: any): boolean | { ok: boolean; value?: unknown };
-  /** Controlled tools only: true sends the call to a person (an amount over your own threshold, for instance). Throwing counts as true. */
-  overThreshold?(input: any, settings: ToolSettings): boolean;
+  validate?(input: any): boolean | { ok: boolean; value?: unknown } | Promise<boolean | { ok: boolean; value?: unknown }>;
+  /** Controlled tools only: true sends the call to a person (an amount over your own threshold, for instance).
+   *  May be async (a cap read from your database); throwing or rejecting counts as true. */
+  overThreshold?(input: any, settings: ToolSettings, context: { organisationId: string | null; actor: ToolActor }): boolean | Promise<boolean>;
   /** At most this many calls of the tool in one run; the next ones are refused (cap_reached). */
   maxPerRun?: number;
   /** Whole units this call is expected to consume: refused up front when it cannot fit in the budget. */
@@ -499,6 +500,10 @@ export interface ToolPolicyOptions {
   store?: Pick<GovernorStore, 'appendAudit' | 'listAudit' | 'getControl' | 'setControl'>;
   /** A governor whose kill switch also stops the tools. */
   governor?: Governor;
+  /** An emergency stop kept by your application (a column of your settings): a boolean, or a function
+   *  (organisationId) => boolean, sync or async, read before each call and polled while a tool runs.
+   *  Anything but a boolean, or a throw, refuses the call (settings_unavailable). */
+  isHalted?: boolean | ((organisationId: string | undefined) => boolean | Promise<boolean>);
   version?: string;
   /** How often a running tool looks at the kill switch pulled by another process (default 1000, 0 = off). */
   pollMs?: number;
@@ -534,8 +539,9 @@ export interface BudgetStanding {
 /** spent/limit/remaining are whole units of your choice (cents, thousandths of cents, tokens...). No fractions. */
 export interface ToolBudgetStore {
   getSpent(scope: string, period: string): Promise<number>;
-  /** Idempotent by (scope, id): a replay adds nothing and returns added: false. */
-  addSpend(entry: { scope: string; period: string; id: string; amount: number; at: string }): Promise<{ added: boolean; spent: number }>;
+  /** Idempotent by (scope, id): a replay adds nothing and returns added: false.
+   *  Absent: the budget is read-only (the consumption is counted elsewhere; record() throws budget_read_only). */
+  addSpend?(entry: { scope: string; period: string; id: string; amount: number; at: string }): Promise<{ added: boolean; spent: number }>;
 }
 export interface CalendarBudgetOptions {
   /** 'month' (default), 'day', or a function (instant, timeZone) => key. */
@@ -546,6 +552,8 @@ export interface CalendarBudgetOptions {
   limit?: number | null;
   scope?: string;
   store?: ToolBudgetStore;
+  /** Asserts the store has no addSpend() (a store with getSpent() only is read-only anyway). */
+  readOnly?: boolean;
   now?(): number;
 }
 export interface CalendarBudget {
@@ -553,6 +561,8 @@ export interface CalendarBudget {
   record(spend: { id: string; amount: number; scope?: string; at?: number | Date }): Promise<{ added: boolean; scope: string; period: string; spent: number }>;
   periodKey(at?: number | Date): string;
   readonly period: string; readonly timeZone: string;
+  /** true when the store has getSpent() only. */
+  readonly readOnly: boolean;
 }
 export function createCalendarBudget(options?: CalendarBudgetOptions): CalendarBudget;
 /** "2026-10" (month) or "2026-10-31" (day) of an instant, in a time zone. */

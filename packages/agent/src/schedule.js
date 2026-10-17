@@ -45,7 +45,11 @@ function normalizeSchedule(schedule) {
   if (!schedule || typeof schedule !== 'object') throw new Error('schedule is required.');
   if (schedule.type === 'interval') {
     if (!Number.isFinite(schedule.everyMs) || schedule.everyMs <= 0) throw new Error('interval schedule needs a positive everyMs.');
-    return { type: 'interval', everyMs: schedule.everyMs };
+    if (schedule.align === undefined || schedule.align === false) return { type: 'interval', everyMs: schedule.everyMs };
+    if (schedule.align !== true) throw new Error('interval align must be true or false.');
+    // Aligned on the wall clock of the zone, counted from local midnight: every hour on the hour, every 10 minutes on the 10.
+    if (schedule.everyMs > DAY_MS || !Number.isInteger(schedule.everyMs / 1000)) throw new Error('an aligned interval needs a whole number of seconds, at most one day.');
+    return { type: 'interval', everyMs: schedule.everyMs, align: true };
   }
   if (schedule.type !== 'daily' && schedule.type !== 'weekly') throw new Error('schedule.type must be daily, weekly or interval.');
   const match = /^([01]?\d|2[0-3]):([0-5]\d)$/.exec(String(schedule.at));
@@ -62,8 +66,22 @@ function normalizeSchedule(schedule) {
 /** First run strictly after `after` (ms). `schedule` is as given to the scheduler. */
 function nextRun(schedule, after, timeZone = 'UTC') {
   const s = normalizeSchedule(schedule);
-  if (s.type === 'interval') return after + s.everyMs;
+  if (s.type === 'interval' && !s.align) return after + s.everyMs;
   checkTimeZone(timeZone);
+  if (s.type === 'interval') {
+    // Slots restart at each local midnight (a step that does not divide the day ends short before midnight).
+    // Counted in elapsed time from midnight: on a time change day the hours stay on the hour, as the offset moves by whole hours.
+    let date = localDate(after, timeZone);
+    for (let i = 0; i < 3; i += 1) {
+      const midnight = zonedTime(date, 0, 0, timeZone);
+      const nextMidnight = zonedTime(addDays(date, 1), 0, 0, timeZone);
+      const slot = after < midnight ? midnight : midnight + (Math.floor((after - midnight) / s.everyMs) + 1) * s.everyMs;
+      if (slot < nextMidnight) return slot;
+      date = addDays(date, 1);
+      if (nextMidnight > after) return nextMidnight;
+    }
+    throw new Error('No next run found.');
+  }
   const start = localDate(after, timeZone);
   for (let i = 0; i <= 8; i += 1) {
     const date = addDays(start, i);

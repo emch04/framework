@@ -178,7 +178,9 @@ await policy.recordSpend({ id: 'appel-42', amount: 120 }); // unités entières 
 ```
 
 - **Niveaux** (`TOOL_LEVELS`) : `read` s'exécute ; `controlled` s'exécute sauf au-delà
-  de son `overThreshold(input, settings)` ou si le tour a lu un contenu non fiable
+  de son `overThreshold(input, settings, { organisationId, actor })` (synchrone ou
+  asynchrone : le seuil peut être lu dans votre base ; une erreur ou un rejet compte
+  comme un dépassement) ou si le tour a lu un contenu non fiable
   (`run.markUntrusted()` ou `untrusted: true` sur l'appel) : il est alors `pending` ;
   `sensitive` est toujours `pending`. La politique n'exécute jamais un appel en attente :
   l'application le garde et une personne décide.
@@ -203,7 +205,11 @@ await policy.recordSpend({ id: 'appel-42', amount: 120 }); // unités entières 
   idempotente, bigint), ou le vôtre `{ getSpent(scope, period), addSpend({ scope,
   period, id, amount, at }) }` (idempotent par id). La portée est `organisationId`
   par défaut. Le plafond est atteint quand `spent >= limit` ; la mesure se faisant après
-  l'appel, le dernier appel peut le dépasser.
+  l'appel, le dernier appel peut le dépasser. **Lecture seule (1.4.0)** : un magasin qui
+  n'a que `getSpent()` lit une consommation déjà comptée ailleurs (votre propre table de
+  coûts) ; le budget ne fait alors que la vérifier avant chaque appel, `budget.readOnly`
+  vaut `true`, et `record()` / `recordSpend()` lèvent `budget_read_only`. `readOnly: true`
+  l'affirme.
 - **Arrêt d'urgence** : `halt({ by, reason, organisationId? })` est lu avant chaque
   appel et pendant l'exécution d'un outil. `execute()` donne à l'outil un `AbortSignal`
   qui s'annule aussitôt pour un arrêt dans ce processus, et sous `pollMs` (1 s par défaut)
@@ -211,7 +217,11 @@ await policy.recordSpend({ id: 'appel-42', amount: 120 }); // unités entières 
   ignore le signal (`interrupted: true`). `activateRoles` le tirent (par défaut : toute
   personne identifiée), `releaseRoles` le lèvent (par défaut : tout humain ; un acteur
   `model` ou `engine` jamais). L'option `governor` fait aussi arrêter les outils par
-  l'interrupteur du gouverneur.
+  l'interrupteur du gouverneur. **`isHalted` (1.4.0)** : un arrêt d'urgence tenu par
+  votre application (une colonne de ses réglages), booléen ou fonction
+  `(organisationId) => boolean`, synchrone ou asynchrone, lu avant chaque appel et
+  relu pendant l'exécution d'un outil ; tout autre résultat, ou une erreur, refuse
+  l'appel (`settings_unavailable`). `validate` peut aussi être asynchrone.
 - **Audit** : chaque décision est écrite dans le journal du gouverneur avant d'être
   rendue (`tool_decision` : qui, outil, famille, niveau, décision, motifs, empreinte de
   l'entrée, jamais l'entrée brute), plus `tool_outcome`, `tool_halt`, `tool_resume` et

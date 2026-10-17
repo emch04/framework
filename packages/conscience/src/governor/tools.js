@@ -102,7 +102,7 @@ const hasRole = (actor, roles) => actor.roles.some((role) => roles.includes(role
 /**
  * Builds the tool policy.
  * options: tools, families?, defaults?, settings?, budget?, emergency?, labels?, untrustedPendingLevels?,
- *          store?, governor?, version?, pollMs?, now?, idFactory?, onEvent?
+ *          store?, governor?, isHalted?, version?, pollMs?, now?, idFactory?, onEvent?
  */
 function createToolPolicy(options = {}) {
   if (!isObject(options)) fail('options must be an object.');
@@ -143,6 +143,10 @@ function createToolPolicy(options = {}) {
   if (budget && typeof budget.record !== 'function') fail('budget must have check() and record().');
   const governor = options.governor ?? null;
   if (governor && typeof governor.isHalted !== 'function') fail('governor must be built by createGovernor().');
+  /* An emergency stop kept by the application (a column of its settings): a boolean, or a function
+     (organisationId) => boolean, sync or async, read before each call and while a tool runs. */
+  const appHalted = options.isHalted ?? null;
+  if (appHalted !== null && typeof appHalted !== 'boolean' && typeof appHalted !== 'function') fail('isHalted must be a boolean or a function.');
 
   const active = new Set();
   const iso = () => new Date(now()).toISOString();
@@ -162,6 +166,11 @@ function createToolPolicy(options = {}) {
       if (local?.halted) return { halted: true, scope: organisationId, reason: local.reason ?? null };
     }
     if (governor && await governor.isHalted(organisationId ?? undefined)) return { halted: true, scope: 'governor', reason: 'governor_halted' };
+    if (appHalted !== null) {
+      const value = typeof appHalted === 'function' ? await appHalted(organisationId ?? undefined) : appHalted;
+      if (typeof value !== 'boolean') throw new GovernorError('governor_unavailable', 'isHalted() must give a boolean.'); // Read as a failure: refuses.
+      if (value) return { halted: true, scope: 'application', reason: 'application_halted' };
+    }
     return { halted: false };
   }
 
@@ -193,7 +202,7 @@ function createToolPolicy(options = {}) {
     let input = call.input ?? {};
     if (tool.validate) {
       let verdict;
-      try { verdict = tool.validate(input); } catch (_error) { verdict = false; }
+      try { verdict = await tool.validate(input); } catch (_error) { verdict = false; }
       if (verdict === false || (isObject(verdict) && verdict.ok === false)) return refuse(TOOL_REASONS.INVALID_INPUT);
       if (isObject(verdict) && verdict.ok === true && 'value' in verdict) input = verdict.value;
     }
@@ -215,7 +224,8 @@ function createToolPolicy(options = {}) {
     if ((run.untrusted || call.untrusted === true) && untrustedLevels.includes(tool.level)) return pending(TOOL_REASONS.UNTRUSTED);
     if (tool.level === TOOL_LEVELS.CONTROLLED && tool.overThreshold) {
       let over = false;
-      try { over = tool.overThreshold(input, settings) === true; } catch (_error) { over = true; }
+      // May be async (a cap read from the database). A failure or a timeout puts the call in front of a person.
+      try { over = (await tool.overThreshold(input, settings, { organisationId, actor: actorOf(call.actor) })) === true; } catch (_error) { over = true; }
       if (over) return pending(TOOL_REASONS.THRESHOLD);
     }
     return { decision: TOOL_DECISIONS.ALLOWED, code: null, input, budget: standing };

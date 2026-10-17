@@ -186,6 +186,14 @@ scheduler.stop();                               // arrête le passage périodiqu
   changements d'heure sont gérés : 07:00 reste 07:00 à l'horloge murale. Une heure qui n'existe pas (02:30 au passage à
   l'heure d'été) part juste après le trou ; une heure qui existe deux fois part une seule fois, à la première
   occurrence. `nextRun(schedule, apresMs, timeZone)` est exportée.
+- **Intervalle aligné (1.3.0)** : `{ type: 'interval', everyMs: 3600000, align: true }` part sur les marques rondes de
+  la journée locale (07:00, 08:00… ; toutes les 15 min : :00, :15, :30, :45), comptées depuis minuit local, quelle que
+  soit l'heure de démarrage. `everyMs` doit être un nombre entier de secondes, d'un jour au plus.
+- **Réglages à chaud (1.3.0)** : `enabled` (booléen ou `async () => booléen`) et `schedule` (objet ou
+  `async () => programmation`) d'une tâche sont relus à chaque passage : un tableau de bord peut couper une tâche ou la
+  déplacer sans redémarrage. Une tâche coupée a `nextRunAt: null` ; une programmation changée est replanifiée au passage
+  suivant (résultat `'rescheduled'`, la tâche ne part pas dans ce passage). Une fonction qui échoue ou rend une mauvaise valeur est signalée à `onError` ; la tâche est
+  laissée de côté pour ce passage (son plan est gardé) et les autres continuent. `state()` montre `enabled` et `schedule` en vigueur.
 - **Jamais deux fois en même temps** : chaque passage prend un `lock` (`acquire(cle)` → `{ release() }` ou `null`). Par
   défaut un verrou dans le processus ; avec plusieurs processus, `createPostgresLock(pool)` (`pg_try_advisory_lock`,
   tenu sur une connexion du pool jusqu'à `release()`, libéré si le processus meurt). L'état est relu sous le verrou :
@@ -228,6 +236,7 @@ const queue = createApprovalQueue({
 const action = await queue.propose({ type: 'publier', input: { titre: 'Bonjour' }, requestedBy: 'assistant', ttlMs: 3 * 24 * 3600 * 1000 });
 await queue.list({ status: 'pending' });
 await queue.approve(action.id, { decider: { id: 'u-1', role: 'proprietaire' } });   // → { action, result }
+await queue.approve(action.id, { decider, input: { titre: 'Bonjour à tous' } });     // l'action telle que corrigée
 await queue.reject(action.id, { decider: { id: 'u-1', role: 'proprietaire' }, reason: 'pas maintenant' });
 await queue.expire();                                                                // fait aussi par list/approve/reject
 ```
@@ -244,11 +253,46 @@ await queue.expire();                                                           
 - **Expiration** : `ttlMs` ou `expiresAt` à `propose`. Une action expirée ne peut plus être approuvée ni rejetée
   (`ApprovalError('expired')`), même si le balayage n'est pas encore passé. `expire()` les marque `expired` ;
   appelez-la depuis une minuterie ou une tâche de l'ordonnanceur.
+- **Entrée corrigée (1.3.0)** : `approve(id, { decider, input })` approuve l'action *telle que la personne l'a lue et
+  corrigée*. `input` doit être un objet ; `validateInput({ action, input, decider })` (option) peut la refuser (`false`
+  ou une exception : `ApprovalError('invalid')`) ou la normaliser (`{ value }`). Elle est enregistrée en
+  `decisionInput` dans la même réservation atomique, avant toute exécution, et l'exécuteur la reçoit en `input` (la
+  proposition reste en `proposedInput`). `authorize` la voit aussi. Un refus ou un échec l'efface avec la réservation.
 - **Erreurs** (`ApprovalError.code`) : `not_found`, `expired`, `already_decided`, `forbidden`, `no_executor`,
   `execution_failed`, `invalid`.
-- **Stockage** : mémoire par défaut ; `createPostgresApprovalStore(db)` avec `postgresApprovalSchema()`. Un stockage
-  maison implémente `create/get/list/reserve/finish/revert/reject/expire`, chaque transition étant atomique et rendant
-  `null` quand sa condition n'est plus vraie.
+- **Stockage PostgreSQL** : `createPostgresApprovalStore(db)` avec `postgresApprovalSchema()` (qui ajoute aussi la
+  colonne `decision_input` à une table plus ancienne). Sur **votre propre table** (1.3.0), donnez la correspondance :
+  ```js
+  createPostgresApprovalStore(db, {
+    table: 'journal_actions',
+    columns: { id: 'ref', type: 'outil', input: 'entree', requestedBy: 'demandeur', status: 'statut',
+      createdAt: 'cree_le', expiresAt: 'expire_le', decidedBy: 'decide_par', decidedAt: 'decide_le',
+      executedAt: 'execute_le', result: 'resultat', reason: 'motif', decisionInput: 'entree_validee',
+      meta: null, refusal: null },                              // null : non conservé
+    statuses: { pending: 'en_attente', approved: 'approuvee', rejected: 'rejetee', expired: 'expiree' },
+    scope: { column: 'necessite_accord', value: true }         // seules ces lignes appartiennent à la file
+  });
+  ```
+  Les horodatages sont en `timestamptz` ; `input`, `meta`, `result`, `refusal`, `decision_input` en `jsonb`. Les noms
+  sont vérifiés (identifiants simples : lettres, chiffres, `_`, 48 caractères au plus) ; toutes les valeurs passent en paramètres. Les
+  lignes hors `scope` ne sont jamais lues ni modifiées. Sans colonne `decisionInput`, `approve` avec `input` est refusé
+  (rien ne s'exécute).
+- **Votre propre stockage (contrat)** : mémoire par défaut ; tout objet qui a ces méthodes convient. Chaque transition
+  est une seule étape atomique qui rend l'action modifiée, ou `null` quand sa condition n'est plus vraie (sans lever
+  d'erreur pour cela) :
+  - `create(action)` enregistre une nouvelle action (tous les champs, `status: 'pending'`) ; `get(id)` → action ou `null` ;
+  - `list({ status?, type?, requestedBy?, limit = 50, before? })` → les plus récentes d'abord (`createdAt` décroissant,
+    puis `id`) ;
+  - `reserve(id, decidedBy, at, decisionInput)` : `pending` et non expirée à `at` → `approved`, fixe `decidedBy`,
+    `decidedAt`, `executedAt: null`, et **garde `decisionInput`** (le rend, `null` s'il est absent ; un stockage qui
+    rend `undefined` est refusé quand une entrée est donnée) ;
+  - `finish(id, result, at)` : `approved` et `executedAt` nul → fixe `result`, `executedAt` ;
+  - `revert(id, decidedBy, refusal)` : `approved` par ce décideur et non exécutée → `pending`, efface `decidedBy`,
+    `decidedAt`, `decisionInput`, fixe `refusal` ;
+  - `reject(id, decidedBy, reason, at)` : `pending` et non expirée → `rejected` ;
+  - `expire(at)` : toute `pending` dont `expiresAt <= at` → `expired` (`decidedAt: at`), et les rend.
+  Les instants sont en millisecondes. Avec plusieurs processus, la condition doit être vérifiée dans la même requête
+  que le changement (un `UPDATE … WHERE status = 'pending'` conditionnel), pas lue puis écrite.
 - Les entrées et résultats conservés doivent être du JSON.
 
 ## Tests

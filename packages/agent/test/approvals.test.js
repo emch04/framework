@@ -187,3 +187,54 @@ test('a single executor function handles every type; wrong configuration is refu
   assert.throws(() => createApprovalQueue({ executors: { send: 1 } }), /executors/);
   assert.throws(() => createApprovalQueue({ authorize: 1 }), /authorize/);
 });
+
+test('the person approving can correct the input: recorded before the run, given to the executor, the proposal kept', async () => {
+  const seen = [];
+  const { queue, calls } = setup({ beforeExecute: ({ action }) => { seen.push(action.decisionInput); } });
+  const action = await propose(queue, { input: { to: 'a', amount: 30 } });
+  const { action: done } = await queue.approve(action.id, { decider: 'owner', input: { to: 'a', amount: 25 } });
+  assert.deepEqual(seen, [{ to: 'a', amount: 25 }]); // recorded before anything ran
+  assert.deepEqual(calls[0].input, { to: 'a', amount: 25 });
+  assert.deepEqual(calls[0].proposedInput, { to: 'a', amount: 30 });
+  assert.deepEqual(done.input, { to: 'a', amount: 30 });
+  assert.deepEqual(done.decisionInput, { to: 'a', amount: 25 });
+  const plain = await propose(queue);
+  await queue.approve(plain.id, { decider: 'owner' });
+  assert.deepEqual(calls[1].input, { to: 'a' }); // without a correction, the proposal runs
+  assert.equal((await queue.get(plain.id)).decisionInput, null);
+});
+
+test('a corrected input is validated (and may be normalised), refused before any reservation, and cleared on a refusal', async () => {
+  const { queue, calls } = setup({
+    validateInput: ({ input }) => input.amount > 100 ? false : { value: { ...input, amount: Math.round(input.amount) } },
+    executors: { send: async ({ input }) => { if (input.amount === 7) throw new ApprovalRefused('too_small'); calls.push(input); return {}; } }
+  });
+  const action = await propose(queue, { input: { to: 'a', amount: 30 } });
+  await assert.rejects(queue.approve(action.id, { decider: 'owner', input: { amount: 500 } }), code('invalid'));
+  await assert.rejects(queue.approve(action.id, { decider: 'owner', input: ['x'] }), code('invalid'));
+  assert.equal((await queue.get(action.id)).status, 'pending');
+  await assert.rejects(queue.approve(action.id, { decider: 'owner', input: { to: 'a', amount: 7 } }), ApprovalRefused);
+  const back = await queue.get(action.id);
+  assert.equal(back.status, 'pending'); assert.equal(back.decisionInput, null); assert.equal(back.refusal.reason, 'too_small');
+  await queue.approve(action.id, { decider: 'owner', input: { to: 'a', amount: 12.6 } });
+  assert.deepEqual(calls, [{ to: 'a', amount: 13 }]);
+});
+
+test('authorize sees the corrected input; a store that cannot keep it refuses rather than run unrecorded', async () => {
+  const decisions = [];
+  const { queue } = setup({ authorize: ({ action }) => { decisions.push(action.decisionInput ?? null); return true; } });
+  const action = await propose(queue);
+  await queue.approve(action.id, { decider: 'o', input: { to: 'b' } });
+  assert.deepEqual(decisions, [{ to: 'b' }]);
+  // A store written before decision inputs (reserve() ignores its 4th argument).
+  const inner = createMemoryApprovalStore();
+  const old = { ...inner, reserve: async (id, by, at) => { const a = await inner.reserve(id, by, at); if (a) delete a.decisionInput; return a; } };
+  const ran = [];
+  const legacy = createApprovalQueue({ store: old, executors: { send: async ({ input }) => { ran.push(input); return {}; } } });
+  const pending = await legacy.propose({ type: 'send', input: { to: 'a' }, requestedBy: 'agent' });
+  await assert.rejects(legacy.approve(pending.id, { decider: 'o', input: { to: 'b' } }), code('invalid'));
+  assert.deepEqual(ran, []);
+  assert.equal((await legacy.get(pending.id)).status, 'pending');
+  await legacy.approve(pending.id, { decider: 'o' }); // without a correction, an old store still works
+  assert.deepEqual(ran, [{ to: 'a' }]);
+});

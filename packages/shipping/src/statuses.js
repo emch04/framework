@@ -1,5 +1,5 @@
 /**
- * Sendcloud tracking statuses (API v2, "Tracking statuses" list) mapped to the
+ * Sendcloud tracking statuses ("Tracking statuses" list; the webhooks are the same in API v2 and v3) mapped to the
  * three moments a shop acts on. Pure function.
  *
  * - picked_up: first scan by the carrier ("label created" is NOT a scan:

@@ -32,7 +32,8 @@ export function messageFor(codeOrError: ShippingErrorCode | string | ShippingErr
 export type ParcelStage = 'picked_up' | 'delivered' | 'incident';
 
 export interface ShippingMethod {
-  id: number | string;
+  /** Sendcloud: the shipping option code (for example 'colissimo:home/signature'). */
+  id: string;
   name: string;
   carrier: string;
   servicePointRequired: boolean;
@@ -53,11 +54,18 @@ export interface Recipient {
 }
 
 export interface Label {
+  /** The shipment, needed to cancel it. */
+  shipmentId: string;
+  /** The parcel, needed to download its label. */
   parcelId: number;
   trackingNumber: string;
   trackingUrl: string;
   carrier: string;
   service: string;
+  /** The label PDF when the provider returns it with the shipment (one parcel); otherwise downloadLabel. */
+  label: Buffer | null;
+  /** The same `reference` was announced before: this is the first shipment, no new label was bought. */
+  alreadyExisted: boolean;
   testMode: boolean;
 }
 
@@ -80,28 +88,33 @@ export interface ParcelEvent {
   /** The provider's status label. */
   message: string;
   stage: ParcelStage | null;
+  /** When the status changed (seconds); webhooks can arrive out of order. */
+  timestamp: number | null;
 }
 
 export class Carrier {
   get name(): string;
   status(): Promise<{ configured: boolean; missing: string[]; testMode?: boolean }> | { configured: boolean; missing: string[] };
-  shippingMethods(query: { country: string; weightGrams: number; servicePointId?: number | string | null }): Promise<ShippingMethod[]>;
+  shippingMethods(query: { country: string; postalCode?: string; weightGrams: number; servicePointId?: number | string | null }): Promise<ShippingMethod[]>;
   createLabel(input: {
     orderNumber: string;
+    /** Unique per account: announcing it again returns the first shipment instead of a second label. */
+    reference?: string;
     recipient: Recipient;
     weightGrams: number;
-    method: { id: number | string; name?: string; carrier?: string };
+    method: { id?: string; code?: string };
     servicePointId?: number | string | null;
   }): Promise<Label>;
-  downloadLabel(input: { parcelId: number; format?: 'a4' | 'a6'; startFrom?: number }): Promise<{ content: Buffer; type: 'application/pdf' }>;
-  cancelLabel(input: { parcelId: number }): Promise<{ status: 'cancelled' | 'requested' }>;
+  /** Paper size; default 'a6'. */
+  downloadLabel(input: { parcelId: number; format?: 'a4' | 'a5' | 'a6' }): Promise<{ content: Buffer; type: 'application/pdf' }>;
+  cancelLabel(input: { shipmentId: string }): Promise<{ status: 'cancelled' | 'requested' }>;
   servicePoints(query: {
     country: string;
     postalCode?: string;
     city?: string;
     latitude?: number;
     longitude?: number;
-    /** Provider carrier codes, for example ['mondial_relay', 'colissimo']; all when omitted. */
+    /** Provider carrier codes, for example ['mondial_relay', 'colissimo']; the integration's carriers when omitted. */
     carriers?: string[];
     radiusMeters?: number;
     limit?: number;
@@ -112,25 +125,32 @@ export class Carrier {
 
 /* ─────────────────── Sendcloud ─────────────────── */
 
+/** https://panel.sendcloud.sc/api/v3 */
 export const SENDCLOUD_API_URL: string;
-export const SENDCLOUD_SERVICE_POINTS_URL: string;
+/** The free test shipping option: an unstamped letter, nothing is posted. */
+export const TEST_SHIPPING_OPTION: 'sendcloud:letter';
 
 type Secret = string | (() => string | Promise<string>);
 
 export interface SendcloudOptions {
   publicKey: Secret;
-  /** Also signs the tracking webhooks. */
   secretKey: Secret;
+  /** The integration's "Webhook Signature Key" when it has one; otherwise webhooks are signed with secretKey. */
+  webhookSecret?: Secret;
+  /** The sender: an address saved in Sendcloud, or the full address. `country` is required in both cases. */
+  sender: { addressId: number; country: string } | {
+    name: string; companyName?: string; line1: string; line2?: string; houseNumber?: string;
+    city: string; postalCode: string; country: string; phone?: string; email?: string;
+  };
   fetch?: typeof fetch;
   baseUrl?: string;
-  servicePointsUrl?: string;
   /** Default 20 000. */
   timeoutMs?: number;
   /** Options of @astratra/resilience retry (reads only). */
   retry?: { attempts?: number; baseDelayMs?: number; maxDelayMs?: number; sleep?: (ms: number) => Promise<void> };
   /** Options of @astratra/resilience createCircuitBreaker. */
   breaker?: { failureThreshold?: number; recoveryMs?: number; now?: () => number };
-  /** Labels on Sendcloud's "Unstamped letter" (found by name): nothing is posted. */
+  /** Labels on 'sendcloud:letter' (unstamped letter): nothing is posted. */
   testMode?: boolean;
   /** Default 120; false disables the service point cache. */
   servicePointsCacheSeconds?: number | false;

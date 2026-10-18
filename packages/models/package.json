@@ -1,6 +1,6 @@
 {
   "name": "@astratra/models",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Local CPU model service for servers without GPU (embeddings, reranking, NLI, entities, speech-to-text, prompt-injection detection, content moderation) and its Node client: optional lazy-loaded models, token auth, request limits, per-endpoint timeouts, retries and circuit breakers, results that degrade instead of throwing; a pinned manifest of every model (Hugging Face commit, SHA-256, licence) with an `astratra-models fetch` command and a startup check; a model price catalog; plus pm2/systemd generators and a pinned venv setup script.",
   "engines": {
     "node": ">=20"

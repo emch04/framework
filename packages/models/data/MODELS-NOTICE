@@ -12,7 +12,9 @@ rerank      onnx-community/gte-multilingual-reranker-base (ONNX conversion
 nli         MoritzLaurer/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7        MIT
 entities    urchade/gliner_multi-v2.1                                        Apache-2.0
             microsoft/mdeberta-v3-base (configuration and tokenizer only)    MIT
-transcribe  Systran/faster-whisper-base (conversion of openai/whisper-base)  MIT
+transcribe  Systran/faster-whisper-small (conversion of openai/whisper-small) MIT
+transcribe_base (optional, fetched by name only)
+            Systran/faster-whisper-base (conversion of openai/whisper-base)  MIT
 injection   Horizon-Labs/prompt-injection-guard-small                        Apache-2.0
 moderation  Horizon-Labs/content-safety-guard-small                          Apache-2.0
 

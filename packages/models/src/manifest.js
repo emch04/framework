@@ -46,6 +46,7 @@ function manifestProblems(manifest) {
     else if (folders.has(model.folder)) problems.push(`${at}.folder: already used by another model`);
     else folders.add(model.folder);
     if (typeof model.license !== 'string' || !model.license) problems.push(`${at}.license: text expected`);
+    if (model.optional !== undefined && typeof model.optional !== 'boolean') problems.push(`${at}.optional: boolean expected`);
     if (!Array.isArray(model.sources) || !model.sources.length) { problems.push(`${at}.sources: non-empty list expected`); continue; }
     model.sources.forEach((source, index) => {
       const where = `${at}.sources[${index}]`;
@@ -82,10 +83,10 @@ function modelNames(manifest = loadManifest()) {
   return Object.keys(manifest.models);
 }
 
-/** Models selected by name; throws on an unknown one. Default: all of them. */
+/** Models selected by name; throws on an unknown one. Default: all of them but the optional ones (`optional: true`, fetched by name only). */
 function selectModels(manifest, names) {
   const known = Object.keys(manifest.models);
-  if (names === undefined || names === null) return known;
+  if (names === undefined || names === null) return known.filter((name) => manifest.models[name].optional !== true);
   if (!Array.isArray(names) || !names.length) throw new TypeError('models: a non-empty list of model names expected.');
   const unknown = names.filter((name) => !known.includes(name));
   if (unknown.length) throw new TypeError(`unknown model: ${unknown.join(', ')} (known: ${known.join(', ')})`);

@@ -66,7 +66,7 @@ async function main(argv, out = process.stdout, err = process.stderr) {
         const files = listFiles(manifest, [name], options.dir);
         const total = files.reduce((sum, file) => sum + file.size, 0);
         const state = options.dir ? ` [${checkModels({ dir: options.dir, models: [name], manifest, verify: 'size' }).models[name].status}]` : '';
-        write(`${name.padEnd(11)} ${megabytes(total).padStart(8)}  ${model.license}  ${model.sources.map((s) => `${s.repo}@${s.revision.slice(0, 8)}`).join(' + ')}${state}`);
+        write(`${name.padEnd(16)} ${megabytes(total).padStart(8)}  ${model.license}  ${model.sources.map((s) => `${s.repo}@${s.revision.slice(0, 8)}`).join(' + ')}${model.optional ? '  (optional: fetch --models ' + name + ')' : ''}${state}`);
       }
       return 0;
     }

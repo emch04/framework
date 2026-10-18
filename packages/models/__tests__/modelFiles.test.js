@@ -8,6 +8,7 @@ const {
   ManifestIncompleteError, ChecksumError, ModelsNotReadyError, serviceEnv
 } = require('../src');
 const { main } = require('../bin/astratra-models');
+const { selectModels } = require('../src/manifest');
 
 const sha = (buffer) => crypto.createHash('sha256').update(buffer).digest('hex');
 const REVISION = 'a'.repeat(40);
@@ -84,8 +85,8 @@ afterEach(() => fs.rmSync(dir, { recursive: true, force: true }));
 describe('the packaged manifest', () => {
   const manifest = loadManifest();
 
-  test('lists the five existing models and the two guard models', () => {
-    expect(Object.keys(manifest.models)).toEqual(['embed', 'rerank', 'nli', 'entities', 'transcribe', 'injection', 'moderation']);
+  test('lists the five existing models, the two guard models, and Whisper base as an option', () => {
+    expect(Object.keys(manifest.models)).toEqual(['embed', 'rerank', 'nli', 'entities', 'transcribe', 'transcribe_base', 'injection', 'moderation']);
     expect(manifestProblems(manifest)).toEqual([]);
   });
 
@@ -99,7 +100,7 @@ describe('the packaged manifest', () => {
           expect(file.size).toBeGreaterThan(0);
         }
       }
-      expect(name).toMatch(/^[a-z]+$/);
+      expect(name).toMatch(/^[a-z]+(_[a-z]+)?$/);
     }
   });
 
@@ -107,9 +108,19 @@ describe('the packaged manifest', () => {
     const folders = Object.fromEntries(Object.entries(manifest.models).map(([n, m]) => [n, m.folder]));
     expect(folders).toEqual({
       embed: 'bge-m3-onnx-int8', rerank: 'gte-reranker-onnx-int8', nli: 'mdeberta-xnli-multilingual',
-      entities: 'gliner-multi-v2.1', transcribe: 'faster-whisper-base',
+      entities: 'gliner-multi-v2.1', transcribe: 'faster-whisper-small', transcribe_base: 'faster-whisper-base',
       injection: 'prompt-injection-guard-small', moderation: 'content-safety-guard-small'
     });
+  });
+
+  test('Whisper small is the default; base is fetched only when asked by name', () => {
+    expect(manifest.models.transcribe.sources[0].repo).toBe('Systran/faster-whisper-small');
+    expect(manifest.models.transcribe.license).toBe('MIT');
+    expect(selectModels(manifest)).not.toContain('transcribe_base');
+    expect(selectModels(manifest)).toContain('transcribe');
+    expect(selectModels(manifest, ['transcribe_base'])).toEqual(['transcribe_base']);
+    expect(manifestProblems({ ...manifest, models: { ...manifest.models, transcribe: { ...manifest.models.transcribe, optional: 'yes' } } }))
+      .toEqual(['models.transcribe.optional: boolean expected']);
   });
 
   test('the encoder GLiNER names lands in _dependances, next to the models', () => {
@@ -337,6 +348,7 @@ describe('astratra-models command', () => {
     const result = await run(['list']);
     expect(result.code).toBe(0);
     expect(result.out).toMatch(/injection\s+\d+ MB\s+Apache-2.0\s+Horizon-Labs\/prompt-injection-guard-small@[0-9a-f]{8}/);
-    expect(result.out.trim().split('\n')).toHaveLength(7);
+    expect(result.out.trim().split('\n')).toHaveLength(8);
+    expect(result.out).toMatch(/transcribe_base .*Systran\/faster-whisper-base@ebe41f70\s+\(optional: fetch --models transcribe_base\)/);
   });
 });

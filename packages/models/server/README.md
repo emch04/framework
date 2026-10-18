@@ -10,7 +10,7 @@ processeur (ONNX int8, CTranslate2 int8, torch CPU).
 | `POST /rerank` | gte-multilingual-reranker ONNX int8 | `{query, documents}` → `{scores, model}` |
 | `POST /nli` | mDeBERTa XNLI ONNX int8 | `{pairs: [{premise, hypothesis}]}` → `{results: [{entailment, neutral, contradiction}], model}` |
 | `POST /entities` | GLiNER multi v2.1 | `{text, labels?}` → `{entities: [{text, label, start, end, score}], model}` |
-| `POST /transcribe` | faster-whisper (base) int8 | `{audio, language?, prompt?, vad?}` → `{text, language, avg_logprob, no_speech_prob, duration_ms, audio_ms, model}` |
+| `POST /transcribe` | faster-whisper (small) int8 | `{audio, language?, prompt?, vad?}` → `{text, language, avg_logprob, no_speech_prob, duration_ms, audio_ms, model}` |
 | `POST /injection` | prompt-injection-guard-small ONNX int8 | `{texts}` → `{results: [{score, verdict}], threshold, model}` |
 | `POST /moderation` | content-safety-guard-small ONNX int8 | `{texts}` → `{results: [{flagged, unsafe, categories, flagged_categories}], model}` |
 | `GET /health` | — | `{status, version, models: {nom: {configured, loaded, failed, model}}}` |
@@ -108,7 +108,7 @@ Chaque réglage d'un modèle se donne par `MODELS_<MODELE>_<CLE>` :
 | `rerank` | `gte-reranker-onnx-int8` | `path`, `id`, `threads`, `max_batch` 50, `max_chars` 2000 (coupé, pas refusé), `max_tokens`, `batch_size` 16 |
 | `nli` | `mdeberta-xnli-multilingual` | `path`, `id`, `threads`, `max_batch` 20, `max_chars` 2000 (coupé), `max_tokens` |
 | `entities` | `gliner-multi-v2.1` | `path`, `id`, `threads`, `max_chars` 8000, `max_labels` 10, `max_label_chars` 50, `threshold` 0.5, `chunk_chars` 1500, `batch_size` 1, `default_labels` `["person"]`, `label_map`, `encoder_dir` `_dependances` |
-| `transcribe` | `faster-whisper-base` | `path`, `id`, `threads` 4, `min_seconds` 0.2, `max_seconds` 30, `max_prompt_chars` 600, `languages` (null = tout code ISO), `auto_languages` (codes laissés à la détection), `vad` false, `allow_vad` true |
+| `transcribe` | `faster-whisper-small` (à défaut, `faster-whisper-base` s'il est seul présent) | `path`, `id`, `threads` 4, `min_seconds` 0.2, `max_seconds` 30, `max_prompt_chars` 600, `languages` (null = tout code ISO), `auto_languages` (codes laissés à la détection), `vad` false, `allow_vad` true |
 
 | `injection` | `prompt-injection-guard-small` | `path`, `id`, `threads`, `max_batch` 8, `max_chars` 20000 (refusé au-delà), `max_tokens` 1024, `batch_size` 4, `window_chars` 3000, `overlap_chars` 300, `threshold` 0.5 |
 | `moderation` | `content-safety-guard-small` | `path`, `id`, `threads`, `max_batch` 8, `max_chars` 20000, `max_tokens` 1024, `batch_size` 4, `window_chars`, `overlap_chars`, `categories` (les six par défaut), `thresholds` (ex. `{"unsafe": 0.4, "self_harm": 0.1}`) |
@@ -119,9 +119,10 @@ deux vecteurs d'`id` différents ne se comparent pas.
 Réglages mesurés à conserver : `embed.batch_size` à 1 (le modèle int8 est
 quantifié dynamiquement, un même texte seul ou à côté d'un plus long sortait
 à un cosinus de 0,995 de lui-même) ; `entities.batch_size` à 1 (par six
-morceaux, la mémoire montait à 4,8 Go) ; `faster-whisper-base` plutôt que
-`small` (0,35 s contre 1,2 s par phrase, pour une reconnaissance un peu
-moins bonne).
+morceaux, la mémoire montait à 4,8 Go) ; `faster-whisper-small` plutôt que
+`base` depuis 1.2.0 (1,2 s contre 0,35 s par phrase, mais deux fois moins de
+mots faux en français : 13,6 % contre 25 %) ; base reste possible par
+`MODELS_TRANSCRIBE_PATH`.
 
 GLiNER nomme son encodeur dans `gliner_config.json` ; le service le fait
 pointer vers la copie locale de `encoder_dir` au travers d'un dossier

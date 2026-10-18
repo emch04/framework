@@ -178,8 +178,21 @@ class ConfigTests(unittest.TestCase):
         config = app.load_config(env={'MODELS_DIR': '/srv/models'})
         self.assertEqual(config['models']['embed']['path'], '/srv/models/bge-m3-onnx-int8')
         self.assertEqual(config['models']['embed']['id'], 'bge-m3-onnx-int8')
-        self.assertEqual(config['models']['transcribe']['path'], '/srv/models/faster-whisper-base')
+        self.assertEqual(config['models']['transcribe']['path'], '/srv/models/faster-whisper-small')
+        self.assertEqual(config['models']['transcribe']['id'], 'faster-whisper-small')
         self.assertEqual(config['models']['entities']['encoder_dir'], '/srv/models/_dependances')
+
+    def test_transcribe_small_by_default_base_kept_when_small_is_not_fetched(self):
+        with tempfile.TemporaryDirectory() as root:
+            os.makedirs(os.path.join(root, 'faster-whisper-base'))
+            config = app.load_config(env={'MODELS_DIR': root})
+            self.assertEqual(config['models']['transcribe']['id'], 'faster-whisper-base')
+            os.makedirs(os.path.join(root, 'faster-whisper-small'))
+            config = app.load_config(env={'MODELS_DIR': root})
+            self.assertEqual(config['models']['transcribe']['id'], 'faster-whisper-small')
+            explicit = os.path.join(root, 'faster-whisper-base')
+            config = app.load_config(env={'MODELS_DIR': root, 'MODELS_TRANSCRIBE_PATH': explicit})
+            self.assertEqual(config['models']['transcribe']['path'], explicit)
 
     def test_guard_models_have_default_folders_and_settings(self):
         config = app.load_config(env={'MODELS_DIR': '/srv/models'})

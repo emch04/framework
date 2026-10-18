@@ -105,16 +105,25 @@ points d'entrée ont leur propre délai (2,5 s) et leur propre disjoncteur.
 
 ## Les modèles : manifeste figé, `fetch`, vérification au démarrage
 
-`data/models-manifest.json` liste les sept modèles du service : dépôt Hugging
+`data/models-manifest.json` liste les sept modèles du service (et Whisper base en option) : dépôt Hugging
 Face, **hash de commit** (jamais une branche), fichiers avec taille et
 SHA-256, licence. `scripts/build-manifest.js` le (re)génère à partir de l'API
 du Hub ; il est relu comme du code.
 
 ```bash
-npx astratra-models fetch --dir /srv/models                       # tout
+npx astratra-models fetch --dir /srv/models                       # tout (sauf les options)
 npx astratra-models fetch --models injection,moderation --dir /srv/models
 npx astratra-models fetch --check --dir /srv/models               # sans réseau
 ```
+
+**Transcription (1.2.0)** : `transcribe` est **Whisper small**
+(`faster-whisper-small`, environ 13,6 % de mots faux en français contre 25 %
+pour base, mais 1,2 s par phrase contre 0,35 s sur un processeur de portable).
+Le service annonce l'`id` `faster-whisper-small` dans `/health` et dans chaque
+réponse. Un service installé avant 1.2.0, qui n'a que `faster-whisper-base`,
+le garde (et l'annonce) jusqu'au prochain `fetch`. Pour rester sur base :
+`fetch --models transcribe_base`, puis `MODELS_TRANSCRIBE_PATH` vers son dossier.
+Un modèle marqué `optional` dans le manifeste n'est téléchargé que nommé.
 
 `fetch` télécharge exactement ces fichiers à ces révisions, vérifie chaque
 SHA-256 (un écart supprime le fichier et fait échouer la commande), reprend un

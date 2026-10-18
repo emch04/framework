@@ -205,3 +205,44 @@ describe('createOpenAICompatibleProvider', () => {
     expect(() => createOpenAICompatibleProvider({ id: 'p', url: 'u', getKey: () => 'k' })).toThrow(/fetch/);
   });
 });
+
+describe('thought signatures (Gemini 3)', () => {
+  const withSignature = (signature) => ({ extra_content: { google: { thought_signature: signature } } });
+  const callAnswer = { status: 200, body: { choices: [{ message: { content: null, tool_calls: [
+    { id: 'c1', type: 'function', function: { name: 'stock', arguments: '{}' }, ...withSignature('sig-A') },
+    { id: 'c2', type: 'function', function: { name: 'price', arguments: '{}' } }
+  ] }, finish_reason: 'tool_calls' }] } };
+  const history = [
+    { role: 'user', text: 'Stock ?' },
+    { role: 'assistant', text: null, toolCalls: [{ id: 'c1', name: 'stock', args: {}, signature: 'sig-A' }, { id: 'c2', name: 'price', args: {} }] },
+    { role: 'tool', toolCallId: 'c1', result: '3' }
+  ];
+
+  test('a tool call keeps its signature as toolCalls[i].signature', async () => {
+    const { fetch } = fakeFetch(callAnswer);
+    const answer = await askChatModel({ url: 'https://gateway.test/v1/chat/completions', key: KEY, model: 'auto' }, { messages: [{ role: 'user', text: 'x' }] }, { fetch });
+    expect(answer.toolCalls.map((call) => call.signature)).toEqual(['sig-A', undefined]);
+  });
+
+  test('sent back to Google and to a target that asks for it, never to another provider', async () => {
+    const sent = async (target) => {
+      const { fetch, calls } = fakeFetch(text('ok'));
+      await askChatModel({ key: KEY, model: 'm', ...target }, { messages: history }, { fetch });
+      return calls[0].body.messages[1].tool_calls.map((call) => call.extra_content);
+    };
+    expect(await sent({ url: 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions' })).toEqual([withSignature('sig-A').extra_content, undefined]);
+    expect(await sent({ url: 'https://centrale.test/v1/passerelle/ia/chat/completions', thoughtSignatures: true })).toEqual([withSignature('sig-A').extra_content, undefined]);
+    expect(await sent({ url: 'https://api.groq.com/openai/v1/chat/completions' })).toEqual([undefined, undefined]);
+  });
+
+  test('a streamed tool call keeps its signature too', async () => {
+    const chunks = [
+      { choices: [{ delta: { tool_calls: [{ index: 0, id: 'c1', function: { name: 'stock', arguments: '{}' }, ...withSignature('sig-S') }] } }] },
+      { choices: [{ delta: {}, finish_reason: 'tool_calls' }] }
+    ];
+    const body = chunks.map((chunk) => `data: ${JSON.stringify(chunk)}\n\n`).join('') + 'data: [DONE]\n\n';
+    const fetch = async () => new Response(body, { status: 200, headers: { 'content-type': 'text/event-stream' } });
+    const answer = await askChatModel({ url: 'https://gateway.test/v1/chat/completions', key: KEY, model: 'auto' }, { messages: [{ role: 'user', text: 'x' }] }, { fetch, onText: () => {} });
+    expect(answer.toolCalls).toEqual([{ id: 'c1', name: 'stock', args: {}, signature: 'sig-S' }]);
+  });
+});

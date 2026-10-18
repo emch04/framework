@@ -108,7 +108,7 @@ Une app n'y garde qu'un jeton de projet (`CENTRALE_PASSERELLE_JETON`, `clj_pas_�
 ```ts
 import { lirePasserelle, modeleDiscussion, passerelleDabord, plongements, rechercher, voix } from '@astratra/centrale/passerelle';
 const passerelle = lirePasserelle(process.env);          // null si non réglée : l'app garde ses clés directes
-const modele = passerelle && modeleDiscussion(passerelle); // { url, baseUrl, apiKey, model: 'auto' } au format OpenAI, à mettre en tête du relais
+const modele = passerelle && modeleDiscussion(passerelle); // { url, baseUrl, apiKey, model: 'auto', thoughtSignatures: true } au format OpenAI, à mettre en tête du relais
 const resultats = await passerelleDabord(passerelle, (p) => rechercher(p, { requete: 'météo Paris' }), () => rechercheDirecte());
 ```
 

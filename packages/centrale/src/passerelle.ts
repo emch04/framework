@@ -65,9 +65,13 @@ export function lirePasserelle(
   return { adresse: url.toString().replace(/\/+$/, ''), jeton, delaiMs: options.delaiMs ?? 30_000, fetch: f };
 }
 
-/** Le modèle de discussion de la passerelle, au format OpenAI : `auto` laisse Centrale choisir parmi les fournisseurs du projet. */
-export function modeleDiscussion(p: Passerelle, modele = 'auto'): { url: string; baseUrl: string; apiKey: string; model: string } {
-  return { url: `${p.adresse}/v1/passerelle/ia/chat/completions`, baseUrl: `${p.adresse}/v1/passerelle/ia`, apiKey: p.jeton, model: modele };
+/**
+ * Le modèle de discussion de la passerelle, au format OpenAI : `auto` laisse Centrale choisir parmi les fournisseurs du projet.
+ * `thoughtSignatures: true` : la passerelle relaie les signatures de pensée de Gemini 3 (`tool_calls[i].extra_content`) ;
+ * un client qui les garde dans l'historique (`@astratra/ai` 1.12.0 et plus) les lui renvoie, sinon Gemini 3 refuse les tours d'outils.
+ */
+export function modeleDiscussion(p: Passerelle, modele = 'auto'): { url: string; baseUrl: string; apiKey: string; model: string; thoughtSignatures: true } {
+  return { url: `${p.adresse}/v1/passerelle/ia/chat/completions`, baseUrl: `${p.adresse}/v1/passerelle/ia`, apiKey: p.jeton, model: modele, thoughtSignatures: true };
 }
 
 async function appeler(p: Passerelle, chemin: string, corps: unknown, signal?: AbortSignal): Promise<Response> {

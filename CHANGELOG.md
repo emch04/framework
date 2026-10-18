@@ -3,6 +3,20 @@
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Chaque package Astratra est versionné indépendamment.
 
+## 2026-10-18 — `@astratra/ai` 1.12.0, `@astratra/centrale` 1.7.0 : signatures de pensée de Gemini 3
+
+Le 18/10/2026, tous les tours d'outils de Boutique Roro sur Gemini 3 (par la passerelle Centrale) étaient refusés (400) : Gemini 3 exige que la signature de pensée de chaque appel d'outil lui revienne au tour suivant.
+
+### Corrigé
+- `@astratra/ai` : un appel d'outil garde sa signature (`toolCalls[i].signature`), lue chez Gemini (`thoughtSignature`) et au format OpenAI (`extra_content.google.thought_signature`, réponse entière ou en flux) ; elle repart avec l'appel dans l'historique. Chez Gemini, un premier appel sans signature part avec la valeur de contournement de Google (`skip_thought_signature_validator`), sauf pour Gemma.
+
+### Ajouté
+- `@astratra/ai` : option `thoughtSignatures` (cible d'`askChatModel`, options de `createOpenAICompatibleProvider`) : au format OpenAI, la signature n'est envoyée qu'à `*.googleapis.com` par défaut, jamais à un autre fournisseur ; `true` pour une passerelle qui la relaie.
+- `@astratra/centrale` : `modeleDiscussion()` rend `thoughtSignatures: true` (la passerelle relaie les signatures).
+
+### Modifié
+- README (anglais et français) : tableau des versions à jour.
+
 ## 2026-10-17 — `@astratra/agent` 1.3.0, `@astratra/conscience` 1.4.0 : réglages à chaud, entrée corrigée à l'approbation, file sur sa propre table, budget en lecture seule
 
 Manques relevés en branchant l'assistant de Boutique Roro sur ces deux paquets.

@@ -17,7 +17,18 @@ const { readRetryAfter } = require('./providerLimits');
 const { providerResult, readToolArguments, readWrittenAnswer, readWrittenToolCalls, toolCallOf, withoutThinking } = require('./modelAnswers');
 const { readServerEvents, textReporter } = require('./streamedAnswer');
 
-function toTranscript(messages) {
+/* Les signatures de pensée de Gemini 3 voyagent dans `extra_content.google.thought_signature`, une extension de Google :
+   envoyées à Google, ou à une cible qui les demande (`thoughtSignatures: true`, la passerelle Centrale), jamais ailleurs. */
+const signatureOf = (call) => {
+  const signature = call && call.extra_content && call.extra_content.google && call.extra_content.google.thought_signature;
+  return typeof signature === 'string' && signature ? signature : undefined;
+};
+function sendsSignatures(target) {
+  if (typeof target.thoughtSignatures === 'boolean') return target.thoughtSignatures;
+  try { return new URL(target.url).hostname.endsWith('.googleapis.com'); } catch (_error) { return false; }
+}
+
+function toTranscript(messages, signatures = false) {
   return (Array.isArray(messages) ? messages : []).map((message) => {
     if (message.role === 'assistant') {
       return {
@@ -28,7 +39,8 @@ function toTranscript(messages) {
             id: call.id,
             type: 'function',
             /* Des arguments illisibles (null) repartent en objet vide : le fournisseur refuserait « null ». */
-            function: { name: call.name, arguments: JSON.stringify(call.args && typeof call.args === 'object' ? call.args : {}) }
+            function: { name: call.name, arguments: JSON.stringify(call.args && typeof call.args === 'object' ? call.args : {}) },
+            ...(signatures && call.signature ? { extra_content: { google: { thought_signature: call.signature } } } : {})
           }))
         } : {})
       };
@@ -72,7 +84,7 @@ async function askChatModel(target, request, io = {}) {
   const report = textReporter(io.onText);
   const messages = [
     ...(request.system ? [{ role: 'system', content: request.system }] : []),
-    ...toTranscript(request.messages)
+    ...toTranscript(request.messages, sendsSignatures(target || {}))
   ];
   const response = await io.fetch(url, {
     method: 'POST',
@@ -100,7 +112,7 @@ async function askChatModel(target, request, io = {}) {
     return {
       status: response.status,
       text: null,
-      toolCalls: message.tool_calls.map((call) => toolCallOf(call.id, call.function && call.function.name, call.function && call.function.arguments))
+      toolCalls: message.tool_calls.map((call) => toolCallOf(call.id, call.function && call.function.name, call.function && call.function.arguments, signatureOf(call)))
     };
   }
   const text = withoutThinking(message.content);
@@ -129,6 +141,7 @@ async function readChatStream(response, report) {
       if (part.id) call.id = part.id;
       if (part.function && part.function.name) call.function.name += part.function.name;
       if (part.function && typeof part.function.arguments === 'string') call.function.arguments += part.function.arguments;
+      if (signatureOf(part)) call.extra_content = part.extra_content;
     }
   });
   const toolCalls = calls.filter(Boolean).map((call, index) => ({ ...call, id: call.id || `call_${index}` }));
@@ -153,6 +166,8 @@ async function readChatStream(response, report) {
  * @param {boolean} [options.detailed] true: the call resolves { text, toolCalls, cut } (an empty text
  *   included, for the router's `accepts` to judge) instead of the text alone.
  * @param {Function} [options.toRequest] (prompt, ctx) => { system?, messages, tools?, maxTokens? }. Default: the prompt as one user message.
+ * @param {boolean} [options.thoughtSignatures] send the thought signatures of Gemini 3 back (default: only to *.googleapis.com);
+ *   true for a gateway that relays them (Centrale).
  */
 function createOpenAICompatibleProvider(options = {}) {
   if (typeof options.id !== 'string' || !options.id) throw new Error('createOpenAICompatibleProvider requires options.id.');
@@ -182,7 +197,8 @@ function createOpenAICompatibleProvider(options = {}) {
         throw missing;
       }
       const answer = await askChatModel(
-        { url, key, model: model.id, extra: { ...(options.extra || {}), ...(model.extra || {}) } },
+        { url, key, model: model.id, extra: { ...(options.extra || {}), ...(model.extra || {}) },
+          ...(typeof options.thoughtSignatures === 'boolean' ? { thoughtSignatures: options.thoughtSignatures } : {}) },
         { maxTokens: model.maxTokens, ...toRequest(prompt, ctx) },
         { fetch: typeof ctx.fetch === 'function' ? ctx.fetch : options.fetch, signal: ctx.signal, timeoutMs: ctx.timeoutMs || options.timeoutMs, onText: ctx.onText }
       );

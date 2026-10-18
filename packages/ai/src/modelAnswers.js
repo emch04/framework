@@ -88,13 +88,15 @@ function readToolArguments(raw) {
 }
 
 /** Un appel d'outil lu : ses arguments, et quand ils sont illisibles, pourquoi. */
-function toolCallOf(id, name, rawArguments) {
+function toolCallOf(id, name, rawArguments, signature) {
   const { args, invalid, reason, detail } = readToolArguments(rawArguments);
   return {
     id,
     name,
     args,
-    ...(invalid ? { invalid: true, invalidReason: reason, ...(detail ? { invalidDetail: detail } : {}) } : {})
+    ...(invalid ? { invalid: true, invalidReason: reason, ...(detail ? { invalidDetail: detail } : {}) } : {}),
+    /* La « signature de pensée » de Gemini 3 : à rendre telle quelle avec l'appel au tour suivant, sinon Gemini répond 400. */
+    ...(typeof signature === 'string' && signature ? { signature } : {})
   };
 }
 

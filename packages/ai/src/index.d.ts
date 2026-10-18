@@ -583,7 +583,7 @@ export interface ChatMessage {
   text?: string;
   content?: string;
   images?: Array<{ mimeType: string; data: string }>;
-  toolCalls?: Array<{ id: string; name: string; args: unknown }>;
+  toolCalls?: Array<{ id: string; name: string; args: unknown; signature?: string }>;
   toolCallId?: string;
   result?: unknown;
 }
@@ -598,12 +598,15 @@ export interface ChatToolCall {
   invalidReason?: 'not_json' | 'not_object';
   /** L'erreur de lecture, pour 'not_json'. */
   invalidDetail?: string;
+  /** La signature de pensée de Gemini 3 : gardez l'appel tel quel dans l'historique, elle repart avec lui (sinon Gemini répond 400). */
+  signature?: string;
 }
 
 export type FetchLike = (url: string, init: { method: string; headers: Record<string, string>; body: string; signal?: AbortSignal }) => Promise<{ ok: boolean; status: number; json(): Promise<any> }>;
 
 export function askChatModel(
-  target: { url: string; key: string; model: string; extra?: Record<string, unknown> },
+  /** `thoughtSignatures` : renvoyer les signatures de pensée de Gemini 3 (par défaut : seulement vers *.googleapis.com ; true pour la passerelle Centrale). */
+  target: { url: string; key: string; model: string; extra?: Record<string, unknown>; thoughtSignatures?: boolean },
   request: { system?: string; messages: ChatMessage[]; tools?: Array<Record<string, unknown>>; maxTokens?: number; temperature?: number },
   io: { fetch: FetchLike; signal?: AbortSignal; timeoutMs?: number; onText?: (shown: string) => void }
 ): Promise<{ status: number; text?: string | null; toolCalls?: ChatToolCall[]; cut?: boolean; retryAfterMs?: number }>;
@@ -692,6 +695,8 @@ export function createOpenAICompatibleProvider(options: ChatProviderOptions & {
   url: string | ((ctx: Record<string, unknown>) => string | null | undefined);
   external?: boolean;
   extra?: Record<string, unknown>;
+  /** Renvoyer les signatures de pensée de Gemini 3 (par défaut : seulement vers *.googleapis.com ; true pour la passerelle Centrale). */
+  thoughtSignatures?: boolean;
 }): Provider;
 
 /* ─────────────────── Gemini ─────────────────── */
@@ -750,6 +755,8 @@ export interface NativeToolCall {
   invalid?: boolean;
   invalidReason?: 'not_json' | 'not_object';
   invalidDetail?: string;
+  /** La signature de pensée de Gemini 3, rendue avec l'appel au tour suivant. */
+  signature?: string;
 }
 
 export interface ToolMessage {

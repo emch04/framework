@@ -27,7 +27,7 @@ test('lirePasserelle : jeton bien formÃ© et adresse HTTPS, sinon rien de branchÃ
   assert.ok(lirePasserelle({ CENTRALE_ADRESSE: 'http://127.0.0.1:4000', CENTRALE_PASSERELLE_JETON: JETON }, { fetch: f }), 'boucle locale permise');
   assert.equal(lirePasserelle({ CENTRALE_PASSERELLE_JETON: JETON }, { fetch: f }), null, 'sans adresse');
   const m = modeleDiscussion(p!);
-  assert.deepEqual(m, { url: 'https://centrale.exemple.fr/v1/passerelle/ia/chat/completions', baseUrl: 'https://centrale.exemple.fr/v1/passerelle/ia', apiKey: JETON, model: 'auto' });
+  assert.deepEqual(m, { url: 'https://centrale.exemple.fr/v1/passerelle/ia/chat/completions', baseUrl: 'https://centrale.exemple.fr/v1/passerelle/ia', apiKey: JETON, model: 'auto', thoughtSignatures: true });
 });
 
 test('plongements, recherche et voix : jeton porteur, formats lus', async () => {

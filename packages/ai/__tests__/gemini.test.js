@@ -40,7 +40,7 @@ describe('askGeminiModel', () => {
     expect(body.generationConfig).toEqual({ temperature: 0.4, maxOutputTokens: 1200 });
     expect(body.contents).toEqual([
       { role: 'user', parts: [{ text: 'Lis Philippiens 4:6.' }] },
-      { role: 'model', parts: [{ functionCall: { name: 'read_bible', args: { reference: 'Philippiens 4:6' } } }] },
+      { role: 'model', parts: [{ functionCall: { name: 'read_bible', args: { reference: 'Philippiens 4:6' } }, thoughtSignature: 'skip_thought_signature_validator' }] },
       { role: 'user', parts: [{ functionResponse: { name: 'read_bible', response: { result: { text: 'Ne vous inquiétez de rien.' } } } }] }
     ]);
     expect(answer).toEqual({ status: 200, text: null, toolCalls: [{ id: 'call_0', name: 'read_bible', args: { reference: 'Philippiens 4:6' } }] });
@@ -73,6 +73,18 @@ describe('askGeminiModel', () => {
     const { fetch, calls } = fakeFetch(parts([{ text: 'ok' }]));
     await askGeminiModel('gemini-x', { messages: [{ role: 'assistant', text: null, toolCalls: [{ id: 'a', name: 'read_bible', args: null, invalid: true }] }] }, { key: KEY, fetch });
     expect(calls[0].body.contents[0].parts[0].functionCall.args).toEqual({});
+  });
+});
+
+describe('thought signatures (Gemini 3)', () => {
+  test('each call keeps its signature; it goes back as thoughtSignature, the first call of a turn without one gets the bypass value', async () => {
+    const { fetch, calls } = fakeFetch(parts([{ functionCall: { name: 'read_bible', args: {} }, thoughtSignature: 'sig-A' }, { functionCall: { name: 'read_bible', args: { n: 2 } } }]));
+    const answer = await askGeminiModel('gemini-3.8-flash', { messages: [{ role: 'user', text: 'x' }], tools }, { key: KEY, fetch });
+    expect(answer.toolCalls.map((call) => call.signature)).toEqual(['sig-A', undefined]);
+    await askGeminiModel('gemini-3.8-flash', { messages: [{ role: 'user', text: 'x' }, { role: 'assistant', text: null, toolCalls: answer.toolCalls }] }, { key: KEY, fetch });
+    expect(calls[1].body.contents[1].parts.map((part) => part.thoughtSignature)).toEqual(['sig-A', undefined]);
+    await askGeminiModel('gemma-4-27b-it', { messages: [{ role: 'assistant', text: null, toolCalls: [{ id: 'a', name: 'read_bible', args: {} }] }] }, { key: KEY, fetch });
+    expect(calls[2].body.contents[0].parts[0].thoughtSignature).toBeUndefined();
   });
 });
 

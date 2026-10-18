@@ -70,9 +70,22 @@ const SPEC = {
     ]
   },
   transcribe: {
+    folder: 'faster-whisper-small',
+    description: 'Whisper small converted for CTranslate2 (faster-whisper), int8 on the CPU',
+    license: 'MIT',
+    sources: [{
+      repo: 'Systran/faster-whisper-small',
+      files: ['config.json', 'model.bin', 'tokenizer.json', 'vocabulary.txt']
+    }]
+  },
+  /* Not fetched by default: faster (about 0.35 s per sentence against 1.2 s on a
+     laptop CPU) but twice as many wrong words in French. `fetch --models
+     transcribe_base`, then point MODELS_TRANSCRIBE_PATH at its folder. */
+  transcribe_base: {
     folder: 'faster-whisper-base',
     description: 'Whisper base converted for CTranslate2 (faster-whisper), int8 on the CPU',
     license: 'MIT',
+    optional: true,
     sources: [{
       repo: 'Systran/faster-whisper-base',
       files: ['config.json', 'model.bin', 'tokenizer.json', 'vocabulary.txt']
@@ -146,10 +159,11 @@ async function main() {
     }
     const sources = [];
     for (const source of spec.sources) {
-      const old = previous.models[name] && previous.models[name].sources.find((s) => s.repo === source.repo);
+      /* A repository already pinned keeps its revision, even when it moved to another model name. */
+      const old = Object.values(previous.models).flatMap((m) => m.sources).find((s) => s.repo === source.repo);
       sources.push(await describeSource(source, !update && old ? old.revision : null));
     }
-    models[name] = { folder: spec.folder, description: spec.description, license: spec.license, sources };
+    models[name] = { folder: spec.folder, description: spec.description, license: spec.license, ...(spec.optional ? { optional: true } : {}), sources };
     process.stderr.write(`${name}: ${sources.map((s) => `${s.repo}@${s.revision.slice(0, 8)}`).join(', ')}\n`);
   }
   const manifest = { schema: 1, models };

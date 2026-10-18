@@ -47,7 +47,7 @@ import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = '1.1.0'
+VERSION = '1.2.0'
 
 os.environ.setdefault('HF_HUB_OFFLINE', '1')
 os.environ.setdefault('TRANSFORMERS_OFFLINE', '1')
@@ -61,12 +61,16 @@ DEFAULT_FOLDERS = {
     'rerank': 'gte-reranker-onnx-int8',
     'nli': 'mdeberta-xnli-multilingual',
     'entities': 'gliner-multi-v2.1',
-    # "base" over "small": measured 0.35 s against 1.2 s per sentence on a
-    # laptop CPU, for a lower recognition rate. Point `path` elsewhere to trade.
-    'transcribe': 'faster-whisper-base',
+    # "small" over "base" (1.2.0): about 1.2 s against 0.35 s per sentence on a
+    # laptop CPU, but half the wrong words in French (13.6 % against 25 %).
+    'transcribe': 'faster-whisper-small',
     'injection': 'prompt-injection-guard-small',
     'moderation': 'content-safety-guard-small',
 }
+
+# A service installed before 1.2.0 has only fetched "base": it keeps it until
+# "small" is fetched, and announces it, instead of failing to load anything.
+PREVIOUS_FOLDERS = {'transcribe': 'faster-whisper-base'}
 
 # Categories reported by the moderation endpoint, out of the 15 the model scores.
 MODERATION_CATEGORIES = ('hate', 'harassment', 'violence', 'sexual', 'sexual_minors', 'self_harm')
@@ -355,6 +359,9 @@ def validate_config(config):
         path = section['path']
         if not path and config['models_dir']:
             path = os.path.join(config['models_dir'], DEFAULT_FOLDERS[name])
+            previous = PREVIOUS_FOLDERS.get(name)
+            if previous and not os.path.isdir(path) and os.path.isdir(os.path.join(config['models_dir'], previous)):
+                path = os.path.join(config['models_dir'], previous)
         section['path'] = path if name in enabled else None
         if section['path'] and not section['id']:
             section['id'] = os.path.basename(os.path.normpath(section['path']))

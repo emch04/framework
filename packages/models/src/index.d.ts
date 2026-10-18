@@ -473,7 +473,11 @@ export const CATALOG_URL: string;
 
 export interface ManifestFile { path: string; size: number; /** 64 hex characters, or null / "TO_COMPLETE" while unverified. */ sha256: string | null }
 export interface ManifestSource { repo: string; /** Commit hash, never a branch. */ revision: string; dir?: string; files: ManifestFile[] }
-export interface ManifestModel { folder: string; description: string; license: string; sources: ManifestSource[] }
+export interface ManifestModel {
+  folder: string; description: string; license: string; sources: ManifestSource[];
+  /** Fetched only when named (`fetch --models name`), never by default. */
+  optional?: boolean;
+}
 export interface ModelsManifest { schema: 1; models: Record<string, ManifestModel> }
 
 export interface ModelFile {

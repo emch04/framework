@@ -3,6 +3,21 @@
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Chaque package Astratra est versionné indépendamment.
 
+## 2026-10-18 — `@astratra/models` 1.2.0 : Whisper small par défaut pour la transcription
+
+Choix d'Emch pour la dictée (comme Tertius le 28/09/2026) : Whisper small fait environ 13,6 % de mots faux en français, contre 25 % pour base.
+
+### Modifié
+- `transcribe` est maintenant `Systran/faster-whisper-small` (révision `536b0662`, `model.bin` de 484 Mo, MIT), dossier `faster-whisper-small`, `id` annoncé `faster-whisper-small` dans `/health` et les réponses. Environ 1,2 s par phrase contre 0,35 s pour base sur un processeur de portable.
+- Un service installé avant 1.2.0, qui n'a que `faster-whisper-base`, le garde et l'annonce jusqu'au prochain `astratra-models fetch`, au lieu de ne plus rien charger.
+
+### Ajouté
+- `transcribe_base` (Whisper base, révision inchangée) dans le manifeste, marqué `optional` : téléchargé seulement nommé (`fetch --models transcribe_base`), puis `MODELS_TRANSCRIBE_PATH` vers son dossier pour rester sur base. Un modèle `optional` n'est jamais pris par défaut (`fetch`, `--check`) ; `list` le signale.
+- `scripts/build-manifest.js` : un dépôt déjà figé garde sa révision même sous un autre nom de modèle.
+
+### Documentation
+- README du paquet et du service, notice des modèles ; README (anglais et français) : tableau des versions à jour.
+
 ## 2026-10-18 — `@astratra/ai` 1.12.0, `@astratra/centrale` 1.7.0 : signatures de pensée de Gemini 3
 
 Le 18/10/2026, tous les tours d'outils de Boutique Roro sur Gemini 3 (par la passerelle Centrale) étaient refusés (400) : Gemini 3 exige que la signature de pensée de chaque appel d'outil lui revienne au tour suivant.

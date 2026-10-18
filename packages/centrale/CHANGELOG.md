@@ -3,6 +3,14 @@
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Les entrées 1.0.0 à 1.4.0 reprennent
 celles du [journal des changements du monorepo](../../CHANGELOG.md).
 
+## 1.7.0 — 2026-10-18 : signatures de pensée de Gemini 3
+
+### Modifié
+- `/passerelle` : `modeleDiscussion(p)` rend aussi `thoughtSignatures: true`. La passerelle relaie les signatures de
+  pensée de Gemini 3 (`tool_calls[i].extra_content.google.thought_signature`) ; passé à `askChatModel` ou à
+  `createOpenAICompatibleProvider` de `@astratra/ai` 1.12.0, il les fait repartir avec l'historique. Sans elles, Gemini 3
+  refusait tout tour d'outil (400). Aucun autre paquet Astratra n'est tiré.
+
 ## 1.5.0 — 2026-10-15 : moins de fausses alertes
 
 Trois sources de fausses erreurs relevées en production le 15/10/2026 ne sont plus signalées.

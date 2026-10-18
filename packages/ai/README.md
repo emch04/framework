@@ -182,6 +182,20 @@ appel — et n'est jamais une réponse à montrer. Des arguments illisibles gard
 l'appel, marqué `invalid` avec `invalidReason` (`not_json`, `not_object`), et
 repartent en `{}` au tour suivant.
 
+**Signatures de pensée (Gemini 3, 1.12.0)** : chaque appel d'outil de Gemini 3
+porte une signature, à rendre telle quelle au tour suivant, sinon Gemini répond
+400. Elle arrive dans `toolCalls[i].signature` (directement chez Gemini, par
+l'API compatible OpenAI de Google, ou par la passerelle Centrale) : **gardez
+l'appel tel quel** dans le message `assistant` de l'historique, elle repart
+avec lui (`thoughtSignature` chez Gemini, `extra_content.google.thought_signature`
+au format OpenAI). Au format OpenAI, elle n'est envoyée qu'à `*.googleapis.com`,
+ou à une cible qui le demande : `thoughtSignatures: true` (dans la cible
+d'`askChatModel` ou les options de `createOpenAICompatibleProvider` ;
+`modeleDiscussion()` de `@astratra/centrale` 1.7.0 le donne) ; jamais à un
+autre fournisseur, qui pourrait refuser le champ. Un premier appel sans
+signature (venu d'un autre fournisseur) part chez Gemini avec la valeur de
+contournement de Google (`skip_thought_signature_validator`), sauf pour Gemma.
+
 ### La réponse petit à petit (`onText`)
 
 Passé dans le contexte de `route()` (`router.route(requete, options, { onText })`) ou dans `io` d'`askChatModel` /

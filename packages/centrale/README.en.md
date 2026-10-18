@@ -82,7 +82,7 @@ const centrale = demarrer({ ...config, robots: true });
 
 ## Key gateway (`/passerelle`)
 
-An app only keeps a project token (`CENTRALE_PASSERELLE_JETON`, `clj_pas_…`) and the Centrale address (`CENTRALE_ADRESSE`): Centrale calls the providers with the keys of its vault and counts usage per project. `lirePasserelle(env)` reads them (null when not set); `modeleDiscussion(p)` gives an OpenAI-format model (`auto`) to put first in an AI's relay; `plongements`, `rechercher` and `voix` cover embeddings, web search and voice. A gateway outage throws `PasserelleIndisponible` and `passerelleDabord` then falls back to the direct keys; a request refused for itself (400, 413) throws `RequetePasserelleRefusee`, without fallback.
+An app only keeps a project token (`CENTRALE_PASSERELLE_JETON`, `clj_pas_…`) and the Centrale address (`CENTRALE_ADRESSE`): Centrale calls the providers with the keys of its vault and counts usage per project. `lirePasserelle(env)` reads them (null when not set); `modeleDiscussion(p)` gives an OpenAI-format model (`auto`, with `thoughtSignatures: true`: the gateway relays the thought signatures of Gemini 3) to put first in an AI's relay; `plongements`, `rechercher` and `voix` cover embeddings, web search and voice. A gateway outage throws `PasserelleIndisponible` and `passerelleDabord` then falls back to the direct keys; a request refused for itself (400, 413) throws `RequetePasserelleRefusee`, without fallback.
 
 ## Agent journal (`/agents`)
 

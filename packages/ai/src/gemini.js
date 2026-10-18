@@ -30,13 +30,22 @@ const noSystemInstructionByDefault = (model) => String(model).startsWith('gemma-
 /* Des arguments illisibles (null) repartent en objet vide : Gemini refuse autre chose. */
 const argsOf = (args) => (args && typeof args === 'object' && !Array.isArray(args) ? args : {});
 
-function contentsOf(messages) {
+/* Gemini 3 vérifie la signature de pensée du premier appel de chaque étape (les appels parallèles suivants n'en ont pas).
+   Un appel sans signature (venu d'un autre fournisseur, ou d'un historique d'avant) reçoit la valeur de contournement
+   documentée par Google plutôt qu'un 400 ; Gemma n'a pas de signatures. */
+const BYPASS_SIGNATURE = 'skip_thought_signature_validator';
+
+function contentsOf(messages, model = '') {
+  const bypass = !String(model).startsWith('gemma-');
   return (Array.isArray(messages) ? messages : []).map((message) => {
     if (message.role === 'assistant') {
       const parts = [];
       const text = message.text === undefined ? message.content : message.text;
       if (text) parts.push({ text });
-      for (const call of message.toolCalls || []) parts.push({ functionCall: { name: call.name, args: argsOf(call.args) } });
+      (message.toolCalls || []).forEach((call, index) => {
+        const signature = call.signature || (index === 0 && bypass ? BYPASS_SIGNATURE : null);
+        parts.push({ functionCall: { name: call.name, args: argsOf(call.args) }, ...(signature ? { thoughtSignature: signature } : {}) });
+      });
       return { role: 'model', parts };
     }
     if (message.role === 'tool') {
@@ -123,7 +132,7 @@ function readGeminiGrounding(answer) {
 
 /** Le corps de la requête pour un modèle. */
 function requestBody(model, request, noSystemInstruction, search = null, dropFunctions = false) {
-  const contents = contentsOf(request.messages);
+  const contents = contentsOf(request.messages, model);
   const generationConfig = {
     temperature: request.temperature === undefined ? 0.4 : request.temperature,
     maxOutputTokens: request.maxTokens || 1200
@@ -191,7 +200,8 @@ async function askGeminiModel(model, request, io = {}) {
   const toolCalls = functionsDropped ? [] : parts.filter((part) => part.functionCall).map((part, index) => ({
     id: part.functionCall.id || `call_${index}`,
     name: part.functionCall.name,
-    args: argsOf(part.functionCall.args)
+    args: argsOf(part.functionCall.args),
+    ...(typeof part.thoughtSignature === 'string' && part.thoughtSignature ? { signature: part.thoughtSignature } : {})
   }));
   if (toolCalls.length) return { status: response.status, text: null, toolCalls, ...grounding };
   const text = withoutThinking(parts.filter((part) => !part.thought && !part.functionCall).map((part) => part.text || '').join(''));

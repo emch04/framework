@@ -117,7 +117,7 @@ est dans [CHANGELOG.md](CHANGELOG.md).
 
 | Paquet | Version | Rôle |
 |---|---|---|
-| [`@astratra/ai`](packages/ai/README.md) | 1.11.0 | Routage multi-fournisseur avec quotas et repli, registre d'outils, boucle d'agent, niveaux de risque avec confirmation, fournisseur llama.cpp local |
+| [`@astratra/ai`](packages/ai/README.md) | 1.12.0 | Routage multi-fournisseur avec quotas et repli, registre d'outils, boucle d'agent, niveaux de risque avec confirmation, fournisseur llama.cpp local |
 | [`@astratra/agent`](packages/agent/README.md) | 1.3.0 | Tâches durables, budgets, plans, vérifications de fin, résumés de contexte, suivi de la consommation, retours utilisateur (👍/👎), ordonnanceur de tâches à heure fixe et file d'actions en attente d'approbation |
 | [`@astratra/models`](packages/models/README.md) | 1.1.0 | Service local de modèles sur CPU (vecteurs, reclassement, NLI, entités, transcription) et son client Node ; catalogue des prix et calcul du coût |
 | [`@astratra/conscience`](packages/conscience/README.md) | 1.4.0 | Mémoire documentée des décisions d'un agent (résultats, corrections, leçons avec preuves, modèle de soi, traçabilité, effacement) sous un gouverneur déterministe sans aucun modèle de langage |
@@ -165,7 +165,7 @@ est dans [CHANGELOG.md](CHANGELOG.md).
 
 | Paquet | Version | Rôle |
 |---|---|---|
-| [`@astratra/centrale`](packages/centrale/README.md) | 1.6.0 | Paquet de collecte pour un tableau de bord de surveillance auto-hébergé : erreurs, plantages, vues, usages, appels d'IA ; masqué à la source, envoyé par lots ; sans dépendance |
+| [`@astratra/centrale`](packages/centrale/README.md) | 1.7.0 | Paquet de collecte pour un tableau de bord de surveillance auto-hébergé : erreurs, plantages, vues, usages, appels d'IA ; masqué à la source, envoyé par lots ; sans dépendance |
 | [`@astratra/centrale-cli`](packages/centrale-cli/README.md) | 1.0.1 | Outil en ligne de commande du même tableau de bord : identifiants de débogage, cartes de code, déclaration des déploiements |
 | [`@astratra/tooling`](packages/tooling/README.md) | 1.5.0 | Audit de l'espace de travail (secrets, routes, traductions), lanceur de tests, déploiement avec retour arrière, publication d'applications, évaluation d'IA |
 | [`@astratra/testkit`](packages/testkit/README.md) | 1.1.0 | Bases de test MongoDB ou PostgreSQL jetables, fausses données reproductibles par pays, garde contre les bases de production |

@@ -350,3 +350,13 @@ async function grounded(): Promise<void> {
   console.log(sources.length, read.searched, detailed.grounding?.functionsDropped);
 }
 void grounded;
+
+/* 1.12.0 : signatures de pensée de Gemini 3. */
+import { askChatModel as askChat, createOpenAICompatibleProvider as openaiProvider } from './src';
+async function signatures() {
+  const answer = await askChat({ url: 'https://centrale.test/v1/passerelle/ia/chat/completions', key: 'k', model: 'auto', thoughtSignatures: true },
+    { messages: [{ role: 'user', text: 'x' }] }, { fetch: async () => ({ ok: true, status: 200, json: async () => ({}) }) });
+  const signature: string | undefined = answer.toolCalls?.[0]?.signature;
+  void [signature, openaiProvider({ id: 'centrale', url: 'https://centrale.test', getKey: () => 'k', fetch: globalThis.fetch as never, thoughtSignatures: true })];
+}
+void signatures;

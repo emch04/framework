@@ -49,6 +49,18 @@ const DESKTOP_DEFAULTS = {
   command: ['npx', '--no', '--', 'electron-builder']
 };
 
+/* electron-builder reads the Electron version from package.json and refuses a range ("^44.5.1"):
+   the version actually installed for the app (its node_modules, or a workspace root above) is given instead. */
+function installedElectronVersion(appDir) {
+  try {
+    const file = require.resolve('electron/package.json', { paths: [appDir] });
+    const version = JSON.parse(fs.readFileSync(file, 'utf8')).version;
+    return typeof version === 'string' && /^\d+\.\d+\.\d+/.test(version) ? version : null;
+  } catch (_error) {
+    return null;
+  }
+}
+
 /** Is electron-builder installed for this app (its own node_modules, or a workspace root above)? */
 function electronBuilderInstalled(appDir) {
   try {
@@ -133,7 +145,8 @@ function resolveDesktopConfig(projectDir, input, merge) {
   if (merged.electronBuilder !== null && !isPlainObject(merged.electronBuilder)) fail('electronBuilder doit etre un objet.');
   if (!Array.isArray(merged.command) || !merged.command.length) fail('command doit etre une liste (par exemple ["npx", "electron-builder"]).');
 
-  return { ...merged, appDir, productName: productName.trim(), version: pkg.version, platforms, targets, arch, icons, signing, outputDir };
+  const electronVersion = installedElectronVersion(appDir);
+  return { ...merged, appDir, productName: productName.trim(), version: pkg.version, electronVersion, platforms, targets, arch, icons, signing, outputDir };
 }
 
 /* File names of the installers: plain letters, digits and dashes (they travel through links and e-mails;
@@ -151,6 +164,7 @@ function electronBuilderConfig(desktop, merge) {
   const base = {
     appId: desktop.appId,
     productName: desktop.productName,
+    ...(desktop.electronVersion ? { electronVersion: desktop.electronVersion } : {}),
     directories: { output: desktop.outputDir, buildResources: 'build' },
     ...(desktop.files ? { files: desktop.files } : {}),
     win: { target: forPlatform('windows'), icon: desktop.icons.windows, artifactName: `${slug}-\${version}-win-\${arch}.\${ext}` },
@@ -237,6 +251,7 @@ module.exports = {
   electronBuilderInstalled,
   expectedArtifacts,
   fileSlug,
+  installedElectronVersion,
   listArtifacts,
   resolveDesktopConfig,
   signingEnv

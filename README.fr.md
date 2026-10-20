@@ -167,7 +167,7 @@ est dans [CHANGELOG.md](CHANGELOG.md).
 |---|---|---|
 | [`@astratra/centrale`](packages/centrale/README.md) | 1.7.0 | Paquet de collecte pour un tableau de bord de surveillance auto-hébergé : erreurs, plantages, vues, usages, appels d'IA ; masqué à la source, envoyé par lots ; sans dépendance |
 | [`@astratra/centrale-cli`](packages/centrale-cli/README.md) | 1.0.1 | Outil en ligne de commande du même tableau de bord : identifiants de débogage, cartes de code, déclaration des déploiements |
-| [`@astratra/tooling`](packages/tooling/README.md) | 1.6.0 | Audit de l'espace de travail (secrets, routes, traductions), lanceur de tests, déploiement avec retour arrière, publication d'applications, évaluation d'IA |
+| [`@astratra/tooling`](packages/tooling/README.md) | 1.6.1 | Audit de l'espace de travail (secrets, routes, traductions), lanceur de tests, déploiement avec retour arrière, publication d'applications, évaluation d'IA |
 | [`@astratra/testkit`](packages/testkit/README.md) | 1.1.0 | Bases de test MongoDB ou PostgreSQL jetables, fausses données reproductibles par pays, garde contre les bases de production |
 
 L'exemple [`examples/dashboard-ui`](examples/dashboard-ui/README.md) montre

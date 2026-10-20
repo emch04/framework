@@ -219,6 +219,10 @@ Rien n'est envoyé nulle part : les installateurs restent dans `outputDir`.
 | `electronBuilder` | `null` | options electron-builder ajoutées en dernier (`mac.category`, `protocols`, `extraResources`…) |
 | `command` | `npx --no -- electron-builder` | electron-builder doit être une devDependency de l'application ; il n'est jamais téléchargé à la volée |
 
+La version d'Electron installée pour l'application est donnée à electron-builder
+(qui refuse une plage comme `^44.5.1` dans le `package.json`) ; `electronBuilder.electronVersion`
+la remplace si besoin.
+
 Chaque refus nomme ce qui manque (dossier, `main`, `appId`, icône, script,
 cible inconnue), **avant** que la version ne bouge. La configuration
 electron-builder est générée dans un fichier temporaire (`--publish=never`) :

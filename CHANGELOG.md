@@ -5,11 +5,16 @@ Chaque package Astratra est versionné indépendamment.
 
 ## 2026-10-20 — Failles critiques corrigées : `@astratra/tooling` 1.6.2, dépendances du dépôt
 
-`npm audit` relevait 4 failles critiques ; il n'en reste aucune (48 alertes moyennes ou graves, dans la chaîne Expo / React Native / Metro pour l'essentiel, traitées à part).
+`npm audit` relevait 4 failles critiques ; il n'en reste aucune. Les 45 alertes restantes (aucune critique) viennent toutes de 4 failles d'origine sans correctif utilisable, voir plus bas.
 
 ### Sécurité
 - `proxy-addr` 2.0.7 → 2.0.8 (usurpation d'adresse IP par une adresse IPv6 qui contient une IPv4, GHSA-jqcg-44mw-7w3h) : dépendance d'Express, donc de tous les serveurs. Dans le dépôt, le fichier de verrouillage est corrigé ; une application qui utilise un paquet Astratra avec Express prend 2.0.8 par une simple réinstallation (`npm update proxy-addr`), la plage d'Express l'accepte.
 - `shell-quote` 1.10.0 → 1.12.0 (injection de commande par `quote()`, GHSA-pqg4-j6r4-53mv) : outils de React Native, côté construction mobile.
+- `brace-expansion` 1.1.21 et 2.1.7, `source-map-js` 1.2.2, `moment` 2.31.0 (déni de service, traversée de chemin) : fichier de verrouillage seulement. `npm audit fix` aurait aussi monté React Native 0.86 → 0.88 et Metro 0.84 → 0.87 : écarté, seuls ces trois paquets sont mis à jour.
+- Restent sans correctif utilisable, vérifiés un par un le 20/10/2026 :
+  - `node-forge` ≤ 1.4.0 (vérification de signature RSA trop permissive ; 1.4.0 est la dernière version) : `@astratra/wallet` passe par `passkit-generator`, qui **signe** les cartes et ne vérifie aucune signature, donc non concerné ; ailleurs, outils Expo et `promptfoo` (développement) ;
+  - `braces` ≤ 3.0.3 (dernière version) et `sprintf-js` ≤ 1.1.3 (dernière version) : outils de construction et de test (Metro, Jest), sur des motifs écrits par les développeurs ;
+  - `basic-ftp` ≤ 6.2.0 : par `promptfoo` → `get-uri`, dont même la dernière version exige `basic-ftp` 5 (la correction n'existe qu'en 6) ; lecture de dossiers FTP, en développement seulement.
 - `@astratra/tooling` 1.6.2 : `promptfoo` ^0.124.1 (développement) et `>=0.124.1` (dépendance facultative de `astratra eval`) ; les versions précédentes tiraient `simple-git` ≤ 3.36.0 (exécution de commandes, GHSA-g4wm-2vf7-vfgr, GHSA-858h-whjf-mvg5, GHSA-x6jw-m9v5-85vh, GHSA-v5rq-49vh-5v5c).
 
 ### Modifié

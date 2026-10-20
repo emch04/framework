@@ -204,3 +204,10 @@ void failureCode;
 
 runEval(rootDir, { eval: { providers: [{ id: 'openai:chat:local', baseUrl: 'http://127.0.0.1:8080/v1', apiKeyEnv: 'LLAMA_API_KEY' }], minPassRate: 0.9 } } as AstratraConfig, { cases: 'evals/cases.json' })
   .then((evaluated: EvalResult) => evaluated.summaries.map((summary) => summary.passRate));
+
+/* ---- Desktop publishing ---- */
+
+runPublish(rootDir, {
+  publish: { desktop: { appDir: 'desktop', appId: 'cd.examen-etat.bureau', productName: "Examen d'État", targets: { windows: ['nsis'] }, signing: { windows: 'auto', mac: 'off' } } }
+} as AstratraConfig, { target: 'windows', bump: 'none', out: 'release', 'dry-run': true })
+  .then((published: PublishResult) => published.artifacts?.windows?.[0]);

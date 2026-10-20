@@ -48,14 +48,23 @@ function runShellCommand(command, options = {}) {
  * streams are also streamed line by line to `onLine` unless `quiet` is set.
  * `input` is written to stdin (the script handed to `ssh host bash -s`).
  */
+/* On Windows, npm and npx are .cmd files: Node starts them only through the shell (since 20.12),
+   so each argument is quoted for cmd.exe. Elsewhere nothing changes. */
+function windowsCommand(command, args, platform) {
+  if (platform !== 'win32' || !/^(npm|npx|yarn|pnpm)$/.test(command)) return null;
+  const quote = (arg) => (/^[A-Za-z0-9_./:=@+-]+$/.test(arg) ? arg : `"${String(arg).replace(/"/g, '""')}"`);
+  return { command: `${command}.cmd`, args: args.map(quote) };
+}
+
 function runProcess(command, args = [], options = {}) {
   return new Promise((resolve) => {
     let child;
     try {
-      child = spawn(command, args, {
+      const windows = windowsCommand(command, args, options.platform || process.platform);
+      child = spawn(windows ? windows.command : command, windows ? windows.args : args, {
         cwd: options.cwd,
         env: options.env || process.env,
-        shell: false
+        shell: Boolean(windows)
       });
     } catch (error) {
       resolve({ code: 127, stdout: '', stderr: error.message });
@@ -105,6 +114,7 @@ function runProcess(command, args = [], options = {}) {
 }
 
 module.exports = {
+  windowsCommand,
   runProcess,
   runShellCommand
 };

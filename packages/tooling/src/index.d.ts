@@ -420,9 +420,41 @@ export interface PublishConfigInput {
     fallback?: 'transporter' | 'none';
   };
   notify?: boolean;
+  /** Desktop apps (Electron, electron-builder): `publish windows|mac|desktop`. */
+  desktop?: DesktopConfigInput | null;
 }
 
-export type PublishTarget = 'ios' | 'android' | 'all' | 'update';
+export type DesktopPlatform = 'windows' | 'mac';
+export type DesktopSigning = 'auto' | 'required' | 'off';
+export interface DesktopConfigInput {
+  /** Folder of the Electron app (its package.json has `main`), relative to the project. */
+  appDir: string;
+  /** Reverse-domain identifier, e.g. cd.examen-etat.bureau. */
+  appId: string;
+  /** Name shown to people; default: productName or name of the app's package.json. */
+  productName?: string | null;
+  platforms?: DesktopPlatform[];
+  /** Relative to appDir. Default build/icon.ico and build/icon.icns. */
+  icons?: { windows?: string; mac?: string };
+  targets?: { windows?: Array<'nsis' | 'portable' | 'zip' | 'msi'>; mac?: Array<'dmg' | 'zip' | 'pkg'> };
+  arch?: { windows?: Array<'x64' | 'arm64' | 'ia32'>; mac?: Array<'x64' | 'arm64' | 'universal'> };
+  /** Relative to appDir (default release); `--out` replaces it for one run. */
+  outputDir?: string;
+  /** npm script run in appDir before packaging (default build); null = none. */
+  buildScript?: string | null;
+  /** electron-builder globs of the packed files; null = its default. */
+  files?: string[] | null;
+  versionBump?: VersionLevel | 'none';
+  /** Certificates come from the environment only (CSC_LINK, CSC_KEY_PASSWORD, WIN_CSC_LINK, WIN_CSC_KEY_PASSWORD, CSC_NAME). */
+  signing?: { windows?: DesktopSigning; mac?: DesktopSigning };
+  nsis?: { oneClick?: boolean; perMachine?: boolean; allowToChangeInstallationDirectory?: boolean } & Record<string, unknown>;
+  /** Extra electron-builder options, merged last. */
+  electronBuilder?: Record<string, unknown> | null;
+  /** Default ['npx', '--no', '--', 'electron-builder']. */
+  command?: string[];
+}
+
+export type PublishTarget = 'ios' | 'android' | 'all' | 'update' | 'windows' | 'mac' | 'desktop';
 
 export interface PublishOptions extends CommandOptions {
   target?: PublishTarget;
@@ -437,14 +469,21 @@ export interface PublishOptions extends CommandOptions {
   env?: Record<string, string | undefined>;
   homeDir?: string;
   osPlatform?: string;
+  /** Desktop: patch, minor, major or none (default publish.desktop.versionBump). */
+  bump?: VersionLevel | 'none';
+  /** Desktop: output folder for this run, relative to the project. */
+  out?: string;
+  'dry-run'?: boolean;
 }
 
 export interface PublishResult extends CommandResult {
   target?: PublishTarget;
   version?: string;
   message?: string;
-  bumped?: { from: string; to: string; files: string[] } | null;
-  results: Array<{ platform: MobilePlatform; ok: boolean; code?: string; message?: string; delivered?: boolean; handoff?: string; filePath?: string; buildNumber?: string | null; versionCode?: number | string }>;
+  bumped?: { from: string; to: string; files: string[] } | boolean | null;
+  results: Array<{ platform: MobilePlatform | DesktopPlatform; ok: boolean; code?: string; message?: string; delivered?: boolean; handoff?: string; filePath?: string; buildNumber?: string | null; versionCode?: number | string; signed?: boolean | null; artifacts?: Array<{ path: string; size: number }> }>;
+  /** Desktop --dry-run: the installers a run would write. */
+  artifacts?: Partial<Record<DesktopPlatform, string[]>>;
   error?: { code: string; message: string };
 }
 

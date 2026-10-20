@@ -3,6 +3,18 @@
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Chaque package Astratra est versionné indépendamment.
 
+## 2026-10-20 — Failles critiques corrigées : `@astratra/tooling` 1.6.2, dépendances du dépôt
+
+`npm audit` relevait 4 failles critiques ; il n'en reste aucune (48 alertes moyennes ou graves, dans la chaîne Expo / React Native / Metro pour l'essentiel, traitées à part).
+
+### Sécurité
+- `proxy-addr` 2.0.7 → 2.0.8 (usurpation d'adresse IP par une adresse IPv6 qui contient une IPv4, GHSA-jqcg-44mw-7w3h) : dépendance d'Express, donc de tous les serveurs. Dans le dépôt, le fichier de verrouillage est corrigé ; une application qui utilise un paquet Astratra avec Express prend 2.0.8 par une simple réinstallation (`npm update proxy-addr`), la plage d'Express l'accepte.
+- `shell-quote` 1.10.0 → 1.12.0 (injection de commande par `quote()`, GHSA-pqg4-j6r4-53mv) : outils de React Native, côté construction mobile.
+- `@astratra/tooling` 1.6.2 : `promptfoo` ^0.124.1 (développement) et `>=0.124.1` (dépendance facultative de `astratra eval`) ; les versions précédentes tiraient `simple-git` ≤ 3.36.0 (exécution de commandes, GHSA-g4wm-2vf7-vfgr, GHSA-858h-whjf-mvg5, GHSA-x6jw-m9v5-85vh, GHSA-v5rq-49vh-5v5c).
+
+### Modifié
+- README (anglais et français) : tableau des versions à jour.
+
 ## 2026-10-20 — `@astratra/tooling` 1.6.1 : version d'Electron en plage acceptée
 
 ### Corrigé

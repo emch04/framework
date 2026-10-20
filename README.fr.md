@@ -159,7 +159,7 @@ est dans [CHANGELOG.md](CHANGELOG.md).
 | [`@astratra/native`](packages/native/README.md) | 1.0.0 | Plomberie mobile : session dans le trousseau, verrou biométrique, enregistrement des notifications, retour de paiement |
 | [`@astratra/native-ui`](packages/native-ui/README.md) | 1.2.0 | Kit d'interface React Native et Expo, dont la logique pure se teste dans Node, barre de retours 👍/👎 |
 | [`@astratra/app-version`](packages/app-version/README.md) | 1.0.0 | Annonces de nouvelles versions d'applications mobiles : route publique des versions, une annonce par version |
-| [`create-astratra-app`](packages/create-astratra-app/README.md) | 1.11.2 | Générateur de projets : pile complète, API seule ou application Expo, briques optionnelles |
+| [`create-astratra-app`](packages/create-astratra-app/README.md) | 1.11.3 | Générateur de projets : pile complète, API seule ou application Expo, briques optionnelles |
 
 ### Supervision et outillage
 

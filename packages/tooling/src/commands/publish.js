@@ -13,7 +13,7 @@ const {
   readRuntimeVersionPolicy,
   recordPublishedFingerprint
 } = require('../publish/fingerprint');
-const { applyVersionBump, readPackageVersion } = require('../publish/version');
+const { applyVersionBump, bumpVersion, readPackageVersion } = require('../publish/version');
 const {
   archiveExtension,
   artifactFileName,
@@ -30,6 +30,15 @@ const {
 const { createGooglePlayClient, loadServiceAccount } = require('../publish/googlePlay');
 const { checkAscKey, expandHome, hasAscCredentials, loadAscCredentials, uploadToAppStore } = require('../publish/appStoreConnect');
 const { createDesktopNotifier } = require('../publish/notify');
+const {
+  buildElectronBuilderArgs,
+  electronBuilderConfig,
+  electronBuilderInstalled,
+  expectedArtifacts,
+  listArtifacts,
+  resolveDesktopConfig,
+  signingEnv
+} = require('../publish/desktop');
 const {
   assertBundleClean,
   assertNoLocalUrl,
@@ -84,15 +93,21 @@ const PUBLISH_DEFAULTS = {
     checkKey: true,
     fallback: 'transporter'
   },
-  notify: true
+  notify: true,
+  // Desktop apps (Electron, electron-builder), see publish/desktop.js; null = no desktop target.
+  desktop: null
 };
 
 const TARGETS = {
   ios: ['ios'],
   android: ['android'],
   all: ['ios', 'android'],
-  update: []
+  update: [],
+  windows: ['windows'],
+  mac: ['mac'],
+  desktop: null
 };
+const DESKTOP_TARGETS = ['windows', 'mac', 'desktop'];
 
 function resolvePublishConfig(rootDir, config = {}, homeDir = os.homedir()) {
   const merged = mergeConfig(PUBLISH_DEFAULTS, config.publish || {});
@@ -163,7 +178,8 @@ function createContext(rootDir, config, options) {
       }
       return run('open', args, { quiet: true });
     }),
-    computeFingerprintFn: options.computeFingerprint
+    computeFingerprintFn: options.computeFingerprint,
+    platform
   };
 }
 
@@ -436,6 +452,118 @@ async function runUpdate(ctx, message) {
   return { exitCode: 0, target: 'update', version, message: finalMessage, results: [] };
 }
 
+const megabytes = (bytes) => `${(bytes / 1024 / 1024).toFixed(1)} Mo`;
+
+/**
+ * windows | mac | desktop: an Electron app built with electron-builder on this
+ * machine (NSIS installer for Windows, .dmg/.zip for macOS). The configuration
+ * is checked and the signing settled before the version moves; the version goes
+ * back when no platform could be built. Nothing is uploaded: the installers stay
+ * in outputDir.
+ */
+async function runDesktop(ctx, target, options) {
+  const resolved = resolveDesktopConfig(ctx.publishConfig.projectDir, ctx.publishConfig.desktop, mergeConfig);
+  // --out=DIR replaces outputDir for one run (relative to the project).
+  const desktop = typeof options.out === 'string' && options.out
+    ? { ...resolved, outputDir: path.resolve(ctx.publishConfig.projectDir, options.out) }
+    : resolved;
+  if (desktop.outputDir === desktop.appDir) {
+    throw new ToolingError('DESKTOP_CONFIG_INVALID', '--out ne peut pas etre le dossier de l\'application elle-meme.', 400);
+  }
+  const platforms = target === 'desktop' ? desktop.platforms : [target];
+  const level = typeof options.bump === 'string' ? options.bump : desktop.versionBump;
+  if (!['patch', 'minor', 'major', 'none'].includes(level)) {
+    throw new ToolingError('VERSION_LEVEL_INVALID', `--bump : patch, minor, major ou none (recu : ${level}).`, 400);
+  }
+  const signing = Object.fromEntries(platforms.map((platform) => [platform,
+    signingEnv(platform, desktop.signing[platform], ctx.env, { projectDir: ctx.publishConfig.projectDir, homeDir: ctx.homeDir })]));
+  const crossWindows = platforms.includes('windows') && ctx.platform !== 'win32';
+  const usesDefaultCommand = desktop.command.join(' ') === 'npx --no -- electron-builder';
+  const builderMissing = usesDefaultCommand && !(options.electronBuilderInstalled || electronBuilderInstalled)(desktop.appDir);
+
+  if (options['dry-run'] || options.dryRun) {
+    const version = level === 'none' ? desktop.version : bumpVersion(desktop.version, level);
+    ctx.output.log(`Essai a blanc : application ${desktop.appDir} ; ${desktop.productName} (${desktop.appId}) ; version ${desktop.version}${level === 'none' ? '' : ` -> ${version}`} ; sortie ${desktop.outputDir}.`);
+    const artifacts = {};
+    for (const platform of platforms) {
+      artifacts[platform] = expectedArtifacts(desktop, platform, version);
+      ctx.output.log(`  ${platform} : ${desktop.targets[platform].join(', ')} (${desktop.arch[platform].join(', ')}), ${signing[platform].note}`);
+      for (const file of artifacts[platform]) ctx.output.log(colors.dim(`    ${file}`));
+    }
+    if (builderMissing) ctx.output.log(colors.yellow(`  electron-builder n'est pas installe pour ${desktop.appDir} : npm install -D electron-builder (dans l'application).`));
+    if (crossWindows) ctx.output.log(colors.yellow('  Windows depuis cette machine : electron-builder peut avoir besoin de Wine (voir le README) ; sinon construire sur Windows ou en CI.'));
+    return { exitCode: 0, dryRun: true, target, version, artifacts, results: [] };
+  }
+
+  if (builderMissing) {
+    throw new ToolingError('DESKTOP_BUILDER_MISSING', `electron-builder n'est pas installe pour ${desktop.appDir} : npm install -D electron-builder dans l'application (ou publish.desktop.command).`, 400);
+  }
+  const bumped = level === 'none' ? null : applyVersionBump(desktop.appDir, level);
+  const version = bumped ? bumped.to : desktop.version;
+  if (bumped) ctx.output.log(`Version ${bumped.from} -> ${bumped.to}.`);
+  const results = [];
+  let failure = null;
+  try {
+    if (desktop.buildScript) {
+      const built = await ctx.run('npm', ['run', desktop.buildScript], {
+        cwd: desktop.appDir, onLine: (line) => ctx.output.log(colors.dim(`  ${line}`))
+      });
+      if (built.code !== 0) throw new ToolingError('DESKTOP_BUILD_SCRIPT_FAILED', `npm run ${desktop.buildScript} a echoue (code ${built.code}).`, 502);
+    }
+    const builderConfig = electronBuilderConfig(desktop, mergeConfig);
+    const workDir = fs.mkdtempSync(path.join(os.tmpdir(), 'astratra-desktop-'));
+    try {
+      const configFile = path.join(workDir, 'electron-builder.json');
+      fs.writeFileSync(configFile, `${JSON.stringify(builderConfig, null, 2)}\n`);
+      for (const platform of platforms) {
+        const since = Date.now() - 1000;
+        const [command, ...prefix] = desktop.command;
+        const run = await ctx.run(command, [...prefix, ...buildElectronBuilderArgs({ platform, configFile, appDir: desktop.appDir })], {
+          cwd: desktop.appDir, env: signing[platform].env, onLine: (line) => ctx.output.log(colors.dim(`  ${line}`))
+        });
+        if (run.code !== 0) {
+          const hint = platform === 'windows' && crossWindows ? ' Depuis un Mac, il peut manquer Wine : voir le README, ou construire sur Windows.' : '';
+          failure = new ToolingError('DESKTOP_BUILD_FAILED', `electron-builder ${platform} a echoue (code ${run.code}).${hint}`, 502);
+          results.push({ platform, ok: false, code: failure.code, message: failure.message });
+          break;
+        }
+        const artifacts = listArtifacts(desktop.outputDir, platform, since);
+        results.push({ platform, ok: true, signed: signing[platform].signed, artifacts });
+        for (const artifact of artifacts) ctx.output.log(`  ${platform} : ${artifact.path} (${megabytes(artifact.size)})`);
+        await ctx.notify(`${platform} pret`, `Version ${version} : ${artifacts.length} fichier(s) dans ${desktop.outputDir}.`);
+      }
+    } finally {
+      fs.rmSync(workDir, { recursive: true, force: true });
+    }
+  } catch (error) {
+    failure = error;
+  }
+
+  if (failure) {
+    // Nothing went out: the version goes back, so the next try does not skip a number.
+    if (bumped && !results.some((entry) => entry.ok)) {
+      applyVersionBackTo(desktop.appDir, bumped);
+      ctx.output.log(colors.yellow(`Version remise a ${bumped.from}.`));
+    }
+    ctx.output.log(colors.red(`Publication arretee : ${failure.message}`));
+    await ctx.notify('echec', 'La construction s\'est arretee : voir le terminal.');
+    return { exitCode: 1, target, version, results, error: { code: failure.code || 'DESKTOP_BUILD_FAILED', message: failure.message } };
+  }
+  ctx.output.log(colors.green(`Termine : version ${version}, installateurs dans ${desktop.outputDir}.`));
+  return { exitCode: 0, target, version, bumped: Boolean(bumped), results };
+}
+
+function applyVersionBackTo(appDir, bumped) {
+  for (const file of bumped.files) {
+    const text = fs.readFileSync(file, 'utf8');
+    const value = JSON.parse(text);
+    if (value.version === bumped.to) value.version = bumped.from;
+    if (value.packages && value.packages[''] && value.packages[''].version === bumped.to) value.packages[''].version = bumped.from;
+    const indent = (/^[ \t]+(?=")/m.exec(text) || ['  '])[0];
+    fs.writeFileSync(file, `${JSON.stringify(value, null, indent)}${text.endsWith('\n') ? '\n' : ''}`);
+  }
+}
+
 /**
  * ios | android | all | update, with no question asked:
  * - update: JavaScript only, straight to installed apps of the same version;
@@ -448,11 +576,20 @@ async function runUpdate(ctx, message) {
 async function runPublish(rootDir, config, options = {}) {
   const target = options.target || options.platform || options._target;
   if (!Object.prototype.hasOwnProperty.call(TARGETS, target || '')) {
-    throw new ToolingError('PUBLISH_TARGET_INVALID', 'Usage : astratra publish ios|android|all|update [--message="..."] (ou --target=...)', 400);
+    throw new ToolingError('PUBLISH_TARGET_INVALID', 'Usage : astratra publish ios|android|all|update|windows|mac|desktop [--message="..."] [--bump=patch|minor|major|none] [--dry-run] (ou --target=...)', 400);
   }
 
   const ctx = createContext(rootDir, config, options);
   ctx.output.log(`${colors.blue(`Publication (${target})`)}\n`);
+
+  if (DESKTOP_TARGETS.includes(target)) {
+    try {
+      return await runDesktop(ctx, target, options);
+    } catch (error) {
+      ctx.output.log(colors.red(`Publication impossible : ${error.message}`));
+      return { exitCode: 1, target, results: [], error: { code: error.code || 'PUBLISH_FAILED', message: error.message } };
+    }
+  }
 
   if (options['dry-run'] || options.dryRun) {
     ctx.output.log(`Essai a blanc : projet ${ctx.publishConfig.projectDir} ; cible ${target} ; build ${ctx.publishConfig.eas.mode === 'local' ? 'sur cette machine' : 'chez Expo'} ; profil ${ctx.publishConfig.eas.profile} ; canal ${ctx.publishConfig.eas.channel} ; environnement ${ctx.publishConfig.eas.environment} ; envoi Android ${ctx.publishConfig.android.upload} ; repli iOS ${ctx.publishConfig.ios.fallback}.`);
@@ -570,6 +707,7 @@ async function runPublishCheckIos(rootDir, config, options = {}) {
 module.exports = {
   PUBLISH_DEFAULTS,
   PUBLISH_TARGETS: Object.keys(TARGETS),
+  DESKTOP_TARGETS,
   resolvePublishConfig,
   runPublish,
   runPublishCheckIos,

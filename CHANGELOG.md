@@ -3,6 +3,19 @@
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Chaque package Astratra est versionné indépendamment.
 
+## 2026-10-20 — `@astratra/tooling` 1.6.0 : publication d'applications de bureau Electron
+
+Demande d'Emch pour Examen d'État (application Electron + Vite, utilisateurs surtout sous Windows) : étendre l'outil commun plutôt qu'écrire un script par projet.
+
+### Ajouté
+- `astratra publish windows|mac|desktop` : construction par electron-builder sur la machine, installateur NSIS (`.exe`) pour Windows, `.dmg` et `.zip` pour macOS ; montée de version dans le `package.json` de l'application (`--bump=patch|minor|major|none`), redescendue si rien n'a pu être construit ; `--out=DIR` ; `--dry-run` (application, version, cibles, signature, noms des installateurs, rien de construit).
+- Section `publish.desktop` de `astratra.config.json` (`appDir`, `appId`, `productName`, `platforms`, `icons`, `targets`, `arch`, `outputDir`, `buildScript`, `files`, `versionBump`, `signing`, `nsis`, `electronBuilder`, `command`), validée avec des refus qui nomment ce qui manque, avant toute montée de version. La configuration electron-builder est générée dans un fichier temporaire, jamais publiée (`--publish=never`) ; noms de fichiers simples tirés du nom du produit.
+- Signature facultative par plateforme (`auto`, `required`, `off`), certificats lus dans l'environnement seulement (`WIN_CSC_LINK`, `WIN_CSC_KEY_PASSWORD`, `CSC_LINK`, `CSC_KEY_PASSWORD`, `CSC_NAME`) ; un certificat situé dans le projet est refusé.
+- `npm` et `npx` lancés par `cmd.exe` sous Windows (arguments entre guillemets), pour construire sur Windows ou en CI.
+
+### Documentation
+- README : configuration, signature, construction de Windows depuis un Mac (vérifiée sans Wine le 20/10/2026 avec electron-builder 26, installateur non signé ; espace de travail npm embarqué), limites, exemple GitHub Actions. README (anglais et français) : tableau des versions à jour.
+
 ## 2026-10-18 — `@astratra/models` 1.2.0 : Whisper small par défaut pour la transcription
 
 Choix d'Emch pour la dictée (comme Tertius le 28/09/2026) : Whisper small fait environ 13,6 % de mots faux en français, contre 25 % pour base.

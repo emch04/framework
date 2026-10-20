@@ -23,6 +23,7 @@ astratra publish <ios|android|all|update>    # build EAS (chez Expo ou sur la ma
 astratra publish:fingerprint [--record]      # compare l'empreinte native à la dernière publiée
 astratra publish:upload --platform=<p> --file=<archive>   # envoie un .aab/.ipa déjà construit
 astratra publish:check-ios                   # vérifie la clé App Store Connect (un appel signé, rien de construit)
+astratra publish <windows|mac|desktop> [--bump=patch|minor|major|none] [--out=DIR] [--dry-run]   # application de bureau Electron (electron-builder)
 astratra dispatch:generate [--out=<file>] [--key=<file.pub>]   # script de commande forcée SSH + ligne authorized_keys
 astratra eval --provider=<id> [--cases=<file>] [--base-url=<url>] [--api-key-env=<VAR>] [--min-pass=<0..1>]   # évalue un modèle sur un jeu de cas (promptfoo)
 ```
@@ -178,6 +179,100 @@ effective quand elle est déclarée ailleurs que dans `package.json`.
 Aucun secret n'est affiché ni journalisé : clés par chemin de fichier ou nom de
 variable d'environnement, jeton Google et identifiants Apple masqués dans les
 erreurs et la sortie d'altool.
+
+## Publication bureau (`publish windows|mac|desktop`, 1.6.0)
+
+Une application Electron construite par electron-builder sur cette machine :
+installateur NSIS (`.exe`) pour Windows, `.dmg` et `.zip` pour macOS. `desktop`
+construit toutes les plateformes de `publish.desktop.platforms`, Windows d'abord.
+Rien n'est envoyé nulle part : les installateurs restent dans `outputDir`.
+
+```json
+{
+  "publish": {
+    "desktop": {
+      "appDir": "desktop",
+      "appId": "cd.exemple.bureau",
+      "productName": "Exemple",
+      "files": ["dist/**", "electron/**", "!electron/test/**", "package.json"],
+      "signing": { "windows": "auto", "mac": "auto" }
+    }
+  }
+}
+```
+
+| Clé | Par défaut | Rôle |
+| --- | --- | --- |
+| `appDir` | (obligatoire) | dossier de l'application Electron ; son `package.json` a un `main` et porte la version |
+| `appId` | (obligatoire) | identifiant en forme de domaine inversé |
+| `productName` | `productName` ou `name` du paquet | nom montré (installateur, menu Démarrer, Applications) ; les fichiers en tirent un nom simple (`exemple-1.2.0-setup-x64.exe`) |
+| `platforms` | `["windows", "mac"]` | plateformes de `publish desktop` |
+| `icons` | `build/icon.ico`, `build/icon.icns` | relatifs à `appDir` ; un `.ico` de 256 px pour Windows |
+| `targets` | `nsis` ; `dmg`, `zip` | Windows : `nsis`, `portable`, `zip`, `msi` ; Mac : `dmg`, `zip`, `pkg` |
+| `arch` | `x64` ; `arm64`, `x64` | architectures par plateforme (`universal` possible sur Mac) |
+| `outputDir` | `release` | relatif à `appDir` ; `--out=DIR` le remplace pour une fois (relatif au projet) |
+| `buildScript` | `build` | script npm lancé dans `appDir` avant l'empaquetage (le renderer) ; `null` pour aucun |
+| `files` | défaut d'electron-builder | fichiers embarqués ; à préciser pour ne pas emporter les sources et les tests |
+| `versionBump` | `patch` | `patch`, `minor`, `major`, `none` ; `--bump=…` le remplace pour une fois |
+| `signing` | `auto` | par plateforme : `auto` signe si un certificat est trouvé, `required` refuse de construire sans, `off` ne signe jamais |
+| `nsis` | par utilisateur, dossier au choix | options NSIS (`oneClick`, `perMachine`, …) |
+| `electronBuilder` | `null` | options electron-builder ajoutées en dernier (`mac.category`, `protocols`, `extraResources`…) |
+| `command` | `npx --no -- electron-builder` | electron-builder doit être une devDependency de l'application ; il n'est jamais téléchargé à la volée |
+
+Chaque refus nomme ce qui manque (dossier, `main`, `appId`, icône, script,
+cible inconnue), **avant** que la version ne bouge. La configuration
+electron-builder est générée dans un fichier temporaire (`--publish=never`) :
+l'application n'a pas de fichier electron-builder à elle. La version monte dans
+le `package.json` de `appDir` ; elle redescend si aucune plateforme n'a pu être
+construite. `--dry-run` affiche l'application, la version, les cibles, la
+signature et les noms des installateurs, sans rien construire.
+
+**Signature** : les certificats ne viennent que de l'environnement, jamais d'un
+dépôt (un chemin de certificat situé dans le projet est refusé).
+
+- Windows : `WIN_CSC_LINK` (chemin d'un `.pfx` ou base64) et `WIN_CSC_KEY_PASSWORD`
+  (ou `CSC_LINK` / `CSC_KEY_PASSWORD`). Sans certificat, l'installateur marche mais
+  Windows SmartScreen avertit à l'installation.
+- Mac : `CSC_LINK` et `CSC_KEY_PASSWORD`, ou `CSC_NAME` (identité du trousseau) ;
+  sans eux, electron-builder prend une identité « Developer ID » du trousseau s'il
+  en trouve une. Notarisation : `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`,
+  `APPLE_TEAM_ID` (ou `APPLE_API_KEY`, `APPLE_API_KEY_ID`, `APPLE_API_ISSUER`).
+
+**Windows depuis un Mac** : vérifié le 20/10/2026 avec electron-builder 26 sur un
+Mac Apple Silicon, sans Wine : l'installateur NSIS non signé se construit (Electron
+Windows et NSIS sont téléchargés dans le cache d'electron-builder). Limites :
+
+- **signer** un `.exe` depuis un Mac reste incertain (signtool est un outil Windows ;
+  les certificats sur clé matérielle EV ne se branchent pas sur un Mac) : signer sur
+  Windows ou en CI ;
+- si une version d'electron-builder réclame Wine, l'image Docker
+  `electronuserland/builder:wine` ou une machine Windows font l'affaire ;
+- **ne pas construire depuis `/tmp`** : electron-builder refuse alors les paquets
+  d'un espace de travail npm (liens symboliques « vers un chemin système ») ; depuis
+  un dossier normal (un disque, le dépôt), ils sont bien embarqués.
+
+**Sur Windows ou en CI** : la même commande (`npx astratra publish windows`) ;
+`npm` et `npx` y passent par `cmd.exe`, arguments entre guillemets. Exemple
+GitHub Actions :
+
+```yaml
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - run: npx astratra publish windows --bump=none
+        env:
+          WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
+          WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
+      - uses: actions/upload-artifact@v4
+        with: { name: windows, path: desktop/release/*.exe }
+```
+
+(`--bump=none` en CI : la version se monte sur le poste, puis se commite.)
 
 ## Commandes à distance (`dispatch:generate`)
 

@@ -3,6 +3,11 @@
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Chaque package Astratra est versionné indépendamment.
 
+## 2026-10-20 — `@astratra/tooling` 1.6.1 : version d'Electron en plage acceptée
+
+### Corrigé
+- `publish windows|mac|desktop` : electron-builder refusait une version d'Electron écrite en plage dans le `package.json` de l'application (`"electron": "^44.5.1"`) ; la version installée (lue dans `node_modules/electron`, ou à la racine de l'espace de travail) lui est maintenant donnée (`electronVersion`), et `--dry-run` l'affiche. Relevé le 20/10/2026 sur Examen d'État, qui avait dû la figer à la main ; vérifié par une construction réelle avec `^44.5.1`.
+
 ## 2026-10-20 — `@astratra/tooling` 1.6.0 : publication d'applications de bureau Electron
 
 Demande d'Emch pour Examen d'État (application Electron + Vite, utilisateurs surtout sous Windows) : étendre l'outil commun plutôt qu'écrire un script par projet.

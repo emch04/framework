@@ -75,6 +75,16 @@ describe('publish.desktop configuration', () => {
     expect(() => resolveDesktopConfig(root, null, mergeConfig)).toThrow(/section absente/);
   });
 
+  test('the installed Electron version is given to electron-builder, which refuses a range in package.json', () => {
+    const { root, config } = setupProject();
+    writeJson(root, 'node_modules/electron/package.json', { name: 'electron', version: '44.5.1' });
+    const desktop = resolveDesktopConfig(root, config.publish.desktop, mergeConfig);
+    expect(desktop.electronVersion).toBe('44.5.1');
+    expect(electronBuilderConfig(desktop, mergeConfig).electronVersion).toBe('44.5.1');
+    const pinned = electronBuilderConfig({ ...desktop, electronBuilder: { electronVersion: '44.0.0' } }, mergeConfig);
+    expect(pinned.electronVersion).toBe('44.0.0');
+  });
+
   test('the generated electron-builder configuration: NSIS per user, plain file names, never published', () => {
     const { root, config } = setupProject({ desktop: { electronBuilder: { mac: { category: 'public.app-category.education' } } } });
     const built = electronBuilderConfig(resolveDesktopConfig(root, config.publish.desktop, mergeConfig), mergeConfig);

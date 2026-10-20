@@ -483,7 +483,8 @@ async function runDesktop(ctx, target, options) {
 
   if (options['dry-run'] || options.dryRun) {
     const version = level === 'none' ? desktop.version : bumpVersion(desktop.version, level);
-    ctx.output.log(`Essai a blanc : application ${desktop.appDir} ; ${desktop.productName} (${desktop.appId}) ; version ${desktop.version}${level === 'none' ? '' : ` -> ${version}`} ; sortie ${desktop.outputDir}.`);
+    ctx.output.log(`Essai a blanc : application ${desktop.appDir} ; ${desktop.productName} (${desktop.appId}) ; version ${desktop.version}${level === 'none' ? '' : ` -> ${version}`} ; Electron ${desktop.electronVersion || 'non installe'} ; sortie ${desktop.outputDir}.`);
+    if (!desktop.electronVersion) ctx.output.log(colors.yellow('  Electron n\'est pas installe pour cette application : npm install (electron-builder en a besoin pour connaitre sa version).'));
     const artifacts = {};
     for (const platform of platforms) {
       artifacts[platform] = expectedArtifacts(desktop, platform, version);

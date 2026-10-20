@@ -68,7 +68,7 @@ function assertCanCreate(targetDir, force) {
 
 function packageJson(projectName, template, bricks = []) {
   const dependencies = {
-    '@astratra/ai': '^1.11.0',
+    '@astratra/ai': '^1.12.0',
     '@astratra/core': '^1.1.0',
     '@astratra/saas-kit': '^2.0.1',
     '@astratra/security': '^1.13.0'

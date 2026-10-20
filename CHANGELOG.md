@@ -3,6 +3,15 @@
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Chaque package Astratra est versionné indépendamment.
 
+## 2026-10-20 — Mises à jour mineures des dépendances, `create-astratra-app` 1.11.3
+
+### Modifié
+- Fichier de verrouillage du dépôt, dans les plages déjà déclarées (aucun `package.json` changé) : pg 8.23.1, react et react-dom 19.3.1, @types/react 19.3.0, tiptap 3.32.0, @hocuspocus 4.7.1, jsdom 30.1.3, supertest 7.3.1, playwright 1.64.1, google-auth-library 11.3.1, passkit-generator 3.7.0, react-native-reanimated 4.7.1, testcontainers 12.2.1, @testing-library (dom 10.4.2, react 16.3.3), @medplum/fhirtypes 5.2.6, ignore 7.0.13.
+- Écartés volontairement : les versions 0.x dont la « mineure » peut casser (react-native 0.86 → 0.88, @expo/fingerprint 0.20 → 0.21, pdfkit 0.18 → 0.20, web-tree-sitter 0.25 → 0.27), à traiter comme des versions majeures ; jest reste fixé à 30.4.2 dans les paquets.
+
+### Corrigé
+- `create-astratra-app` 1.11.3 : les projets générés demandent `@astratra/ai` ^1.12.0 (il demandait encore ^1.11.0 depuis la sortie de 1.12.0 ; ses propres tests le relevaient).
+
 ## 2026-10-20 — Failles critiques corrigées : `@astratra/tooling` 1.6.2, dépendances du dépôt
 
 `npm audit` relevait 4 failles critiques ; il n'en reste aucune. Les 45 alertes restantes (aucune critique) viennent toutes de 4 failles d'origine sans correctif utilisable, voir plus bas.

@@ -154,7 +154,7 @@ package is in [CHANGELOG.md](CHANGELOG.md).
 | [`@astratra/native`](packages/native/README.md) | 1.0.0 | Mobile plumbing: keychain session, biometric gate, push registration, payment return |
 | [`@astratra/native-ui`](packages/native-ui/README.md) | 1.2.0 | UI kit for React Native and Expo, with pure logic testable in Node, 👍/👎 feedback bar |
 | [`@astratra/app-version`](packages/app-version/README.md) | 1.0.0 | Announcements of new mobile builds: public version route, one announcement per version |
-| [`create-astratra-app`](packages/create-astratra-app/README.md) | 1.11.2 | Project generator: full stack, API only, or Expo app, with optional building blocks |
+| [`create-astratra-app`](packages/create-astratra-app/README.md) | 1.11.3 | Project generator: full stack, API only, or Expo app, with optional building blocks |
 
 ### Monitoring and tooling
 

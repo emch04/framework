@@ -130,6 +130,24 @@ function readGeminiGrounding(answer) {
   return { searched: queries.length > 0 || sources.length > 0, queries, sources, searchSuggestionsHtml: entry };
 }
 
+/* L'API Gemini native refuse ces mots de JSON Schema dans `parameters` (400 « Unknown name "additionalProperties" »),
+   alors que les schémas stricts en portent souvent (`additionalProperties: false`). Ils sont retirés à toute profondeur,
+   sans toucher à une propriété qui porte un de ces noms (les clés de `properties` sont des noms, pas des mots du schéma). */
+const GEMINI_UNSUPPORTED = new Set(['additionalProperties', '$schema', '$id']);
+function geminiSchema(value) {
+  if (Array.isArray(value)) return value.map(geminiSchema);
+  if (!value || typeof value !== 'object') return value;
+  const out = {};
+  for (const [key, child] of Object.entries(value)) {
+    if (GEMINI_UNSUPPORTED.has(key)) continue;
+    out[key] = key === 'properties' && child && typeof child === 'object' && !Array.isArray(child)
+      ? Object.fromEntries(Object.entries(child).map(([name, schema]) => [name, geminiSchema(schema)]))
+      : geminiSchema(child);
+  }
+  return out;
+}
+const geminiDeclaration = (tool) => (tool && tool.parameters ? { ...tool, parameters: geminiSchema(tool.parameters) } : tool);
+
 /** Le corps de la requête pour un modèle. */
 function requestBody(model, request, noSystemInstruction, search = null, dropFunctions = false) {
   const contents = contentsOf(request.messages, model);
@@ -138,7 +156,7 @@ function requestBody(model, request, noSystemInstruction, search = null, dropFun
     maxOutputTokens: request.maxTokens || 1200
   };
   const toolList = [];
-  if (request.tools && request.tools.length && !dropFunctions) toolList.push({ functionDeclarations: request.tools });
+  if (request.tools && request.tools.length && !dropFunctions) toolList.push({ functionDeclarations: request.tools.map(geminiDeclaration) });
   if (search) toolList.push({ google_search: {} });
   const functions = toolList.length ? { tools: toolList } : {};
   const system = request.system || '';

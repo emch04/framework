@@ -49,6 +49,28 @@ défaut (bloquer et signaler). `failOpen` laisse passer en signalant
 `degraded` ; `recommendedGuards({ readOnly: true })` l'applique à un agent qui
 ne fait que lire. Le mode d'une exécution est `newRun({ mode: 'action' | 'read' })`.
 
+**Textes courts (1.13.0)** : un texte de moins de `injection.minWords` mots (3 par
+défaut ; `0` envoie tout) n'est pas soumis au modèle d'injection, qui note un ou
+deux mots au hasard (mesuré sur Examen d'État le 20/10/2026 : « oui » 0,96,
+« Salut » 0,72, alors que toutes les vraies attaques dépassaient 0,993 dès trois
+mots). Le résultat porte `score: null` et la raison `too_short_to_scan`.
+
+**Où passent les messages de la personne** : par `input()`, jamais par
+`toolResult(…, { external: true })`. `toolResult` sert à ce qui vient de
+l'extérieur (page web, fichier, réponse d'un service) ; un message de la
+personne passé par là peut marquer toute l'exécution `requiresConfirmation`, et
+un agent qui revérifie tout l'historique à chaque tour reste alors bloqué.
+
+**À savoir avec `recommendedGuards`** :
+- sans `readOnly`, la politique est `failClosed` partout : si le modèle
+  d'entités ne répond plus (par exemple son disjoncteur ouvert après des délais
+  dépassés quand un tour vérifie beaucoup de messages en parallèle), `input`
+  bloque et l'agent entier s'arrête. Pour un agent qui ne fait que lire,
+  `readOnly: true` ; sinon, limiter ce qui est revérifié à chaque tour ;
+- l'ancrage (`output.grounding`, NLI phrase par phrase) coûte de l'ordre de 3 s
+  par réponse sur un processeur ; c'est un signal, `output: { grounding: false }`
+  le coupe quand la latence compte plus.
+
 **Événements** : chaque décision appelle `onEvent({ type: 'guard', guard, decision,
 reasons, degraded, metrics, runId, mode, at })`. Ils ne contiennent jamais le
 texte (ni saisie, ni résultat d'outil, ni réponse) : des nombres, des codes et
@@ -78,7 +100,10 @@ suspected, forbids every action without a human for the rest of the run
 (`beforeAction`), `output` unmasks the reply and checks grounding against the
 sources, personal-data leaks and moderation. Failure policy is `failClosed` for
 actions by default, `failOpen` possible for read-only runs. Events never carry
-the text. Mocks for tests: `@astratra/ai/guards/testing`.
+the text. Mocks for tests: `@astratra/ai/guards/testing`. Since 1.13.0, texts
+under `injection.minWords` words (default 3) are not sent to the injection
+model, which scores one or two words at random; the person's own messages go
+through `input()`, never `toolResult(…, { external: true })`.
 
 ## Routeur de providers
 
@@ -181,6 +206,12 @@ d'outil **écrit dans le texte** (façons de Qwen et de Hermes) devient un vrai
 appel — et n'est jamais une réponse à montrer. Des arguments illisibles gardent
 l'appel, marqué `invalid` avec `invalidReason` (`not_json`, `not_object`), et
 repartent en `{}` au tour suivant.
+
+**Schémas d'outils chez Gemini (1.13.0)** : l'API Gemini native refuse
+`additionalProperties`, `$schema` et `$id` dans les paramètres d'une fonction
+(400 « Unknown name "additionalProperties" »). Ils sont retirés à toute
+profondeur avant l'envoi (une *propriété* qui porte un de ces noms reste) ; les
+schémas stricts produits par `toolSpecs` passent donc tels quels.
 
 **Signatures de pensée (Gemini 3, 1.12.0)** : chaque appel d'outil de Gemini 3
 porte une signature, à rendre telle quelle au tour suivant, sinon Gemini répond

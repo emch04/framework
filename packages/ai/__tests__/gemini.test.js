@@ -76,6 +76,36 @@ describe('askGeminiModel', () => {
   });
 });
 
+describe('tool schemas for Gemini', () => {
+  test('additionalProperties, $schema and $id are removed at every depth; a property that bears one of these names stays', async () => {
+    const { fetch, calls } = fakeFetch(parts([{ text: 'ok' }]));
+    const strict = {
+      name: 'save', description: 'Saves.',
+      parameters: {
+        $schema: 'http://json-schema.org/draft-07/schema#', type: 'object', additionalProperties: false,
+        properties: {
+          item: { type: 'object', additionalProperties: false, properties: { additionalProperties: { type: 'string' } } },
+          tags: { type: 'array', items: { type: 'object', $id: 'tag', additionalProperties: { type: 'string' } } }
+        },
+        required: ['item']
+      }
+    };
+    await askGeminiModel('gemini-3.8-flash', { messages: [{ role: 'user', text: 'x' }], tools: [strict] }, { key: KEY, fetch });
+    expect(calls[0].body.tools[0].functionDeclarations[0]).toEqual({
+      name: 'save', description: 'Saves.',
+      parameters: {
+        type: 'object',
+        properties: {
+          item: { type: 'object', properties: { additionalProperties: { type: 'string' } } },
+          tags: { type: 'array', items: { type: 'object' } }
+        },
+        required: ['item']
+      }
+    });
+    expect(strict.parameters.additionalProperties).toBe(false);
+  });
+});
+
 describe('thought signatures (Gemini 3)', () => {
   test('each call keeps its signature; it goes back as thoughtSignature, the first call of a turn without one gets the bypass value', async () => {
     const { fetch, calls } = fakeFetch(parts([{ functionCall: { name: 'read_bible', args: {} }, thoughtSignature: 'sig-A' }, { functionCall: { name: 'read_bible', args: { n: 2 } } }]));

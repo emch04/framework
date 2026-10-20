@@ -3,6 +3,18 @@
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Chaque package Astratra est versionné indépendamment.
 
+## 2026-10-20 — `@astratra/ai` 1.13.0, `create-astratra-app` 1.11.4 : schémas d'outils chez Gemini, textes courts et détection d'injection
+
+Deux défauts relevés sur Examen d'État le 20/10/2026.
+
+### Corrigé
+- `@astratra/ai` (`askGeminiModel`, `createGeminiProvider`) : les schémas d'outils partaient tels quels vers l'API Gemini native, qui refuse `additionalProperties`, `$schema` et `$id` dans les paramètres d'une fonction : 400 « Unknown name "additionalProperties" » sur tous les modèles dès qu'un outil a un schéma strict (`additionalProperties: false`, ce que produisent `toolSpecs` et les outils natifs). Ces mots sont retirés à toute profondeur avant l'envoi ; une propriété qui porte un de ces noms reste ; le schéma de l'appelant n'est pas modifié.
+- `@astratra/ai/guards` : un texte de moins de `injection.minWords` mots (3 par défaut, `0` pour tout envoyer) n'est plus soumis au modèle d'injection, qui note un ou deux mots au hasard (« oui » 0,96, « Salut » 0,72, alors que toutes les vraies attaques mesurées dépassaient 0,993 dès trois mots). Un seul « oui » passé par `toolResult(…, { external: true })` marquait l'exécution `requiresConfirmation`, et un agent qui revérifie l'historique à chaque tour restait bloqué. Le résultat porte `score: null` et la raison `too_short_to_scan`.
+
+### Documentation
+- `@astratra/ai` : les messages de la personne passent par `input()`, jamais par `toolResult(external)` ; avec `recommendedGuards` sans `readOnly`, un modèle d'entités indisponible arrête tout l'agent (`failClosed`) ; l'ancrage NLI coûte de l'ordre de 3 s par réponse et se coupe par `output: { grounding: false }`.
+- `create-astratra-app` 1.11.4 : les projets générés demandent `@astratra/ai` ^1.13.0. README (anglais et français) : tableau des versions à jour.
+
 ## 2026-10-20 — Mises à jour mineures des dépendances, `create-astratra-app` 1.11.3
 
 ### Modifié

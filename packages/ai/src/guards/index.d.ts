@@ -65,6 +65,8 @@ export interface CreateGuardsOptions {
     maxScanChars?: number;
     chunkChars?: number;
     overlapChars?: number;
+    /** Texts with fewer words are not sent to the injection model (it scores one or two words at random). Default 3; 0 sends everything. */
+    minWords?: number;
   };
   output?: {
     grounding?: boolean;

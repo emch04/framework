@@ -27,6 +27,9 @@ const FAIL_OPEN = 'failOpen';
 const DECISIONS = Object.freeze(['allow', 'flag', 'block']);
 const SEVERITY = { allow: 0, flag: 1, block: 2 };
 const DEFAULT_MAX_SCAN_CHARS = 100000;
+const DEFAULT_MIN_WORDS = 3;
+/* Words that carry letters or digits: emoji and punctuation alone are not words. */
+const wordCount = (text) => String(text).split(/\s+/).filter((word) => /[\p{L}\p{N}]/u.test(word)).length;
 const WITHHELD = '[content withheld by a guard]';
 
 const keyHash = (key) => crypto.createHash('sha256').update(String(key)).digest('hex');
@@ -77,7 +80,8 @@ function lazyVerifySources() {
  * @param {Function} [options.onEvent]
  * @param {string[]} [options.names]  register names always masked.
  * @param {string[]} [options.entityLabels] default ['person'].
- * @param {object} [options.injection] { threshold = 0.5, actionThreshold = threshold, maxScanChars, chunkChars, overlapChars }.
+ * @param {object} [options.injection] { threshold = 0.5, actionThreshold = threshold, maxScanChars, chunkChars, overlapChars,
+ *   minWords = 3 (shorter texts are not sent to the injection model; 0 sends everything) }.
  * @param {object} [options.output]  { grounding = true, leak = true, moderation = true, minSupport = 0.5, leakTypes }.
  * @param {Function} [options.verifySources] (answer, sources, { nli }) => report; default: @astratra/rag if installed.
  * @param {'action'|'read'} [options.defaultMode] mode of a run that does not name one. Default 'action'.
@@ -101,6 +105,8 @@ function createGuards(options = {}) {
   const maxScanChars = injectionOptions.maxScanChars || DEFAULT_MAX_SCAN_CHARS;
   const chunkChars = injectionOptions.chunkChars || 6000;
   const overlapChars = injectionOptions.overlapChars === undefined ? 300 : injectionOptions.overlapChars;
+  const minWords = injectionOptions.minWords === undefined ? DEFAULT_MIN_WORDS : injectionOptions.minWords;
+  if (!Number.isInteger(minWords) || minWords < 0) throw new TypeError('injection.minWords must be an integer >= 0.');
   const outputOptions = { grounding: true, leak: true, moderation: true, minSupport: 0.5, ...(options.output || {}) };
   const verifySources = options.verifySources || (outputOptions.grounding ? lazyVerifySources() : null);
 
@@ -233,6 +239,9 @@ function createGuards(options = {}) {
   /* ---- toolResult --------------------------------------------------------- */
 
   async function scanForInjection(content, threshold) {
+    /* One or two words carry no instruction, and the injection model scores them at random (« oui » 0.96,
+       « Salut » 0.72 on Examen d'État, 20/10/2026, where every real attack scored ≥ 0.993 from three words up). */
+    if (wordCount(content) < minWords) return { score: null, suspected: false, chunks: 0, short: true };
     const pieces = windowsOf(content, chunkChars, overlapChars);
     let max = 0;
     for (let i = 0; i < pieces.length; i += 8) {
@@ -271,7 +280,10 @@ function createGuards(options = {}) {
     } else {
       const scan = await scanForInjection(content, run.mode === 'action' ? actionThreshold : injectionThreshold);
       if (scan.failed) degraded.push('injection');
-      else ({ score, suspected, chunks } = scan);
+      else {
+        ({ score, suspected, chunks } = scan);
+        if (scan.short) reasons.push('too_short_to_scan');
+      }
     }
     if (degraded.length) {
       reasons.push('injection_check_unavailable');

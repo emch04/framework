@@ -1,6 +1,6 @@
 {
   "name": "@astratra/tooling",
-  "version": "1.6.1",
+  "version": "1.6.2",
   "description": "Generic audit, test, deploy and app-publishing tooling for Astratra workspaces.",
   "engines": {
     "node": ">=20"
@@ -42,7 +42,7 @@
   },
   "peerDependencies": {
     "@expo/fingerprint": ">=0.10.0",
-    "promptfoo": ">=0.120.0"
+    "promptfoo": ">=0.124.1"
   },
   "peerDependenciesMeta": {
     "@expo/fingerprint": {
@@ -54,6 +54,6 @@
   },
   "devDependencies": {
     "jest": "30.4.2",
-    "promptfoo": "^0.123.1"
+    "promptfoo": "^0.124.1"
   }
 }

@@ -106,10 +106,13 @@ app.use(centrale.gestionnaireErreurs());
 Une app n'y garde qu'un jeton de projet (`CENTRALE_PASSERELLE_JETON`, `clj_pas_…`) et l'adresse de Centrale (`CENTRALE_ADRESSE`) : Centrale appelle les fournisseurs avec les clés de son coffre et compte la consommation par projet.
 
 ```ts
-import { lirePasserelle, modeleDiscussion, passerelleDabord, plongements, rechercher, voix } from '@astratra/centrale/passerelle';
+import { image, lirePasserelle, modeleDiscussion, passerelleDabord, plongements, rechercher, voix } from '@astratra/centrale/passerelle';
 const passerelle = lirePasserelle(process.env);          // null si non réglée : l'app garde ses clés directes
 const modele = passerelle && modeleDiscussion(passerelle); // { url, baseUrl, apiKey, model: 'auto', thoughtSignatures: true } au format OpenAI, à mettre en tête du relais
 const resultats = await passerelleDabord(passerelle, (p) => rechercher(p, { requete: 'météo Paris' }), () => rechercheDirecte());
+// Une image (Cloudflare Workers AI, compte et clé du coffre du projet, périmètre « images » du jeton), depuis 1.8.0 :
+const dessin = await passerelleDabord(passerelle, (p) => image(p, { texte: 'Un phare au lever du jour', modele: '@cf/black-forest-labs/flux-1-schnell' }), () => dessinDirect());
+// { octets, type: 'image/png', modele } — le modèle dit si Centrale s'est repliée sur Flux 1 Schnell
 ```
 
 Une panne de la passerelle (injoignable, 5xx, 429, 401/403, service non configuré) lève `PasserelleIndisponible` : `passerelleDabord` passe alors aux clés directes. Une requête refusée pour elle-même (400, 413) lève `RequetePasserelleRefusee`, sans repli.

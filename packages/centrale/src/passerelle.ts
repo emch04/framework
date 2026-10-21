@@ -6,7 +6,7 @@
  * - `lirePasserelle(env)` : l'adresse (`CENTRALE_ADRESSE`) et le jeton (`CENTRALE_PASSERELLE_JETON`), ou null ;
  * - `modeleDiscussion(p)` : un modèle au format OpenAI (adresse complète, adresse de base, clé, `auto`), à mettre EN
  *   TÊTE de la liste de relais d'une IA, ses clés directes restant derrière en secours ;
- * - `plongements`, `rechercher`, `voix` : les trois autres services.
+ * - `plongements`, `rechercher`, `voix`, `image` : les autres services (les images de Cloudflare Workers AI depuis 1.8.0).
  * Toute panne de la passerelle (injoignable, 5xx, 429, délai, service non configuré) lève `PasserelleIndisponible` :
  * l'appelant passe à ses clés directes. Une requête refusée pour elle-même (400, 413) lève `RequetePasserelleRefusee`.
  * Sans aucune dépendance (fetch de Node 18+). Aucun contenu n'est journalisé.
@@ -74,8 +74,8 @@ export function modeleDiscussion(p: Passerelle, modele = 'auto'): { url: string;
   return { url: `${p.adresse}/v1/passerelle/ia/chat/completions`, baseUrl: `${p.adresse}/v1/passerelle/ia`, apiKey: p.jeton, model: modele, thoughtSignatures: true };
 }
 
-async function appeler(p: Passerelle, chemin: string, corps: unknown, signal?: AbortSignal): Promise<Response> {
-  const delai = typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function' ? AbortSignal.timeout(p.delaiMs) : undefined;
+async function appeler(p: Passerelle, chemin: string, corps: unknown, signal?: AbortSignal, delaiMs = p.delaiMs): Promise<Response> {
+  const delai = typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function' ? AbortSignal.timeout(delaiMs) : undefined;
   const combine = signal && delai && typeof AbortSignal.any === 'function' ? AbortSignal.any([signal, delai]) : (signal ?? delai);
   let reponse: Response;
   try {
@@ -163,6 +163,34 @@ export async function voix(
     frequence: Number(reponse.headers.get('x-audio-rate')) || 24_000,
     canaux: Number(reponse.headers.get('x-audio-channels')) || 1
   };
+}
+
+/** Les modèles d'image que la passerelle sait demander à Cloudflare Workers AI. */
+export const MODELES_IMAGE = ['@cf/black-forest-labs/flux-1-schnell', '@cf/black-forest-labs/flux-2-klein-9b', '@cf/leonardo/phoenix-1.0'] as const;
+export type ModeleImage = (typeof MODELES_IMAGE)[number];
+
+/**
+ * Une image (Cloudflare Workers AI, avec le compte et la clé du coffre du projet) : ses octets, leur type et le modèle
+ * qui l'a faite (Centrale se replie sur Flux 1 Schnell si le modèle demandé est en panne). Une image prend plus de
+ * temps qu'une réponse de texte : une minute au plus par défaut.
+ */
+export async function image(
+  p: Passerelle,
+  demande: { texte: string; modele?: ModeleImage; largeur?: number; hauteur?: number; etapes?: number },
+  options: { signal?: AbortSignal; delaiMs?: number } = {}
+): Promise<{ octets: Uint8Array; type: string; modele: string }> {
+  const corps = {
+    texte: demande.texte,
+    ...(demande.modele ? { modele: demande.modele } : {}),
+    ...(demande.largeur ? { largeur: demande.largeur } : {}),
+    ...(demande.hauteur ? { hauteur: demande.hauteur } : {}),
+    ...(demande.etapes ? { etapes: demande.etapes } : {})
+  };
+  const reponse = await appeler(p, '/v1/passerelle/images', corps, options.signal, options.delaiMs ?? Math.max(p.delaiMs, 70_000));
+  const octets = new Uint8Array(await reponse.arrayBuffer());
+  const type = reponse.headers.get('content-type') ?? '';
+  if (!octets.length || !type.startsWith('image/')) throw new PasserelleIndisponible(reponse.status, 'image vide');
+  return { octets, type: type.split(';')[0]!, modele: reponse.headers.get('x-image-model') ?? demande.modele ?? MODELES_IMAGE[0] };
 }
 
 /**

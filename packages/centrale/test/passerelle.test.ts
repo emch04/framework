@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { lirePasserelle, modeleDiscussion, passerelleDabord, PasserelleIndisponible, plongements, rechercher, RequetePasserelleRefusee, voix } from '../src/passerelle.ts';
+import { image, lirePasserelle, modeleDiscussion, passerelleDabord, PasserelleIndisponible, plongements, rechercher, RequetePasserelleRefusee, voix } from '../src/passerelle.ts';
 
 /* Le client de la passerelle des clés : jeton lu dans l'environnement, appels authentifiés, repli sur les clés directes. */
 const JETON = 'clj_pas_' + 'a'.repeat(40);
@@ -70,4 +70,22 @@ test('passerelleDabord : la passerelle, puis les clés directes seulement en cas
   assert.equal(await passerelleDabord(p, async () => { throw new PasserelleIndisponible(502, 'x'); }, async () => 'direct', (e) => replis.push(e.statut ?? 0)), 'direct');
   assert.deepEqual(replis, [502]);
   await assert.rejects(passerelleDabord(p, async () => { throw new RequetePasserelleRefusee(400, 'x'); }, async () => 'direct'), RequetePasserelleRefusee, 'un refus ne passe pas aux clés directes');
+});
+
+test('image : le jeton porteur, la demande, les octets, leur type et le modèle qui l’a faite ; une panne passe la main', async () => {
+  const JETON_I = 'clj_pas_' + 'a'.repeat(40);
+  const appels: Array<{ url: string; corps: unknown; auth: string | null }> = [];
+  const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47]);
+  const fetch = (async (url: string, init: RequestInit) => {
+    appels.push({ url, corps: JSON.parse(String(init.body)), auth: new Headers(init.headers).get('authorization') });
+    return new Response(png, { status: 200, headers: { 'content-type': 'image/png', 'x-image-model': '@cf/black-forest-labs/flux-1-schnell' } });
+  }) as typeof globalThis.fetch;
+  const p = lirePasserelle({ CENTRALE_ADRESSE: 'https://c.fr', CENTRALE_PASSERELLE_JETON: JETON_I }, { fetch })!;
+  const r = await image(p, { texte: 'Un agneau', modele: '@cf/leonardo/phoenix-1.0', largeur: 512, hauteur: 512 });
+  assert.deepEqual([...r.octets], [...png]);
+  assert.equal(r.type, 'image/png');
+  assert.equal(r.modele, '@cf/black-forest-labs/flux-1-schnell', 'le repli de Centrale est dit');
+  assert.deepEqual(appels[0], { url: 'https://c.fr/v1/passerelle/images', corps: { texte: 'Un agneau', modele: '@cf/leonardo/phoenix-1.0', largeur: 512, hauteur: 512 }, auth: `Bearer ${JETON_I}` });
+  const panne = lirePasserelle({ CENTRALE_ADRESSE: 'https://c.fr', CENTRALE_PASSERELLE_JETON: JETON_I }, { fetch: (async () => new Response('{"error":{"code":"service_not_configured"}}', { status: 503 })) as typeof globalThis.fetch })!;
+  await assert.rejects(image(panne, { texte: 'x' }), PasserelleIndisponible);
 });

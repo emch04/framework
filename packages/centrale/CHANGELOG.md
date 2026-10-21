@@ -3,6 +3,17 @@
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Les entrées 1.0.0 à 1.4.0 reprennent
 celles du [journal des changements du monorepo](../../CHANGELOG.md).
 
+## 1.8.0 — 2026-10-21 : les images par la passerelle
+
+### Ajouté
+- `/passerelle` : `image(p, { texte, modele?, largeur?, hauteur?, etapes? })` demande une image à Cloudflare Workers AI
+  par la passerelle de Centrale (`POST /v1/passerelle/images`, périmètre `images` du jeton), avec le compte et la clé du
+  coffre du projet : l'app ne garde plus de clé Cloudflare. Rend les octets, leur type et le modèle qui l'a faite
+  (Centrale se replie sur Flux 1 Schnell si le modèle demandé est en panne). Modèles : `MODELES_IMAGE` (Flux 1 Schnell,
+  Flux 2 Klein 9B, Leonardo Phoenix 1.0). Délai d'une minute et dix secondes par défaut (`delaiMs`). Comme les autres
+  services, une panne lève `PasserelleIndisponible` (à combiner avec `passerelleDabord` pour garder la clé directe en
+  secours). Aucun autre paquet Astratra n'est tiré.
+
 ## 1.7.0 — 2026-10-18 : signatures de pensée de Gemini 3
 
 ### Modifié

@@ -3,6 +3,11 @@
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Chaque package Astratra est versionné indépendamment.
 
+## 2026-10-21 — `@astratra/centrale` 1.8.0 : les images par la passerelle de Centrale
+
+### Ajouté
+- `@astratra/centrale/passerelle` : `image(p, { texte, modele?, largeur?, hauteur?, etapes? })` demande une image à Cloudflare Workers AI par la passerelle de Centrale (`POST /v1/passerelle/images`, périmètre `images`), avec le compte et la clé du coffre du projet : l'app ne garde plus de clé Cloudflare. Rend les octets, leur type et le modèle qui l'a faite (repli de Centrale sur Flux 1 Schnell). Une panne lève `PasserelleIndisponible`, à combiner avec `passerelleDabord`. Détails dans [packages/centrale/CHANGELOG.md](packages/centrale/CHANGELOG.md).
+
 ## 2026-10-20 — `@astratra/ai` 1.13.0, `create-astratra-app` 1.11.4 : schémas d'outils chez Gemini, textes courts et détection d'injection
 
 Deux défauts relevés sur Examen d'État le 20/10/2026.

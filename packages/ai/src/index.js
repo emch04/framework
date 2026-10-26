@@ -27,5 +27,6 @@ module.exports = {
   ...require('./serviceHttp'),
   ...require('./serviceLanguage'),
   ...require('./voice'),
-  ...require('./providerLimits')
+  ...require('./providerLimits'),
+  ...require('./mcpClient')
 };

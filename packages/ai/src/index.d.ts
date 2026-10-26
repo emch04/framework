@@ -1162,3 +1162,35 @@ export function createInferenceQueue(options?: { maxConcurrent?: number; maxQueu
   run<T>(task: () => Awaitable<T>, options?: { signal?: AbortSignal }): Promise<T>;
   stats(): { active: number; waiting: number };
 };
+
+/* ─────────────────── Connecteur MCP ─────────────────── */
+
+/** Un outil d'un serveur MCP, rendu au format des outils natifs ; son résultat est une donnée non fiable (`external`). */
+export interface McpNativeTool extends NativeTool {
+  external: true;
+  mcp: { name: string };
+}
+
+export interface McpConnection {
+  tools: McpNativeTool[];
+  /** Les instructions annoncées par le serveur, ou null. */
+  instructions: string | null;
+  close(): Promise<void>;
+}
+
+/** Se connecte à un serveur MCP (Streamable HTTP) et rend ses outils au format des outils natifs. */
+export function connectMcpServer(options: {
+  url?: string;
+  headers?: Record<string, string>;
+  prefix?: string;
+  allow?: string[];
+  kinds?: Record<string, NativeToolKind | { kind?: NativeToolKind; risk?: DeclaredToolRisk }>;
+  timeoutMs?: number;
+  resultMax?: number;
+  client?: { name: string; version: string };
+  transport?: unknown;
+  fetch?: typeof globalThis.fetch;
+}): Promise<McpConnection>;
+
+/** Le nom d'outil Astratra d'un outil MCP (minuscules, chiffres, « _ », 64 caractères au plus). */
+export function mcpToolName(prefix: string, name: string): string;

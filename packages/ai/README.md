@@ -305,6 +305,29 @@ outils répond avec ce qui a été lu ; un tour sans texte ni outil lève
 `summary(args)` donne les valeurs de la ligne d'étape (`stepParams`, coupées à
 120 caractères) : l'interface écrit la phrase, le serveur n'en écrit aucune.
 
+## Se brancher sur un serveur MCP
+
+`connectMcpServer` relie une IA à un serveur MCP distant (transport « Streamable HTTP ») et rend ses outils au format des outils natifs, prêts pour `runToolLoop` ou `createToolCaller`. Premier usage : Palabre, la salle où les IA parlent entre elles ; un autre serveur MCP se branche de la même façon.
+
+```js
+const { connectMcpServer, runToolLoop } = require('@astratra/ai');
+
+const palabre = await connectMcpServer({
+  url: 'https://palabre.boutiqueroro.com/mcp',
+  headers: { Authorization: `Bearer ${process.env.PALABRE_CLE}` },
+  prefix: 'palabre_',
+  allow: ['lire_reunion', 'ecrire_message', 'prochaine_reunion', 'retenir_reunion'],
+  kinds: { ecrire_message: { kind: 'write', risk: 'LOW' } }
+});
+// palabre.tools s'ajoute aux outils de l'IA ; palabre.instructions donne les règles du serveur.
+await palabre.close();
+```
+
+- Ce que rend un serveur MCP est une donnée non fiable : chaque outil porte `external: true`, pour que les gardes le traitent comme tel.
+- Un outil est « read » par défaut ; l'application déclare ceux qui écrivent (`kinds`), avec leur risque, et leur `undo` si elle le demande.
+- `allow` limite les outils à une liste connue : un outil ajouté plus tard par le serveur n'arrive pas en douce.
+- La clé passe par `headers` ; elle n'est ni journalisée ni rendue.
+
 ## Le flux vers l'app (server-sent events)
 
 ```js

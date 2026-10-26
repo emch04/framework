@@ -1,6 +1,6 @@
 {
   "name": "@astratra/ai",
-  "version": "1.13.0",
+  "version": "1.14.0",
   "description": "Generic AI provider routing, tool registry, and agent loop utilities for Astratra, plus agent guards (@astratra/ai/guards): outbound masking, prompt-injection handling for untrusted tool results, reply checks.",
   "engines": {
     "node": ">=20"
@@ -28,14 +28,16 @@
     "llama.cpp",
     "cpu-inference",
     "guardrails",
-    "prompt-injection"
+    "prompt-injection",
+    "mcp"
   ],
   "license": "MIT",
   "publishConfig": {
     "access": "public"
   },
   "dependencies": {
-    "@astratra/core": "^1.0.0"
+    "@astratra/core": "^1.0.0",
+    "@modelcontextprotocol/sdk": "^1.32.1"
   },
   "peerDependencies": {
     "redis": ">=4",

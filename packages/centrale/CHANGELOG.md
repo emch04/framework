@@ -3,6 +3,18 @@
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Les entrées 1.0.0 à 1.4.0 reprennent
 celles du [journal des changements du monorepo](../../CHANGELOG.md).
 
+## 1.9.0 — 2026-10-27 : les bruits des extensions écartés
+
+### Ajouté
+- Les erreurs venues d'une extension du navigateur ne partent plus : `BRUITS_EXTERNES` (« Invalid call to
+  runtime.sendMessage() » de Safari iOS, « Extension context invalidated », « Could not establish connection.
+  Receiving end does not exist », « The message port closed before a response was received ») et toute erreur dont la
+  pile est entièrement dans une extension (`chrome-extension://`, `moz-extension://`, `safari-web-extension://`…).
+  Le tri se fait avant la file : l'envoi final par balise (page fermée) est couvert aussi. `bruitsExternes: false`
+  les garde. Trouvé par Curie sur Barber Clan (bruit de Safari iOS remonté comme une erreur de l'app).
+- Option `ignorer` : messages d'erreur propres à l'app à ne jamais envoyer (texte contenu ou expression).
+- `erreur()` rend `undefined` pour une erreur écartée.
+
 ## 1.8.0 — 2026-10-21 : les images par la passerelle
 
 ### Ajouté

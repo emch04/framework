@@ -54,6 +54,7 @@ const config = {
   echantillonnage: { vues: 0.5, usages: 1, ia: 1 }, // jamais pour les erreurs et sessions
   strict: false,                          // true : ni utilisateur, ni appareil précis
   desactive: false,                       // true : coupe tout (refus)
+  ignorer: ['ResizeObserver loop'],       // erreurs à ne jamais envoyer (texte contenu ou expression)
   debug: false                            // true : console.warn des erreurs internes
 };
 ```
@@ -69,6 +70,8 @@ const config = {
 | `echantillonnage` | Taux de 0 à 1 pour `vues`, `usages` et `ia` ; jamais appliqué aux erreurs ni aux sessions. |
 | `strict` | Ni utilisateur, ni appareil précis. |
 | `desactive` | Coupe tout : l'instance ne fait rien. |
+| `ignorer` | Erreurs à ne jamais envoyer, d'après leur message : un texte contenu dans le message, ou une expression. S'ajoute aux bruits des extensions. |
+| `bruitsExternes` | `true` par défaut : les bruits connus des extensions du navigateur (`BRUITS_EXTERNES`) et les erreurs dont toute la pile est dans une extension (`chrome-extension://`, `safari-web-extension://`…) ne partent pas. `false` pour les garder. |
 | `debug` | Affiche les erreurs internes avec `console.warn`. |
 | `robots` | Navigateur seulement. `false` par défaut : un navigateur piloté par un robot (`navigator.webdriver`, c'est-à-dire Playwright, Selenium, Puppeteer) ne collecte rien. `true` pour collecter quand même (tester la collecte elle-même). |
 
@@ -81,6 +84,13 @@ tableau de bord de fausses erreurs. Pour vérifier la collecte dans un test Play
 ```ts
 const centrale = demarrer({ ...config, robots: true });
 ```
+
+### Bruits des extensions du navigateur
+
+Depuis la 1.9.0, les erreurs qui viennent d'une extension et non de l'app (« Invalid call to runtime.sendMessage().
+Tab not found. » de Safari iOS, « Extension context invalidated. », etc.) sont écartées avant la file : elles ne
+partent ni dans les lots, ni dans l'envoi final par balise quand la page se ferme. La liste est exportée
+(`BRUITS_EXTERNES`) ; `ignorer` y ajoute les messages propres à l'app.
 
 ## Les 6 entrées
 

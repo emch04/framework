@@ -5,7 +5,7 @@
 
 export {
   creerCentrale, centraleParDefaut, definirCentraleParDefaut,
-  NOM_SDK, VERSION_SDK, FILE_MAX, SEUIL_LOT, INTERVALLE_MS, RECUL_BASE_MS, RECUL_MAX_MS
+  NOM_SDK, VERSION_SDK, FILE_MAX, SEUIL_LOT, INTERVALLE_MS, RECUL_BASE_MS, RECUL_MAX_MS, BRUITS_EXTERNES
 } from './coeur.ts';
 export type { Centrale, ConfigCentrale, ExtraErreur, InfosIA, PorteeCentrale, ReglagesInternes } from './coeur.ts';
 export { transportFetch, lireRetryAfter } from './transport.ts';

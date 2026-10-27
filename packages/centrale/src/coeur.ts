@@ -19,7 +19,7 @@ import { lireRetryAfter, transportFetch } from './transport.ts';
 import type { Transport } from './transport.ts';
 
 export const NOM_SDK = '@astratra/centrale';
-export const VERSION_SDK = '1.8.0';
+export const VERSION_SDK = '1.9.0';
 
 /** Valeurs par défaut de la file et de l'envoi. */
 export const FILE_MAX = 500;
@@ -29,6 +29,20 @@ export const RECUL_BASE_MS = 2_000;
 export const RECUL_MAX_MS = 5 * 60_000;
 const MESSAGE_MAX = 4_000;
 const TEXTE_PROPRIETE_MAX = 200;
+
+/**
+ * Bruits connus des extensions du navigateur (Safari iOS, Chrome, Firefox, navigateurs intégrés) : ces erreurs
+ * viennent d'un script qui n'est pas celui de l'app. Elles sont écartées avant la file, donc aussi de l'envoi
+ * final par balise. `bruitsExternes: false` les garde.
+ */
+export const BRUITS_EXTERNES: readonly RegExp[] = [
+  /^Invalid call to runtime\.sendMessage\(\)/,
+  /Extension context invalidated/,
+  /Could not establish connection\. Receiving end does not exist/,
+  /The message port closed before a response was received/
+];
+/** Une pile dont tous les cadres viennent d'une extension n'est pas celle de l'app. */
+const ADRESSE_EXTENSION = /^(?:chrome|moz|safari(?:-web)?|ms-browser)-extension:\/\//;
 
 export interface ConfigCentrale {
   /** Clé publique du projet (`clj_pub_…`) : elle sert seulement à envoyer. */
@@ -48,6 +62,13 @@ export interface ConfigCentrale {
   strict?: boolean;
   /** Coupe tout (refus de l'utilisateur, tests…). */
   desactive?: boolean;
+  /**
+   * Erreurs à ne jamais envoyer, d'après leur message : un texte (contenu dans le message) ou une expression.
+   * S'ajoutent aux `BRUITS_EXTERNES`.
+   */
+  ignorer?: Array<string | RegExp>;
+  /** false : garder aussi les bruits des extensions du navigateur (`BRUITS_EXTERNES`). Vrai par défaut. */
+  bruitsExternes?: boolean;
   /** Affiche les erreurs internes avec `console.warn`. */
   debug?: boolean;
   /** Renseignés par les points d'entrée (node, navigateur, expo) ; rarement à fournir à la main. */
@@ -214,6 +235,14 @@ function creerCentraleActive(config: ConfigCentrale, transport: Transport, regla
   const optionsMasquage = { noms: config.noms ?? [] };
   const adresse = String(config.adresse ?? '').replace(/\/+$/, '');
   const nomSdk = reglages.nomSdk ?? NOM_SDK;
+  const aIgnorer: Array<string | RegExp> = [
+    ...(config.bruitsExternes === false ? [] : BRUITS_EXTERNES),
+    ...(Array.isArray(config.ignorer) ? config.ignorer.filter((m) => typeof m === 'string' ? m.length > 0 : m instanceof RegExp) : [])
+  ];
+  /** Vrai si l'erreur ne doit pas partir : message à ignorer, ou pile entièrement dans une extension. */
+  const ignoree = (message: string, pile: Cadre[]): boolean =>
+    aIgnorer.some((m) => typeof m === 'string' ? message.includes(m) : m.test(message))
+    || (config.bruitsExternes !== false && pile.length > 0 && pile.every((c) => ADRESSE_EXTENSION.test(c.fichier)));
 
   const avertir = (message: string, err?: unknown) => {
     if (config.debug) {
@@ -422,6 +451,7 @@ function creerCentraleActive(config: ConfigCentrale, transport: Transport, regla
         : (typeof e === 'string' ? 'Error' : 'ValeurLancee');
       const message = objet ? String(objet.message ?? '') : String(e);
       const pile = extra.pile ? extra.pile.map((c) => ({ ...c })) : analyserPile(objet?.stack, { racine: config.racine });
+      if (ignoree(message, pile)) return undefined;
       let quand = horodatage();
       if (extra.horodatage) {
         const d = new Date(extra.horodatage);

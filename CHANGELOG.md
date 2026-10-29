@@ -3,6 +3,13 @@
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Chaque package Astratra est versionné indépendamment.
 
+## 2026-10-29 — `@astratra/gouvernance` 1.1.0 : le connecteur MongoDB
+
+### Ajouté
+- `@astratra/gouvernance/mongo` : `createMongoConnector({ db, client, ObjectId, resources, transactions })`, `createMongoGovernanceStore(db)` et `mongoGovernanceIndexes(db)`. Reçoit le `Db` et le `MongoClient` du pilote officiel sans l'importer (mongoose : `connection.db`, `connection.getClient()`). Tout ou rien par `withTransaction` (lecture `snapshot`, écriture `majority`) avec l'état de la proposition dans la même transaction ; relecture du filtre, comparaison des versions, écriture par clé ; conflit d'écriture ou clé en double : `stale_data` ; autre erreur (validateur de la collection…) : tout annulé, `failed`. Jeu de réplicas exigé (`check()`) ; `transactions: false` pour un serveur seul, limité à une écriture par proposition, filtrée par toute la ligne lue à l'aperçu. Le magasin garde les enregistrements en JSON (les `$masked` ne deviennent jamais des clés).
+- Ressources : `types` (`objectId`, `date`) pour que l'aperçu soit du JSON (hexadécimal, ISO) et que l'écriture remette le bon type. Le plan d'exécution donne aussi la ligne lue à l'aperçu (`expect[].before`).
+- 12 tests sur un vrai MongoDB 7.0 (jeu de réplicas en mémoire, ou `MONGO_TEST_URL`) et sur un serveur seul ; 70 tests en tout.
+
 ## 2026-10-29 — `@astratra/centrale` 1.10.0 : le client de la gouvernance
 
 ### Ajouté

@@ -13,6 +13,7 @@ const CHALLENGE_SCHEMA = 'gouvernance-defi/1';
 const RESULT_SCHEMA = 'gouvernance-resultat/1';
 
 const OPERATIONS = Object.freeze(['insert', 'update', 'delete']);
+const COLUMN_TYPES = Object.freeze(['objectId', 'date']);
 const COMPARISONS = Object.freeze(['eq', 'ne', 'gt', 'gte', 'lt', 'lte', 'in', 'isNull']);
 const IDENTIFIER = /^[A-Za-z_][A-Za-z0-9_]{0,62}$/;
 const TABLE = /^[A-Za-z_][A-Za-z0-9_]{0,62}(\.[A-Za-z_][A-Za-z0-9_]{0,62})?$/;
@@ -46,7 +47,7 @@ function defineResources(declaration) {
   for (const [name, spec] of Object.entries(declaration)) {
     if (!NAME.test(name)) fail('invalid_resources', `Nom de ressource invalide : ${name}.`);
     if (!isPlainObject(spec)) fail('invalid_resources', `${name} : la déclaration doit être un objet.`);
-    onlyKeys(spec, ['table', 'key', 'writable', 'filterable', 'sensitive', 'tags', 'amount', 'maxRows', 'operations'], name);
+    onlyKeys(spec, ['table', 'key', 'writable', 'filterable', 'sensitive', 'tags', 'amount', 'maxRows', 'operations', 'types'], name);
     if (typeof spec.table !== 'string' || !TABLE.test(spec.table)) fail('invalid_resources', `${name} : table ou collection invalide.`);
     const key = columnList(spec.key, 'clé', name);
     if (!key.length) fail('invalid_resources', `${name} : une clé primaire est obligatoire.`);
@@ -65,12 +66,19 @@ function defineResources(declaration) {
     const tags = spec.tags === undefined ? [] : unique(spec.tags);
     for (const tag of tags) if (typeof tag !== 'string' || !NAME.test(tag)) fail('invalid_resources', `${name} : étiquette invalide.`);
     if (spec.amount !== undefined && (typeof spec.amount !== 'string' || !writable.includes(spec.amount))) fail('invalid_resources', `${name} : la colonne de montant doit être modifiable.`);
+    /* Le type d'une colonne quand la base ne le déduit pas d'un texte (MongoDB) : identifiant ObjectId, date. */
+    const types = spec.types === undefined ? {} : spec.types;
+    if (!isPlainObject(types)) fail('invalid_resources', `${name} : « types » doit être un objet.`);
+    for (const [column, type] of Object.entries(types)) {
+      if (!readable.includes(column)) fail('invalid_resources', `${name} : la colonne typée ${column} n'est pas déclarée.`);
+      if (!COLUMN_TYPES.includes(type)) fail('invalid_resources', `${name} : type inconnu ${String(type)} (${COLUMN_TYPES.join(', ')}).`);
+    }
     const maxRows = spec.maxRows === undefined ? 100 : spec.maxRows;
     if (!Number.isSafeInteger(maxRows) || maxRows < 1 || maxRows > 10000) fail('invalid_resources', `${name} : maxRows doit être un entier de 1 à 10 000.`);
     resources[name] = Object.freeze({
       name, table: spec.table, key: Object.freeze(key), writable: Object.freeze(writable), filterable: Object.freeze(filterable),
       readable: Object.freeze(readable), sensitive: Object.freeze(sensitive), tags: Object.freeze(tags), amount: spec.amount ?? null,
-      maxRows, operations: Object.freeze(operations)
+      maxRows, operations: Object.freeze(operations), types: Object.freeze({ ...types })
     });
   }
   return Object.freeze(resources);
@@ -190,6 +198,6 @@ function rowMatches(row, where) {
 }
 
 module.exports = {
-  PROPOSAL_SCHEMA, VALIDATION_SCHEMA, CHALLENGE_SCHEMA, RESULT_SCHEMA, OPERATIONS, COMPARISONS, MAX_ACTIONS,
+  PROPOSAL_SCHEMA, VALIDATION_SCHEMA, CHALLENGE_SCHEMA, RESULT_SCHEMA, OPERATIONS, COMPARISONS, MAX_ACTIONS, COLUMN_TYPES,
   IDENTIFIER, NAME, defineResources, normalizeActions, normalizeAction, rowMatches, isPlainObject, isScalar
 };

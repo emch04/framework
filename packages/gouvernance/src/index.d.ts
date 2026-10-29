@@ -33,6 +33,8 @@ export interface ResourceDeclaration {
   amount?: string;
   maxRows?: number;
   operations?: Operation[];
+  /** Le type d'une colonne quand la base ne le déduit pas d'un texte (MongoDB). */
+  types?: Record<string, 'objectId' | 'date'>;
 }
 
 export interface Resource {
@@ -47,6 +49,7 @@ export interface Resource {
   readonly amount: string | null;
   readonly maxRows: number;
   readonly operations: readonly Operation[];
+  readonly types: Readonly<Record<string, 'objectId' | 'date'>>;
 }
 
 export type Condition = Scalar | { eq?: Scalar; ne?: Scalar; gt?: string | number; gte?: string | number; lt?: string | number; lte?: string | number; in?: Array<string | number | boolean>; isNull?: boolean };
@@ -168,7 +171,7 @@ export interface ExecutionStep {
   resource: string;
   op: Operation;
   select: { where: Record<string, Record<string, unknown>> } | { keys: Array<Record<string, unknown>> };
-  expect: Array<{ key: Record<string, unknown>; version?: string; values?: Record<string, unknown> }>;
+  expect: Array<{ key: Record<string, unknown>; version?: string; values?: Record<string, unknown>; before?: Record<string, unknown> }>;
   writes: Array<{ kind: 'update' | 'insert' | 'delete'; key: Record<string, unknown>; set?: Record<string, unknown>; values?: Record<string, unknown> }>;
 }
 export interface ExecutionPlan {

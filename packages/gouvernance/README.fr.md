@@ -20,6 +20,7 @@ npm install @astratra/gouvernance @astratra/conscience
 |---|---|
 | `@astratra/gouvernance` | Contrat, niveaux d'autonomie, cycle de vie, validations signées, magasin et connecteur en mémoire |
 | `@astratra/gouvernance/postgres` | Connecteur PostgreSQL et magasin des propositions (un `Pool` de `pg`, aucune connexion ouverte par le pack) |
+| `@astratra/gouvernance/mongo` | Connecteur MongoDB et magasin des propositions (le `Db` et le `MongoClient` du pilote officiel, jamais importé) |
 
 ## Le cycle
 
@@ -106,6 +107,7 @@ L'application déclare ce que l'IA peut toucher. Tout le reste est refusé avant
 | `amount` | aucune | Colonne de montant : la somme des écarts compte pour `amountAbove` |
 | `maxRows` | `100` | Au-delà : refus (`too_many_rows`), jamais d'aperçu tronqué |
 | `operations` | `['update']` | `insert`, `update`, `delete` |
+| `types` | `{}` | MongoDB : `{ _id: 'objectId', soldAt: 'date' }`, pour que l'aperçu soit du JSON (hexadécimal, ISO) et que l'écriture remette le bon type |
 
 ## Actions
 
@@ -220,6 +222,36 @@ processus.
 - `postgresGovernanceSchema({ prefix })` est idempotent ; `numeric` arrive en texte (`'10.50'`) et
   se compare comme un nombre à l'annulation.
 
+## MongoDB
+
+```js
+const { MongoClient, ObjectId } = require('mongodb');
+const { createMongoConnector, createMongoGovernanceStore, mongoGovernanceIndexes } = require('@astratra/gouvernance/mongo');
+
+const client = await MongoClient.connect(process.env.MONGO_URL);   // avec mongoose : connection.getClient() et connection.db
+const db = client.db();
+await mongoGovernanceIndexes(db);                                   // dans la MÊME base que les données
+
+const connector = createMongoConnector({ db, client, ObjectId, resources: {
+  grades: { table: 'grades', key: '_id', writable: ['value'], filterable: ['student', 'subject'], types: { _id: 'objectId', student: 'objectId' } }
+} });
+const store = createMongoGovernanceStore(db);
+```
+
+- **Tout ou rien par une transaction** (`withTransaction`, lecture `snapshot`, écriture `majority`) : relecture du
+  filtre d'origine, comparaison des versions, écritures par clé (un document chacune), puis l'état de la proposition
+  dans la même transaction. Une erreur passagère fait rejouer le tout, comparaison comprise ; un conflit d'écriture ou
+  une clé en double rend `stale_data` ; toute autre erreur (un validateur de la collection, par exemple) annule tout et
+  rend `failed`.
+- **Il faut un jeu de réplicas** (ou un cluster). Sans lui, `check()` rend `false` et l'exécution échoue sans rien
+  écrire. `transactions: false` permet un serveur seul, mais **une seule écriture par proposition** (sinon
+  `transactions_required`) : la mise à jour est filtrée par toute la ligne lue à l'aperçu ; l'état de la proposition
+  est écrit juste après, pas dans la même opération.
+- Les champs sont ceux du premier niveau du document (pas de chemin `a.b`). ObjectId, dates, Decimal128 et Long
+  deviennent du texte dans l'aperçu ; un champ binaire est refusé.
+- Le magasin garde chaque enregistrement en JSON : les valeurs masquées (`$masked`) ne deviennent jamais des clés de
+  document.
+
 ## Autres fonctions
 
 `expire({ organisationId })` passe en `expired` les propositions en attente dépassées (12 h par
@@ -233,9 +265,11 @@ voudrait refaire les mêmes calculs.
 ```sh
 npm test
 GOUVERNANCE_TEST_DATABASE_URL=postgresql://localhost/gouvernance_test npm test   # avec un vrai PostgreSQL
+MONGO_TEST_URL=mongodb://localhost:27017/?replicaSet=rs0 npm test                  # un jeu de réplicas à vous
 ```
 
-La base doit finir par `_test` ; les tests créent et suppriment leur propre schéma `shop`.
+La base PostgreSQL doit finir par `_test` ; les tests créent et suppriment leur propre schéma `shop`. Sans
+`MONGO_TEST_URL`, les tests MongoDB démarrent un jeu de réplicas en mémoire (`mongodb-memory-server`).
 
 ## Limites
 
@@ -244,4 +278,5 @@ La base doit finir par `_test` ; les tests créent et suppriment leur propre sch
 - Une suppression ne s'annule pas.
 - Si une action change une ligne de façon qu'elle entre dans le filtre d'une action suivante de la
   même proposition, l'exécution s'arrête (`stale_data`) : regrouper ces actions.
-- Le connecteur MongoDB n'est pas encore là.
+- Une ligne ajoutée par quelqu'un d'autre pendant la transaction elle-même (après sa première lecture) n'est pas vue
+  en `REPEATABLE READ` ni dans une transaction MongoDB ; `isolation: 'serializable'` le couvre pour PostgreSQL.

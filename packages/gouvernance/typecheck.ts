@@ -1,12 +1,18 @@
 import { createDataGovernance, createMemoryGovernanceStore, createMemoryConnector, signValidation, GouvernanceError } from './src';
 import type { Proposal, Rule, Validation } from './src';
 import { createPostgresConnector, createPostgresGovernanceStore, postgresGovernanceSchema } from './src/postgres';
+import { createMongoConnector, createMongoGovernanceStore, mongoGovernanceIndexes } from './src/mongo';
 
 const rules: Rule[] = [{ id: 'catalogue', level: 'free_with_notice', match: { resources: ['products'], rowsAbove: 0 }, quota: { perDay: 20 } }];
 const shop = createMemoryConnector({ resources: { products: { table: 'products', key: 'id', writable: ['price'], amount: 'price' } } });
 const pool = { query: async () => ({ rows: [], rowCount: 0 }), connect: async () => ({ query: async () => ({ rows: [], rowCount: 0 }), release() {} }) };
 const pg = createPostgresConnector({ pool, resources: { products: { table: 'app.products', key: ['id'], writable: ['price'] } } });
 const sql: string = postgresGovernanceSchema({ prefix: 'app_gouvernance' });
+const mongoDb = { collection: () => ({}), admin: () => ({ command: async () => ({ setName: 'rs0' }) }) };
+class FakeObjectId { constructor(public hex: string) {} }
+const mongo = createMongoConnector({ db: mongoDb, client: { startSession: () => ({}) }, ObjectId: FakeObjectId,
+  resources: { grades: { table: 'grades', key: '_id', writable: ['value'], types: { _id: 'objectId' } } } });
+void mongo.check(); void createMongoGovernanceStore(mongoDb); void mongoGovernanceIndexes(mongoDb, { collection: 'app_gouvernance' });
 
 const governance = createDataGovernance({
   governor: { isHalted: async () => false },

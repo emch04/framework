@@ -292,7 +292,8 @@ function createDataGovernance(options = {}) {
       }
       return {
         action: index, resource: action.resource, op: action.op, select: { where: action.where },
-        expect: rows.map((r) => ({ key: r.key, version: keyedDigest(local.salt, r.before) })),
+        /* `before` : la ligne entière lue à l'aperçu, pour un connecteur qui revérifie par un filtre d'égalité (MongoDB sans transaction). */
+        expect: rows.map((r) => ({ key: r.key, version: keyedDigest(local.salt, r.before), before: r.before })),
         writes: rows.map((r) => (action.op === 'update'
           ? { kind: 'update', key: r.key, set: pick(r.after, Object.keys(action.set)) }
           : { kind: 'delete', key: r.key }))

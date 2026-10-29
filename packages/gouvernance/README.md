@@ -19,6 +19,7 @@ npm install @astratra/gouvernance @astratra/conscience
 |---|---|
 | `@astratra/gouvernance` | Contract, autonomy levels, lifecycle, signed validations, in-memory store and connector |
 | `@astratra/gouvernance/postgres` | PostgreSQL connector and proposal store (a `pg` `Pool`; the package opens no connection) |
+| `@astratra/gouvernance/mongo` | MongoDB connector and proposal store (the official driver's `Db` and `MongoClient`, never imported) |
 
 ## Lifecycle
 
@@ -114,14 +115,28 @@ then `COMMIT`. Concurrent writes (`40001`, `40P01`, `23505`) give `stale_data`; 
 rolls everything back and gives `failed`. With the PostgreSQL store in the same database, a crash
 never leaves data written without the `executed` state, nor the reverse.
 
+## MongoDB
+
+`createMongoConnector({ db, client, ObjectId, resources, transactions = true })`, `createMongoGovernanceStore(db)`,
+`mongoGovernanceIndexes(db)` (with mongoose: `connection.db`, `connection.getClient()`). Declare `types:
+{ _id: 'objectId', soldAt: 'date' }` so the preview is JSON (hex, ISO) and writes restore the right type. All or
+nothing through `withTransaction` (snapshot reads, majority writes), the proposal state in the same transaction;
+transient errors replay everything, comparison included; write conflicts and duplicate keys give `stale_data`; any
+other error rolls back and gives `failed`. A replica set (or cluster) is required: without it `check()` is `false`
+and execution writes nothing. `transactions: false` allows a standalone server with **one write per proposal**
+(`transactions_required` otherwise), filtered on the whole row read at preview time. Top-level fields only. The
+store keeps records as JSON, so `$masked` values never become document keys.
+
 ## Tests
 
 ```sh
 GOUVERNANCE_TEST_DATABASE_URL=postgresql://localhost/gouvernance_test npm test
+MONGO_TEST_URL=mongodb://localhost:27017/?replicaSet=rs0 npm test   # otherwise an in-memory replica set
 ```
 
 ## Limits
 
 Agent reads do not go through this package; one database per proposal; deletes cannot be undone;
 an action that makes a row enter the filter of a later action of the same proposal stops the
-execution (`stale_data`); no MongoDB connector yet.
+execution (`stale_data`); a row inserted by someone else during the transaction itself is not seen in
+`REPEATABLE READ` nor in a MongoDB transaction (`isolation: 'serializable'` covers it for PostgreSQL).

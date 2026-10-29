@@ -38,6 +38,7 @@ ORDER=(
   "@astratra/agent"
   "@astratra/memory"
   "@astratra/conscience"
+  "@astratra/gouvernance"
   "@astratra/models"
   "@astratra/i18n-server"
   "@astratra/shipping"

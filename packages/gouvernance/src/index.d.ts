@@ -223,7 +223,8 @@ export interface DataGovernanceOptions {
 
 export interface DataGovernance {
   propose(input: ProposeInput): Promise<ProposalView>;
-  applyValidation(validation: Validation, options: { organisationId: string }): Promise<ProposalView>;
+  /** `validation` vient du réseau : tout est vérifié ici (signature d'abord), d'où `unknown`. */
+  applyValidation(validation: unknown, options: { organisationId: string }): Promise<ProposalView>;
   undo(id: string, options: { organisationId: string; by: { kind: 'human'; id: string } }): Promise<ProposalView>;
   expire(options: { organisationId: string }): Promise<string[]>;
   get(id: string, options: { organisationId: string }): Promise<ProposalView | null>;

@@ -1,0 +1,48 @@
+{
+  "name": "@astratra/gouvernance",
+  "version": "1.0.0",
+  "description": "Governed data actions for AI agents: the agent proposes, an exact preview is computed, a human validates (signed, bound to the exact proposal, with an expiry), the data is re-checked at commit time and the change runs all or nothing, with a full audit trail. Builds on @astratra/conscience.",
+  "engines": {
+    "node": ">=20"
+  },
+  "main": "src/index.js",
+  "types": "src/index.d.ts",
+  "type": "commonjs",
+  "files": [
+    "src"
+  ],
+  "scripts": {
+    "test": "node --test test/*.test.js"
+  },
+  "keywords": [
+    "astratra",
+    "ai",
+    "agent",
+    "governance",
+    "approval",
+    "audit",
+    "webauthn",
+    "postgres"
+  ],
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
+  "dependencies": {
+    "@astratra/conscience": "^1.4.0"
+  },
+  "devDependencies": {
+    "pg": "^8.13.1"
+  },
+  "exports": {
+    ".": {
+      "types": "./src/index.d.ts",
+      "default": "./src/index.js"
+    },
+    "./postgres": {
+      "types": "./src/postgres/index.d.ts",
+      "default": "./src/postgres/index.js"
+    },
+    "./package.json": "./package.json"
+  }
+}

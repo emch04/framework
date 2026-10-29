@@ -3,6 +3,12 @@
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Chaque package Astratra est versionné indépendamment.
 
+## 2026-10-29 — `@astratra/gouvernance` 1.0.0 : les actions de l'IA sur les données, gouvernées
+
+### Ajouté
+- Nouveau paquet `@astratra/gouvernance`, qui s'appuie sur `@astratra/conscience` (arrêt d'urgence, journal d'audit, budgets calendaires) sans rien en recopier. Une IA ne modifie jamais une base : elle propose une action fermée (jamais de SQL), le pack calcule l'aperçu exact (clé, valeurs avant et après, version de chaque ligne), applique les niveaux d'autonomie (`free`, `free_with_notice`, `validation`, `forbidden` ; critères : opération, ressource, étiquettes, IA, lignes, montant, plage horaire dans un fuseau ; la règle la plus stricte l'emporte ; quotas d'actions libres ; règles distantes qui ne peuvent que resserrer), vérifie la validation signée (passkey de la personne dont le défi est l'empreinte de la proposition, plus signature Ed25519 du service de validation ; l'application ne garde que des clés publiques), revérifie au moment d'écrire (ligne changée, supprimée ou apparue : `stale_data`, rien d'écrit) et exécute tout ou rien, avec audit avant chaque étape et annulation par un humain.
+- `@astratra/gouvernance/postgres` : connecteur (`REPEATABLE READ`, `SELECT … FOR UPDATE`, l'état de la proposition écrit dans la même transaction que les données) et magasin des propositions. Valeurs sensibles masquées dans la proposition envoyée (HMAC salé). Connecteur et magasin en mémoire pour les tests. 58 tests, dont 10 sur un vrai PostgreSQL ; types TypeScript.
+
 ## 2026-10-21 — `@astratra/centrale` 1.8.0 : les images par la passerelle de Centrale
 
 ### Ajouté

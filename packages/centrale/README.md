@@ -92,7 +92,7 @@ Tab not found. » de Safari iOS, « Extension context invalidated. », etc.) son
 partent ni dans les lots, ni dans l'envoi final par balise quand la page se ferme. La liste est exportée
 (`BRUITS_EXTERNES`) ; `ignorer` y ajoute les messages propres à l'app.
 
-## Les 6 entrées
+## Les 7 entrées
 
 | Entrée | Usage |
 | --- | --- |
@@ -102,6 +102,7 @@ partent ni dans les lots, ni dans l'envoi final par balise quand la page se ferm
 | `@astratra/centrale/expo` | `demarrer({ ...config, plateforme: Platform.OS, version, build, miseAJour, os, appareil, appState: AppState, stockage })`, puis `centrale.ecran(nom)` depuis la navigation. `stockage` (AsyncStorage, expo-file-system…) garde l'état entre deux lancements. |
 | `@astratra/centrale/ia` | `mesurerAppelIA({ fournisseur, modele, outil?, jetons?, estRepli? }, () => appel())`. |
 | `@astratra/centrale/conscience` | `creerConscienceCentrale({ adresse, jeton })` : réglages de la conscience d'une IA, bilan du matin, décisions humaines (section plus bas). |
+| `@astratra/centrale/gouvernance` | `creerGouvernanceCentrale({ adresse, jeton })` : propositions d'actions de l'IA sur les données, règles, validations signées (section plus bas). |
 
 ```ts
 import { demarrer } from '@astratra/centrale/node';
@@ -183,6 +184,38 @@ Le tableau de bord vérifie à nouveau et refuse tout envoi qui contient autre c
 
 Les erreurs sont des `ErreurConscience` : `statut` HTTP (ou `null` hors ligne) et `code` (`invalid_api_key`,
 `sensitive_data`, `reseau`…).
+
+## Gouvernance des actions de l'IA sur les données (`/gouvernance`)
+
+L'IA d'une app propose une action sur ses données ; l'app calcule l'aperçu exact, l'envoie au tableau de bord, qui
+prévient la bonne personne et rend une **validation signée** (sa passkey, plus la signature Ed25519 du tableau de
+bord). L'app revérifie et exécute elle-même : le tableau de bord ne reçoit jamais d'accès à une base. Ce client va
+avec `@astratra/gouvernance`, qu'il n'importe pas : on lui passe la gouvernance.
+
+```ts
+import { creerGouvernanceCentrale } from '@astratra/centrale/gouvernance';
+
+const tableau = creerGouvernanceCentrale({ adresse: 'https://tableau.exemple.fr', jeton: process.env.JETON_PROJET! });
+// Une fois, à l'installation : lireConfiance() donne les clés publiques à ÉPINGLER dans la configuration de l'app.
+const gouvernance = createDataGovernance({ /* … */ trust: confianceEpinglee, remoteRules: () => tableau.lireRegles() });
+
+const vue = await gouvernance.propose({ /* … */ });
+await tableau.envoyerProposition(vue);                       // en attente, ou déjà exécutée (libre avec avis)
+setInterval(() => tableau.synchroniser(gouvernance, { organisationId }).catch(() => {}), 15_000);
+```
+
+| Méthode | Route | Rôle |
+| --- | --- | --- |
+| `lireRegles()` | `GET /v1/gouvernance/rules` | Règles d'autonomie (`gouvernance-regles/1`), avec `If-None-Match` ; à passer en `remoteRules` |
+| `lireConfiance()` | `GET /v1/gouvernance/trust` | Clés publiques du tableau de bord et des approbateurs (`gouvernance-confiance/1`), à épingler, pas à relire à chaque tour |
+| `envoyerProposition(vue)` | `POST /v1/gouvernance/proposals` | La proposition canonique (empreinte comprise), son explication et son état ; rejouable |
+| `signalerEtat(id, vue)` | `POST /v1/gouvernance/proposals/:id/status` | Exécutée, annulée, données changées… |
+| `lireValidations({ toutes? })` | `GET /v1/gouvernance/validations` | Validations signées pas encore accusées |
+| `accuserValidation(id, vue)` | `POST /v1/gouvernance/validations/:id/ack` | Ce que la gouvernance en a fait |
+| `synchroniser(gouvernance, { organisationId })` | les deux précédentes | Applique chaque validation et accuse le résultat ; une validation dont l'application lève n'est pas accusée et revient |
+
+Seuls un état connu, un code court et un nombre de lignes repartent (`etatDe`). Les erreurs sont des
+`ErreurGouvernance` (`statut`, `code`).
 
 ## Ce qui est capté
 

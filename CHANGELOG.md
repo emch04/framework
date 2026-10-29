@@ -3,6 +3,11 @@
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Chaque package Astratra est versionné indépendamment.
 
+## 2026-10-29 — `@astratra/centrale` 1.10.0 : le client de la gouvernance
+
+### Ajouté
+- `@astratra/centrale/gouvernance` : `creerGouvernanceCentrale({ adresse, jeton })`, client des routes `/v1/gouvernance/*` du tableau de bord (règles d'autonomie avec ETag, confiance à épingler, envoi des propositions, état, validations signées, accusés, `synchroniser(gouvernance, { organisationId })`). Va avec `@astratra/gouvernance`, sans l'importer : le paquet reste sans aucune dépendance. Détails dans [packages/centrale/CHANGELOG.md](packages/centrale/CHANGELOG.md).
+
 ## 2026-10-29 — `@astratra/gouvernance` 1.0.0 : les actions de l'IA sur les données, gouvernées
 
 ### Ajouté

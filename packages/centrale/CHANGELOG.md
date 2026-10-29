@@ -3,6 +3,16 @@
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Les entrées 1.0.0 à 1.4.0 reprennent
 celles du [journal des changements du monorepo](../../CHANGELOG.md).
 
+## 1.10.0 — 2026-10-29 : la gouvernance des actions de l'IA sur les données
+
+### Ajouté
+- `/gouvernance` : `creerGouvernanceCentrale({ adresse, jeton })`, le client des routes `/v1/gouvernance/*` du tableau
+  de bord. `lireRegles()` (règles d'autonomie, ETag, à passer en `remoteRules`), `lireConfiance()` (clés publiques du
+  tableau de bord et des approbateurs, à épingler), `envoyerProposition(vue)`, `signalerEtat(id, vue)`,
+  `lireValidations()`, `accuserValidation(id, vue)` et `synchroniser(gouvernance, { organisationId })` (applique chaque
+  validation signée et accuse le résultat ; une panne la laisse revenir). Ne renvoie qu'un état connu, un code court et
+  un nombre de lignes (`etatDe`). Aucun autre paquet Astratra n'est tiré.
+
 ## 1.9.0 — 2026-10-27 : les bruits des extensions écartés
 
 ### Ajouté

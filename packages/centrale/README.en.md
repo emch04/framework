@@ -69,7 +69,7 @@ errors. To check the collection in a Playwright test, ask for it:
 const centrale = demarrer({ ...config, robots: true });
 ```
 
-## The 6 entry points
+## The 7 entry points
 
 | Entry | Use |
 | --- | --- |
@@ -79,6 +79,7 @@ const centrale = demarrer({ ...config, robots: true });
 | `@astratra/centrale/expo` | `demarrer({ ...config, plateforme: Platform.OS, version, build, miseAJour, os, appareil, appState: AppState, stockage })`, then `centrale.ecran(nom)` from navigation. `stockage` (AsyncStorage, expo-file-system…) keeps the state between two launches. |
 | `@astratra/centrale/ia` | `mesurerAppelIA({ fournisseur, modele, outil?, jetons?, estRepli? }, () => call())`. |
 | `@astratra/centrale/conscience` | `creerConscienceCentrale({ adresse, jeton })`: settings of an AI's conscience, morning report, human decisions (section below). |
+| `@astratra/centrale/gouvernance` | `creerGouvernanceCentrale({ adresse, jeton })`: proposed AI actions on data, rules, signed validations (section below). |
 
 ## Key gateway (`/passerelle`)
 
@@ -133,6 +134,29 @@ await dashboard.accuserDecisions(results);                   // applied, already
 `resumerBilan(report, proposals?)` keeps only ids, codes (`answer_style`, `tool_reliability`…) and numbers: no question, answer, note, decision id, `tests` object, rollback plan, owner, nor the identity of a person who proposed. A string the masking would change is dropped. The dashboard checks again and refuses anything else.
 
 Errors are `ErreurConscience`: HTTP `statut` (or `null` when offline) and `code` (`invalid_api_key`, `sensitive_data`, `reseau`…).
+
+## Governed data actions (`/gouvernance`)
+
+An app's AI proposes an action on its data; the app computes the exact preview and sends it to the dashboard, which
+notifies the right person and returns a **signed validation** (their passkey plus the dashboard's Ed25519 signature).
+The app re-checks and executes by itself: the dashboard never gets database access. Pairs with
+`@astratra/gouvernance`, which this package does not import.
+
+```ts
+import { creerGouvernanceCentrale } from '@astratra/centrale/gouvernance';
+
+const dashboard = creerGouvernanceCentrale({ adresse: 'https://dashboard.example.com', jeton: process.env.PROJECT_TOKEN! });
+// Once, at setup: lireConfiance() gives the public keys to PIN in the app configuration.
+const governance = createDataGovernance({ /* … */ trust: pinnedTrust, remoteRules: () => dashboard.lireRegles() });
+await dashboard.envoyerProposition(await governance.propose({ /* … */ }));
+setInterval(() => dashboard.synchroniser(governance, { organisationId }).catch(() => {}), 15_000);
+```
+
+Methods: `lireRegles()` (`GET /v1/gouvernance/rules`, ETag), `lireConfiance()` (`GET /v1/gouvernance/trust`, to pin),
+`envoyerProposition(view)` (`POST /v1/gouvernance/proposals`), `signalerEtat(id, view)`
+(`POST /v1/gouvernance/proposals/:id/status`), `lireValidations()` (`GET /v1/gouvernance/validations`),
+`accuserValidation(id, view)` (`POST /v1/gouvernance/validations/:id/ack`), `synchroniser(governance, { organisationId })`.
+Only a known status, a short code and a row count are sent back (`etatDe`). Errors are `ErreurGouvernance`.
 
 ## What is captured
 

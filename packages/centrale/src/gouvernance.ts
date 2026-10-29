@@ -48,7 +48,7 @@ export interface ValidationRecue {
 export interface VueProposition {
   status?: string | null;
   code?: string | null;
-  proposal?: { id?: unknown; digest?: unknown } & Record<string, unknown> | null;
+  proposal?: { id?: unknown; digest?: unknown } | null;
   explanation?: string | null;
   result?: { rowsAffected?: unknown } | null;
 }

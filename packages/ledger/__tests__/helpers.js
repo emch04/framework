@@ -1,7 +1,7 @@
 const { createLedger, createRateTable } = require('../src');
 
 const humain = { id: 'u-comptable', kind: 'human', name: 'Comptable' };
-const ia = { id: 'oracle', kind: 'ai' };
+const ia = { id: 'assistant', kind: 'ai' };
 
 /** Grand livre SYSCOHADA en CDF, exercices 2026 et 2027 ouverts, banque 5211. */
 async function montage(options = {}) {

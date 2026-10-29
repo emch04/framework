@@ -46,8 +46,8 @@ const VERIFICATIONS_DE_CONNEXION = /^(https?:\/\/)?(clients\d*\.google\.com\/gen
 
 /**
  * Les vérifications de connexion des systèmes et des bibliothèques (« ai-je Internet ? ») : leur échec dit seulement
- * que le réseau manque, jamais une erreur de l'app (15/10/2026 : 83 fausses erreurs de Scolaris sur
- * clients3.google.com/generate_204). Elles restent dans le fil d'Ariane, sans signalement.
+ * que le réseau manque, jamais une erreur de l'app (15/10/2026 : 83 fausses erreurs d'une app
+ * sur clients3.google.com/generate_204). Elles restent dans le fil d'Ariane, sans signalement.
  */
 export function estVerificationDeConnexion(adresse: string): boolean {
   return VERIFICATIONS_DE_CONNEXION.test(adresse.trim());
@@ -165,8 +165,8 @@ export interface OptionsGardien {
   noter?: (debut: number | null) => void;
   /**
    * Au-delà, un retard de la minuterie est une PAUSE de l'app (téléphone verrouillé, onglet endormi), pas un blocage :
-   * JavaScript a pu être suspendu avant même d'apprendre le passage en arrière-plan (15/10/2026 : 59 « blocages » de
-   * Scolaris sur iPhone, jusqu'à 2 181 s). 60 s par défaut.
+   * JavaScript a pu être suspendu avant même d'apprendre le passage en arrière-plan (15/10/2026 : 59 « blocages » d'une
+   * app sur iPhone, jusqu'à 2 181 s). 60 s par défaut.
    */
   plafondMs?: number;
 }

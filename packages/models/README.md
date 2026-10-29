@@ -155,7 +155,7 @@ const prices = createPriceCatalog({
     'gemini-2.5-pro': { pricesPerMillion: { input: 1.0 } },            // prix négocié
     'llama-local': { prices: { input: 0, output: 0 }, contextWindow: { maxInput: 8192 } }
   },
-  aliases: { 'oracle-rapide': 'groq/openai/gpt-oss-120b' }
+  aliases: { 'assistant-rapide': 'groq/openai/gpt-oss-120b' }
 });
 
 const cost = prices.cost('openai/gpt-oss-120b', response.usage, { provider: 'groq' });

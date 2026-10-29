@@ -192,6 +192,6 @@ test('les vérifications de connexion (generate_204, captive.apple.com) ne sont 
   const { estVerificationDeConnexion } = await import('../src/vigilance.ts');
   for (const adresse of ['https://clients3.google.com/generate_204', 'http://connectivitycheck.gstatic.com/generate_204', 'https://captive.apple.com/hotspot-detect.html', 'http://www.msftconnecttest.com/connecttest.txt'])
     assert.equal(estVerificationDeConnexion(adresse), true, adresse);
-  for (const adresse of ['https://api.scolarisapp.com/api/students', 'https://google.com/search?q=generate_204'])
+  for (const adresse of ['https://api.example.com/api/students', 'https://google.com/search?q=generate_204'])
     assert.equal(estVerificationDeConnexion(adresse), false, adresse);
 });

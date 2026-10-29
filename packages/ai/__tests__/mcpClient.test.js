@@ -5,7 +5,7 @@ const { StreamableHTTPServerTransport } = require('@modelcontextprotocol/sdk/ser
 const { InMemoryTransport } = require('@modelcontextprotocol/sdk/inMemory.js');
 const { connectMcpServer, mcpToolName, validateNativeTools, createToolCaller } = require('../src');
 
-/* Un petit serveur MCP de test, à la manière de Palabre : lire, écrire, et un outil en trop. */
+/* Un petit serveur MCP de test, à la manière d'un salon de discussion : lire, écrire, et un outil en trop. */
 function serveur() {
   const s = new McpServer({ name: 'salle-de-test', version: '1.0.0' }, { instructions: 'Parle librement.' });
   const recus = [];
@@ -28,15 +28,15 @@ async function enMemoire(options = {}) {
 
 describe('mcpClient', () => {
   test('les outils du serveur deviennent des outils natifs valides, préfixés, externes, read par défaut', async () => {
-    const { connexion } = await enMemoire({ prefix: 'palabre_', kinds: { ecrire_message: { kind: 'write', risk: 'LOW' } } });
+    const { connexion } = await enMemoire({ prefix: 'salon_', kinds: { ecrire_message: { kind: 'write', risk: 'LOW' } } });
     const noms = connexion.tools.map((t) => t.name).sort();
-    expect(noms).toEqual(['palabre_echoue', 'palabre_ecrire_message', 'palabre_lire_reunion', 'palabre_outil_en_trop']);
-    const lire = connexion.tools.find((t) => t.name === 'palabre_lire_reunion');
+    expect(noms).toEqual(['salon_echoue', 'salon_ecrire_message', 'salon_lire_reunion', 'salon_outil_en_trop']);
+    const lire = connexion.tools.find((t) => t.name === 'salon_lire_reunion');
     expect(lire.kind).toBe('read');
     expect(lire.external).toBe(true);
     expect(lire.parameters.type).toBe('object');
     expect(lire.parameters.properties.apres).toBeTruthy();
-    expect(connexion.tools.find((t) => t.name === 'palabre_ecrire_message')).toMatchObject({ kind: 'write', risk: 'LOW' });
+    expect(connexion.tools.find((t) => t.name === 'salon_ecrire_message')).toMatchObject({ kind: 'write', risk: 'LOW' });
     expect(connexion.instructions).toBe('Parle librement.');
     const lecture = connexion.tools.filter((t) => t.kind === 'read');
     expect(() => validateNativeTools(lecture)).not.toThrow();
@@ -48,8 +48,8 @@ describe('mcpClient', () => {
     expect(connexion.tools.map((t) => t.name).sort()).toEqual(['echoue', 'ecrire_message', 'lire_reunion']);
     const lire = connexion.tools.find((t) => t.name === 'lire_reunion');
     expect(await lire.run({ apres: 4 }, {})).toEqual({ data: { messages: [{ id: 1, texte: 'Bonjour' }], curseur: 4 } });
-    await connexion.tools.find((t) => t.name === 'ecrire_message').run({ texte: 'Salut Oracle' }, {});
-    expect(recus).toEqual(['Salut Oracle']);
+    await connexion.tools.find((t) => t.name === 'ecrire_message').run({ texte: 'Salut Nova' }, {});
+    expect(recus).toEqual(['Salut Nova']);
     expect(await connexion.tools.find((t) => t.name === 'echoue').run({}, {})).toEqual({ data: { erreur: true, detail: { erreur: 'reunion_fermee' } } });
     await connexion.close();
   });
@@ -89,7 +89,7 @@ describe('mcpClient', () => {
   });
 
   test('les noms MCP sont ramenés aux noms d’Astratra', () => {
-    expect(mcpToolName('palabre_', 'Lire-Réunion')).toBe('palabre_lire_r_union');
+    expect(mcpToolName('salon_', 'Lire-Réunion')).toBe('salon_lire_r_union');
     expect(mcpToolName('', '9outil')).toBe('mcp_9outil');
     expect(mcpToolName('', 'x'.repeat(80)).length).toBe(64);
   });

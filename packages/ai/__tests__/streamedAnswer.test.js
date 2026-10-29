@@ -25,14 +25,14 @@ describe('réponse en flux', () => {
       fetch: async (_url, init) => { body = JSON.parse(init.body); return streamed([
         { choices: [{ delta: { content: '<think>je réfléchis' } }] },
         { choices: [{ delta: { content: '</think>Bon' } }] },
-        { choices: [{ delta: { content: 'jour, Emch.' }, finish_reason: 'stop' }] },
+        { choices: [{ delta: { content: 'jour, Sam.' }, finish_reason: 'stop' }] },
         '[DONE]'
       ]); },
       onText: (t) => seen.push(t)
     });
     expect(body.stream).toBe(true);
-    expect(seen).toEqual(['Bon', 'Bonjour, Emch.']);
-    expect(answer).toEqual({ status: 200, text: 'Bonjour, Emch.', cut: false });
+    expect(seen).toEqual(['Bon', 'Bonjour, Sam.']);
+    expect(answer).toEqual({ status: 200, text: 'Bonjour, Sam.', cut: false });
   });
 
   test('OpenAI : les appels d’outils arrivent en morceaux et sont recollés ; rien n’est montré', async () => {

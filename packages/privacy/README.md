@@ -281,7 +281,7 @@ const verdict = await consentement.guard(userId, 'web');
 if (!verdict.allowed) return res.status(403).json({ code: verdict.code }); // CONSENT_REQUIRED | CONSENT_REFUSED
 
 // Ou l'action enveloppée, qui ne s'exécute jamais sans accord :
-const envoyer = consentement.guarded('ai', (req) => req.user.id, (req) => oracle.ask(req.body));
+const envoyer = consentement.guarded('ai', (req) => req.user.id, (req) => assistant.ask(req.body));
 ```
 
 Ce que les tests fixent :

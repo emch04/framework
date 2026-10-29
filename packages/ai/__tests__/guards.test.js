@@ -159,7 +159,7 @@ describe('toolResult', () => {
   test('a text of one or two words is not sent to the injection model, which scores them at random ("oui" 0.96)', async () => {
     const { guards, models } = setup({ rules: { injectionScore: () => 0.96 } });
     const run = guards.newRun();
-    for (const short of ['oui', 'Salut', 'Bonjour Solvia', '  test  ', '👍']) {
+    for (const short of ['oui', 'Salut', 'Bonjour Nova', '  test  ', '👍']) {
       const out = await guards.toolResult(short, run, { external: true });
       expect(out).toMatchObject({ decision: 'allow', suspected: false, score: null, framed: true });
     }

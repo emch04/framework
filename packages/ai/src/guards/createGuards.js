@@ -240,7 +240,7 @@ function createGuards(options = {}) {
 
   async function scanForInjection(content, threshold) {
     /* One or two words carry no instruction, and the injection model scores them at random (« oui » 0.96,
-       « Salut » 0.72 on Examen d'État, 20/10/2026, where every real attack scored ≥ 0.993 from three words up). */
+       « Salut » 0.72 in production, 20/10/2026, where every real attack scored ≥ 0.993 from three words up). */
     if (wordCount(content) < minWords) return { score: null, suspected: false, chunks: 0, short: true };
     const pieces = windowsOf(content, chunkChars, overlapChars);
     let max = 0;

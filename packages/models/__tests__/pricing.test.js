@@ -74,7 +74,7 @@ const make = (options = {}) => createPriceCatalog({ data: fixture(), date: '2026
 describe('lookup: aliases and provider prefixes', () => {
   const catalog = make({
     aliases: [
-      { from: 'oracle-rapide', model: 'groq/openai/gpt-oss-120b' },
+      { from: 'assistant-rapide', model: 'groq/openai/gpt-oss-120b' },
       { match: '(?i)^gpt-4o-\\d{4}-\\d{2}-\\d{2}$', model: 'gpt-4o' }
     ]
   });
@@ -91,7 +91,7 @@ describe('lookup: aliases and provider prefixes', () => {
     ['gpt-oss-120b', 'groq', 'groq/openai/gpt-oss-120b', 'provider_suffix'],
     ['openai/gpt-4o', 'vercel', 'vercel_ai_gateway/openai/gpt-4o', 'provider_prefix'],
     ['vercel/openai/gpt-4o', undefined, 'vercel_ai_gateway/openai/gpt-4o', 'provider_prefix'],
-    ['oracle-rapide', undefined, 'groq/openai/gpt-oss-120b', 'alias'],
+    ['assistant-rapide', undefined, 'groq/openai/gpt-oss-120b', 'alias'],
     ['gpt-4o-2026-08-06', undefined, 'gpt-4o', 'alias']
   ])('%s (provider %s) -> %s', (model, provider, key, matchedBy) => {
     const info = catalog.lookup(model, { provider });

@@ -4,7 +4,7 @@ Shipping labels without the traps: a carrier contract, a Sendcloud adapter
 (labels, service points, tracking), the signed tracking webhook with replay
 protection, and a free test mode.
 
-Extracted from Boutique Roro, for every shop: the package knows no orders, no
+For every shop: the package knows no orders, no
 tables and no prices. It talks to the carrier; the shop decides.
 
 [Version française](README.fr.md)

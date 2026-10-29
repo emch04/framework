@@ -7,7 +7,7 @@ const {
 } = require('../src');
 
 /* A phone as the chip behaves: P-256 keys, DER signatures, the raw 65-byte public point exported. */
-function phone(id = 'iphone-emch-0001') {
+function phone(id = 'iphone-test-0001') {
   const device = crypto.generateKeyPairSync('ec', { namedCurve: 'P-256' });
   const biometric = crypto.generateKeyPairSync('ec', { namedCurve: 'P-256' });
   const raw = (pair) => pair.publicKey.export({ type: 'spki', format: 'der' }).subarray(-65).toString('base64');

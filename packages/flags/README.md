@@ -11,13 +11,13 @@ sans SDK ni protocole propriétaire.
 const { createFlagProvider, createMemorySource } = require('@astratra/flags');
 
 const source = createMemorySource({ flags: {
-  oracle: {
+  assistant: {
     type: 'boolean', default: false, value: true,
-    target: { country: 'FR' }, rollout: 10, seed: 'oracle-oct-2026'
+    target: { country: 'FR' }, rollout: 10, seed: 'assistant-oct-2026'
   }
 } });
 const flags = createFlagProvider({ source });
-const result = await flags.resolveBoolean('oracle', false, {
+const result = await flags.resolveBoolean('assistant', false, {
   targetingKey: 'school-42', // identifiant stable de l'école
   attributes: { country: 'FR', role: 'teacher', plan: 'pro', organization: 'school-42', platform: 'web', appVersion: '2.4.0' }
 });

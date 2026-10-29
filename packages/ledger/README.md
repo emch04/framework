@@ -75,7 +75,7 @@ const brouillon = await compta.propose({
   journal: 'AC', date: '2026-09-10', label: 'Facture fournitures',
   rationale: 'Facture PDF reçue le 10/09, fournisseur reconnu',
   lines: [{ account: '6011', debit: 5000000 }, { account: '4011', partner: 'papeterie', credit: 5000000 }]
-}, { actor: { id: 'oracle', kind: 'ai' } });
+}, { actor: { id: 'assistant', kind: 'ai' } });
 
 // Plus tard, dans l'interface, un humain relit puis valide (ou corrige, ou supprime)
 await compta.validate(brouillon.id, { actor: comptable });

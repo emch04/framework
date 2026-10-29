@@ -110,7 +110,7 @@ function resolveDesktopConfig(projectDir, input, merge) {
   if (!fs.existsSync(appDir) || !fs.statSync(appDir).isDirectory()) fail(`appDir introuvable : ${appDir}.`);
   const pkg = readAppPackage(appDir);
   if (typeof pkg.main !== 'string' || !pkg.main) fail(`le package.json de ${appDir} n'a pas de "main" (le fichier principal d'Electron).`);
-  if (typeof merged.appId !== 'string' || !APP_ID.test(merged.appId)) fail('appId manquant ou mal forme (forme inverse de domaine, par exemple cd.examen-etat.bureau).');
+  if (typeof merged.appId !== 'string' || !APP_ID.test(merged.appId)) fail('appId manquant ou mal forme (forme inverse de domaine, par exemple com.example.bureau).');
   const productName = merged.productName || pkg.productName || pkg.name;
   if (typeof productName !== 'string' || !productName.trim()) fail('productName manquant.');
 

@@ -40,8 +40,8 @@ export interface ConfigNavigateur extends ConfigCentrale {
   stockage?: StockageCentrale;
   /**
    * Collecter aussi quand le navigateur est piloté par un robot (Playwright, Selenium : `navigator.webdriver`).
-   * Faux par défaut : les tests automatisés d'un déploiement n'envoient rien (15/10/2026 : 57 fausses erreurs de
-   * Scolaris venaient de ses tests Playwright, comptées en production).
+   * Faux par défaut : les tests automatisés d'un déploiement n'envoient rien (15/10/2026 : 57 fausses erreurs d'une
+   * app venaient de ses tests Playwright, comptées en production).
    */
   robots?: boolean;
 }

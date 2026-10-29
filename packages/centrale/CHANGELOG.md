@@ -11,7 +11,7 @@ celles du [journal des changements du monorepo](../../CHANGELOG.md).
   Receiving end does not exist », « The message port closed before a response was received ») et toute erreur dont la
   pile est entièrement dans une extension (`chrome-extension://`, `moz-extension://`, `safari-web-extension://`…).
   Le tri se fait avant la file : l'envoi final par balise (page fermée) est couvert aussi. `bruitsExternes: false`
-  les garde. Trouvé par Curie sur Barber Clan (bruit de Safari iOS remonté comme une erreur de l'app).
+  les garde. Cas réel : un bruit de Safari iOS remonté comme une erreur de l'app.
 - Option `ignorer` : messages d'erreur propres à l'app à ne jamais envoyer (texte contenu ou expression).
 - `erreur()` rend `undefined` pour une erreur écartée.
 

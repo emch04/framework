@@ -429,7 +429,7 @@ export type DesktopSigning = 'auto' | 'required' | 'off';
 export interface DesktopConfigInput {
   /** Folder of the Electron app (its package.json has `main`), relative to the project. */
   appDir: string;
-  /** Reverse-domain identifier, e.g. cd.examen-etat.bureau. */
+  /** Reverse-domain identifier, e.g. com.example.bureau. */
   appId: string;
   /** Name shown to people; default: productName or name of the app's package.json. */
   productName?: string | null;

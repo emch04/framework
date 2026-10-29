@@ -405,10 +405,10 @@ test('sessions : début, fin avec durée, « ok » devient « erreur » après u
 test('ia : liste blanche des champs, aucun contenu ne passe', async () => {
   const t = transportFactice();
   const c = creerCentrale(CONFIG, t.transport, SANS_MINUTERIE);
-  c.ia({ fournisseur: 'anthropic', modele: 'claude', dureeMs: 1234.6, jetonsEntree: 10, jetonsSortie: -1, resultat: 'ok', outil: 'oracle', messages: ['secret'] } as never);
+  c.ia({ fournisseur: 'anthropic', modele: 'claude', dureeMs: 1234.6, jetonsEntree: 10, jetonsSortie: -1, resultat: 'ok', outil: 'assistant', messages: ['secret'] } as never);
   await c.vider();
   const ev = t.envois()[0].evenements[0] as EvenementIA;
-  assert.deepEqual(ev, { type: 'ia', horodatage: ev.horodatage, fournisseur: 'anthropic', modele: 'claude', dureeMs: 1235, resultat: 'ok', jetonsEntree: 10, outil: 'oracle' });
+  assert.deepEqual(ev, { type: 'ia', horodatage: ev.horodatage, fournisseur: 'anthropic', modele: 'claude', dureeMs: 1235, resultat: 'ok', jetonsEntree: 10, outil: 'assistant' });
 });
 
 test('viderParBalise : adresse avec ?cle=, lots sous la taille, remise en file si refus', () => {

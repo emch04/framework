@@ -10,7 +10,7 @@ Chaque package Astratra est versionné indépendamment.
 
 ## 2026-10-20 — `@astratra/ai` 1.13.0, `create-astratra-app` 1.11.4 : schémas d'outils chez Gemini, textes courts et détection d'injection
 
-Deux défauts relevés sur Examen d'État le 20/10/2026.
+Deux défauts relevés en production le 20/10/2026.
 
 ### Corrigé
 - `@astratra/ai` (`askGeminiModel`, `createGeminiProvider`) : les schémas d'outils partaient tels quels vers l'API Gemini native, qui refuse `additionalProperties`, `$schema` et `$id` dans les paramètres d'une fonction : 400 « Unknown name "additionalProperties" » sur tous les modèles dès qu'un outil a un schéma strict (`additionalProperties: false`, ce que produisent `toolSpecs` et les outils natifs). Ces mots sont retirés à toute profondeur avant l'envoi ; une propriété qui porte un de ces noms reste ; le schéma de l'appelant n'est pas modifié.
@@ -53,7 +53,7 @@ Deux défauts relevés sur Examen d'État le 20/10/2026.
 
 ## 2026-10-20 — `@astratra/tooling` 1.6.0 : publication d'applications de bureau Electron
 
-Demande d'Emch pour Examen d'État (application Electron + Vite, utilisateurs surtout sous Windows) : étendre l'outil commun plutôt qu'écrire un script par projet.
+Besoin d'une application Electron + Vite dont les utilisateurs sont surtout sous Windows : étendre l'outil commun plutôt qu'écrire un script par projet.
 
 ### Ajouté
 - `astratra publish windows|mac|desktop` : construction par electron-builder sur la machine, installateur NSIS (`.exe`) pour Windows, `.dmg` et `.zip` pour macOS ; montée de version dans le `package.json` de l'application (`--bump=patch|minor|major|none`), redescendue si rien n'a pu être construit ; `--out=DIR` ; `--dry-run` (application, version, cibles, signature, noms des installateurs, rien de construit).
@@ -66,7 +66,7 @@ Demande d'Emch pour Examen d'État (application Electron + Vite, utilisateurs su
 
 ## 2026-10-18 — `@astratra/models` 1.2.0 : Whisper small par défaut pour la transcription
 
-Choix d'Emch pour la dictée (comme Tertius le 28/09/2026) : Whisper small fait environ 13,6 % de mots faux en français, contre 25 % pour base.
+Choix pour la dictée : Whisper small fait environ 13,6 % de mots faux en français, contre 25 % pour base.
 
 ### Modifié
 - `transcribe` est maintenant `Systran/faster-whisper-small` (révision `536b0662`, `model.bin` de 484 Mo, MIT), dossier `faster-whisper-small`, `id` annoncé `faster-whisper-small` dans `/health` et les réponses. Environ 1,2 s par phrase contre 0,35 s pour base sur un processeur de portable.
@@ -81,7 +81,7 @@ Choix d'Emch pour la dictée (comme Tertius le 28/09/2026) : Whisper small fait 
 
 ## 2026-10-18 — `@astratra/ai` 1.12.0, `@astratra/centrale` 1.7.0 : signatures de pensée de Gemini 3
 
-Le 18/10/2026, tous les tours d'outils de Boutique Roro sur Gemini 3 (par la passerelle Centrale) étaient refusés (400) : Gemini 3 exige que la signature de pensée de chaque appel d'outil lui revienne au tour suivant.
+Le 18/10/2026, tous les tours d'outils d'une boutique sur Gemini 3 (par une passerelle) étaient refusés (400) : Gemini 3 exige que la signature de pensée de chaque appel d'outil lui revienne au tour suivant.
 
 ### Corrigé
 - `@astratra/ai` : un appel d'outil garde sa signature (`toolCalls[i].signature`), lue chez Gemini (`thoughtSignature`) et au format OpenAI (`extra_content.google.thought_signature`, réponse entière ou en flux) ; elle repart avec l'appel dans l'historique. Chez Gemini, un premier appel sans signature part avec la valeur de contournement de Google (`skip_thought_signature_validator`), sauf pour Gemma.
@@ -95,7 +95,7 @@ Le 18/10/2026, tous les tours d'outils de Boutique Roro sur Gemini 3 (par la pas
 
 ## 2026-10-17 — `@astratra/agent` 1.3.0, `@astratra/conscience` 1.4.0 : réglages à chaud, entrée corrigée à l'approbation, file sur sa propre table, budget en lecture seule
 
-Manques relevés en branchant l'assistant de Boutique Roro sur ces deux paquets.
+Manques relevés en branchant un assistant de boutique sur ces deux paquets.
 
 ### Ajouté
 - `@astratra/agent` : intervalle aligné `{ type: 'interval', everyMs, align: true }` (marques rondes de la journée locale, comptées depuis minuit local, changement d'heure compris ; `everyMs` en secondes entières, un jour au plus).
@@ -111,7 +111,7 @@ Manques relevés en branchant l'assistant de Boutique Roro sur ces deux paquets.
 
 ## 2026-10-17 — `@astratra/shipping` 1.1.0 : réglages relus à chaque appel, heures en millisecondes, purge du journal
 
-Manques relevés en branchant Boutique Roro sur la 1.0.0.
+Manques relevés en branchant une boutique sur la 1.0.0.
 
 ### Ajouté
 - `createSendcloudCarrier` : `sender` et `testMode` acceptent une valeur ou une fonction (éventuellement asynchrone) relue à chaque appel, comme les clés : l'adresse d'expédition et le mode test changent sans recréer le transporteur. `carrier.testMode` vaut le booléen donné, ou `null` pour une fonction (`status().testMode` donne la valeur du moment).
@@ -127,7 +127,7 @@ Manques relevés en branchant Boutique Roro sur la 1.0.0.
 ## 2026-10-17 — `@astratra/shipping` 1.0.0, `@astratra/payments` 1.1.0, `create-astratra-app` 1.11.2 : étiquettes d'expédition, journal d'événements PostgreSQL
 
 ### Ajouté
-- `@astratra/shipping` 1.0.0, nouveau paquet, tiré du code des transporteurs de Boutique Roro et rendu générique : contrat `Carrier` (options d'expédition, annonce de l'envoi et étiquette, téléchargement, annulation, points relais, signature, lecture des événements) et adaptateur Sendcloud **API v3** `createSendcloudCarrier` (la v2 passe en maintenance chez Sendcloud) : options d'expédition par codes stables, étiquette rendue avec l'envoi, `reference` (`external_reference_id`) contre le double achat, annulation par envoi, points relais `/service-points` ; clés en option (valeur ou fonction relue à chaque appel), clé de signature des webhooks dédiée, expéditeur enregistré ou complet, `fetch` injectable, disjoncteur et relances de `@astratra/resilience` sur les seules lectures, un 4xx n'est pas une panne ; correspondance des statuts de suivi (`classifySendcloudStatus`) ; erreurs `ShippingError` à code stable, sans corps ni clé, phrases fr/en par `messageFor` (catalogue de `@astratra/i18n-server`) ; mode test `sendcloud:letter` ; `createCarrierWebhook` sur le tuyau de `@astratra/payments` (signature HMAC-SHA256 du corps brut en temps constant, identifiant = empreinte SHA-256 du corps, réservation atomique, libération en cas d'échec, `timestamp` pour l'ordre des événements). Tests sans réseau (faux Sendcloud v3), README en/fr, types.
+- `@astratra/shipping` 1.0.0, nouveau paquet, tiré d'un code de transporteurs existant et rendu générique : contrat `Carrier` (options d'expédition, annonce de l'envoi et étiquette, téléchargement, annulation, points relais, signature, lecture des événements) et adaptateur Sendcloud **API v3** `createSendcloudCarrier` (la v2 passe en maintenance chez Sendcloud) : options d'expédition par codes stables, étiquette rendue avec l'envoi, `reference` (`external_reference_id`) contre le double achat, annulation par envoi, points relais `/service-points` ; clés en option (valeur ou fonction relue à chaque appel), clé de signature des webhooks dédiée, expéditeur enregistré ou complet, `fetch` injectable, disjoncteur et relances de `@astratra/resilience` sur les seules lectures, un 4xx n'est pas une panne ; correspondance des statuts de suivi (`classifySendcloudStatus`) ; erreurs `ShippingError` à code stable, sans corps ni clé, phrases fr/en par `messageFor` (catalogue de `@astratra/i18n-server`) ; mode test `sendcloud:letter` ; `createCarrierWebhook` sur le tuyau de `@astratra/payments` (signature HMAC-SHA256 du corps brut en temps constant, identifiant = empreinte SHA-256 du corps, réservation atomique, libération en cas d'échec, `timestamp` pour l'ordre des événements). Tests sans réseau (faux Sendcloud v3), README en/fr, types.
 - `@astratra/payments` 1.1.0 : `createPostgresEventLog(pool, { table, claimTtlMs })` et `postgresEventLogSchema()`, le journal des événements partagé par toutes les instances (même contrat que le journal en mémoire : réservation atomique par `INSERT … ON CONFLICT`, expiration d'une réservation inachevée, `release` qui n'annule jamais un événement traité), plus `prune(olderThanMs)` ; sans dépendance à `pg`. Contrat de tests commun aux deux journaux, joué sur une vraie base avec `PAYMENTS_TEST_DATABASE_URL`.
 
 ### Modifié
@@ -187,7 +187,7 @@ Manques relevés en branchant Boutique Roro sur la 1.0.0.
 - `VERSION_SDK` passe à 1.5.0 (il était resté à 1.4.0) ; un test vérifie qu'il suit la version du paquet.
 - Nouveau `packages/centrale/CHANGELOG.md` (publié avec le paquet) ; README français et anglais à jour ; tableau des versions de la racine à jour.
 
-## 2026-10-11 — `@astratra/notify` 1.1.0, `@astratra/ai` 1.11.0, `@astratra/security` 1.13.0 : ce qu'il manquait à Palabre
+## 2026-10-11 — `@astratra/notify` 1.1.0, `@astratra/ai` 1.11.0, `@astratra/security` 1.13.0 : notifications Apple, secrets détectés, requêtes signées par le téléphone
 
 ### Ajouté
 - `@astratra/notify` 1.1.0 : `createApnsTransport`, les notifications Apple en direct (HTTP/2, jeton de fournisseur ES256 gardé 50 minutes, une seule connexion réutilisée). Transport prêt pour `createPushSender` : un appareil mort (410, `BadDeviceToken`, `Unregistered`) est rendu pour suppression. Badge, notification urgente (`time-sensitive`), notification silencieuse ; clé `.p8` acceptée sur une seule ligne. Repris du code de Centrale LJ, vérifié en vrai sur iPhone et Mac le 11/10/2026.

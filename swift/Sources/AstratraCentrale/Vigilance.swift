@@ -88,7 +88,7 @@ public enum Appareil {
 ///
 /// Une app mise en PAUSE n'est pas bloquée : Mac en veille, app endormie par macOS (App Nap), débogueur arrêté.
 /// Le gardien s'en aperçoit à son propre retard : s'il n'a pas tourné depuis plus que le seuil, c'est toute l'app
-/// qui était arrêtée, et l'intervalle est oublié (15/10/2026 : 146 des 191 « blocages » de Muzika sur Mac
+/// qui était arrêtée, et l'intervalle est oublié (15/10/2026 : 146 des 191 « blocages » d'une app sur Mac
 /// duraient de 1 à 14 minutes, la nuit, Mac endormi).
 final class GardienBlocage: @unchecked Sendable {
     /// Au-delà, le fil principal est considéré bloqué.

@@ -7,7 +7,7 @@ const { electronBuilderConfig, fileSlug, resolveDesktopConfig, signingEnv } = re
 const { createOutput, createTempProject, writeFile, writeJson } = require('./helpers');
 const { createFakeRunner } = require('./fakes');
 
-/* A workspace like Examen d'État: the Electron app in desktop/, its icons in desktop/build. */
+/* A typical desktop workspace: the Electron app in desktop/, its icons in desktop/build. */
 function setupProject({ desktop = {}, version = '1.0.0', scripts = { build: 'vite build' } } = {}) {
   const root = createTempProject();
   writeJson(root, 'desktop/package.json', { name: '@acme/desktop', version, main: 'electron/main.js', scripts });
@@ -94,7 +94,7 @@ describe('publish.desktop configuration', () => {
     expect(built.win.target).toEqual([{ target: 'nsis', arch: ['x64'] }]);
     expect(built.nsis).toMatchObject({ oneClick: false, perMachine: false, artifactName: 'acme-bureau-${version}-setup-${arch}.${ext}' });
     expect(built.mac).toMatchObject({ category: 'public.app-category.education', target: [{ target: 'dmg', arch: ['arm64', 'x64'] }, { target: 'zip', arch: ['arm64', 'x64'] }] });
-    expect(fileSlug('Examen d\'État — Bureau')).toBe('examen-d-etat-bureau');
+    expect(fileSlug('Café d\'Été — Bureau')).toBe('cafe-d-ete-bureau');
   });
 });
 

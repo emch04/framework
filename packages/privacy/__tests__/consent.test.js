@@ -90,7 +90,7 @@ describe('the pure rules', () => {
     const keys = consentCopyKeys('ai', 'simple');
     expect(keys.title).toBe('consent.ai.simple.title');
     expect(keys.accept).toBe('consent.accept');
-    expect(consentCopyKeys('web', 'standard', { prefix: 'oracle.consent' }).lead).toBe('oracle.consent.web.standard.lead');
+    expect(consentCopyKeys('web', 'standard', { prefix: 'assistant.consent' }).lead).toBe('assistant.consent.web.standard.lead');
   });
 
   test('after a refusal the second button keeps it off instead of refusing again', () => {

@@ -3,8 +3,7 @@
 /**
  * Connecteur MCP (26/10/2026) : une IA d'Astratra se branche sur un serveur MCP distant (transport « Streamable HTTP »)
  * et en reçoit les outils comme ses outils natifs ({ name, description, parameters, kind, run }), prêts pour
- * runToolLoop / createToolCaller. Premier usage : Palabre, la salle où les IA d'Emch parlent entre elles ; tout autre
- * serveur MCP (GitHub, documentation…) se branche de la même façon.
+ * runToolLoop / createToolCaller. Tout serveur MCP (GitHub, documentation…) se branche de la même façon.
  *
  * Règles :
  *   - ce que rend un serveur MCP est une DONNÉE NON FIABLE : chaque outil est marqué `external: true`, pour que les gardes
@@ -48,7 +47,7 @@ async function chargerSdk() {
  * @param {object} options
  * @param {string} options.url                 adresse du serveur MCP (https://…/mcp)
  * @param {Record<string,string>} [options.headers] en-têtes envoyés à chaque requête (par exemple Authorization: Bearer …)
- * @param {string} [options.prefix]            préfixe des noms d'outils (par exemple « palabre_ »)
+ * @param {string} [options.prefix]            préfixe des noms d'outils (par exemple « salon_ »)
  * @param {string[]} [options.allow]           noms MCP des seuls outils à exposer
  * @param {Record<string,{kind?:string,risk?:string}|string>} [options.kinds] genre et risque par nom MCP (défaut read)
  * @param {number} [options.timeoutMs]         délai d'un appel d'outil (défaut 20 s)

@@ -208,6 +208,6 @@ runEval(rootDir, { eval: { providers: [{ id: 'openai:chat:local', baseUrl: 'http
 /* ---- Desktop publishing ---- */
 
 runPublish(rootDir, {
-  publish: { desktop: { appDir: 'desktop', appId: 'cd.examen-etat.bureau', productName: "Examen d'État", targets: { windows: ['nsis'] }, signing: { windows: 'auto', mac: 'off' } } }
+  publish: { desktop: { appDir: 'desktop', appId: 'com.example.bureau', productName: "Café d'Été", targets: { windows: ['nsis'] }, signing: { windows: 'auto', mac: 'off' } } }
 } as AstratraConfig, { target: 'windows', bump: 'none', out: 'release', 'dry-run': true })
   .then((published: PublishResult) => published.artifacts?.windows?.[0]);

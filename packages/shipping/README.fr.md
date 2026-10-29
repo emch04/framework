@@ -4,7 +4,7 @@ Les étiquettes d'expédition sans les pièges : un contrat de transporteur, un
 adaptateur Sendcloud (étiquettes, points relais, suivi), le webhook de suivi
 signé et protégé contre les rejeux, et un mode test sans frais.
 
-Né du code de Boutique Roro, pour toutes les boutiques : le paquet ne connaît
+Pour toutes les boutiques : le paquet ne connaît
 ni commandes, ni tables, ni prix. Il parle au transporteur ; la boutique décide.
 
 ```bash

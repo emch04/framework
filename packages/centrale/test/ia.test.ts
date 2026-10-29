@@ -16,7 +16,7 @@ test('appel réussi : durée, jetons, résultat rendu tel quel, aucun contenu en
   const { t, centrale, ias } = preparer();
   const reponse = { texte: 'réponse confidentielle', usage: { input_tokens: 120, output_tokens: 40 } };
   const r = await mesurerAppelIA(
-    { centrale, fournisseur: 'anthropic', modele: 'claude-haiku', outil: 'oracle', jetons: (x) => ({ entree: x.usage.input_tokens, sortie: x.usage.output_tokens }) },
+    { centrale, fournisseur: 'anthropic', modele: 'claude-haiku', outil: 'assistant', jetons: (x) => ({ entree: x.usage.input_tokens, sortie: x.usage.output_tokens }) },
     async () => { await new Promise((ok) => setTimeout(ok, 20)); return reponse; }
   );
   assert.equal(r, reponse);
@@ -24,7 +24,7 @@ test('appel réussi : durée, jetons, résultat rendu tel quel, aucun contenu en
   assert.equal(ev.type, 'ia');
   assert.equal(ev.resultat, 'ok');
   assert.equal(ev.fournisseur, 'anthropic');
-  assert.equal(ev.outil, 'oracle');
+  assert.equal(ev.outil, 'assistant');
   assert.equal(ev.jetonsEntree, 120);
   assert.equal(ev.jetonsSortie, 40);
   assert.ok(ev.dureeMs >= 15, `durée ${ev.dureeMs}`);

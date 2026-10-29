@@ -208,7 +208,8 @@ export interface DataGovernanceOptions {
   store: GovernanceStore;
   connectors: Record<string, Connector>;
   rules?: Rule[];
-  remoteRules?: (context: { organisationId: string; environment: string }) => Promise<{ version?: unknown; rules?: Rule[] }>;
+  /** Les règles lues ailleurs (un tableau de bord) : vérifiées ici à chaque lecture, d'où des objets quelconques acceptés. */
+  remoteRules?: (context: { organisationId: string; environment: string }) => Promise<{ version?: unknown; rules?: ReadonlyArray<Rule | Record<string, unknown>> }>;
   trust?: TrustInput;
   environment?: string;
   proposalTtlMs?: number;

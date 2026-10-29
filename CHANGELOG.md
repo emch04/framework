@@ -3,6 +3,11 @@
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Chaque package Astratra est versionné indépendamment.
 
+## 2026-10-29 — `@astratra/gouvernance` 1.2.0 : la confiance mesurée
+
+### Ajouté
+- `trustSuggestions(entries, options)` et `governance.trustReport({ organisationId })` : par type d'action (IA, ressource, opérations), les issues (`approved`, `declined`, `undone`, `unreviewed`, `unknown`), le taux de réussite, l'intervalle de Wilson et la calibration de l'autoconscience de `@astratra/conscience`, et au plus une suggestion : assouplir `validation` → `free_with_notice` (30 décisions au moins, borne basse ≥ 0,9, aucune annulation) ou resserrer vers `validation` (3 annulations et 10 % d'erreurs au moins). Rien n'est jamais appliqué : chaque suggestion porte la règle à relire. `trustEntriesFromRecords` et `outcomeOfRecord` pour d'autres magasins ; 80 tests en tout.
+
 ## 2026-10-29 — `@astratra/gouvernance` 1.1.0 : le connecteur MongoDB
 
 ### Ajouté

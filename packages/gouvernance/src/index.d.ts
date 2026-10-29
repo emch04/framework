@@ -234,8 +234,24 @@ export interface DataGovernance {
   list(filter: { organisationId: string; status?: Status | Status[]; limit?: number }): Promise<ProposalView[]>;
   challengeFor(proposal: Proposal, options: { decision: Decision; approver: string; nonce: string }): string;
   verifyDigest(proposal: unknown): boolean;
+  /** La confiance mesurée sur les propositions gardées ici : des suggestions, jamais appliquées. */
+  trustReport(options: { organisationId: string; limit?: number } & TrustOptions): Promise<TrustReport[]>;
   readonly environment: string;
 }
+
+export type TrustOutcome = 'approved' | 'declined' | 'undone' | 'unreviewed' | 'unknown';
+export declare const TRUST_OUTCOMES: readonly TrustOutcome[];
+export interface TrustEntry { id: string; agent: string; resource: string; ops: string[]; level: Level; confidence?: number | null; outcome: TrustOutcome; at?: string }
+export interface TrustOptions { minimumSample?: number; loosenAbove?: number; tightenUndone?: number; tightenRate?: number; level?: 0.9 | 0.95 | 0.99 }
+export interface TrustReport {
+  agent: string; resource: string; ops: string[]; level: Level; counts: Record<TrustOutcome, number>;
+  sampleSize: number; rate: number | null; interval: { low: number; high: number; level: number } | null; status: 'observed' | 'insufficient_data';
+  calibration: { sampleSize: number; brierScore: number | null; confidenceGap: number | null; overconfidence: number | null; underconfidence: number | null; status: string } | null;
+  suggestion: { action: 'loosen' | 'tighten'; from: Level; to: Level; reasons: string[]; rule: Rule } | null;
+}
+export declare function trustSuggestions(entries: TrustEntry[], options?: TrustOptions): TrustReport[];
+export declare function trustEntriesFromRecords(records: unknown[]): TrustEntry[];
+export declare function outcomeOfRecord(record: unknown): TrustOutcome;
 
 export declare function createDataGovernance(options: DataGovernanceOptions): DataGovernance;
 export declare function defineResources(declaration: Record<string, ResourceDeclaration>): Readonly<Record<string, Resource>>;

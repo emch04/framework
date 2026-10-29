@@ -12,11 +12,12 @@ const { DECISIONS, challengeFor, signValidation, verifyValidation, createTrust }
 const { stableStringify, digestOf } = require('./stable');
 const { createMemoryGovernanceStore, createMemoryConnector } = require('./memory');
 const { GouvernanceError } = require('./errors');
+const { trustSuggestions, trustEntriesFromRecords, outcomeOfRecord, TRUST_OUTCOMES } = require('./trust');
 
 module.exports = {
   createDataGovernance, createMemoryGovernanceStore, createMemoryConnector, defineResources,
   normalizeRules, decideLevel, challengeFor, signValidation, verifyValidation, createTrust,
-  stableStringify, digestOf, GouvernanceError,
+  stableStringify, digestOf, GouvernanceError, trustSuggestions, trustEntriesFromRecords, outcomeOfRecord, TRUST_OUTCOMES,
   STATUSES, LEVELS, DEFAULT_LEVEL, OPERATIONS, COMPARISONS, MAX_ACTIONS, DECISIONS,
   PROPOSAL_SCHEMA, VALIDATION_SCHEMA, CHALLENGE_SCHEMA, RESULT_SCHEMA
 };

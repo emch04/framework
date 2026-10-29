@@ -115,6 +115,16 @@ then `COMMIT`. Concurrent writes (`40001`, `40P01`, `23505`) give `stale_data`; 
 rolls everything back and gives `failed`. With the PostgreSQL store in the same database, a crash
 never leaves data written without the `executed` state, nor the reverse.
 
+## Measured trust
+
+Rules loosen with evidence, **never by themselves**: the package only suggests, a person decides by changing the
+rule. `governance.trustReport({ organisationId })` or `trustSuggestions(entries, options)` gives, per action type
+(agent, resource, operations), outcome counts (`approved`, `declined`, `undone`, `unreviewed`, `unknown`), success
+rate, Wilson interval, calibration (from `@astratra/conscience` autoconscience) and at most one suggestion: loosen
+`validation` → `free_with_notice` (≥ 30 decisions, interval low bound ≥ 0.9, no undo) or tighten `free` /
+`free_with_notice` → `validation` (≥ 3 undos, error rate ≥ 10 %). Never to `free` directly, never from or to
+`forbidden`; below the sample threshold, no conclusion. Each suggestion carries a ready-to-review rule.
+
 ## MongoDB
 
 `createMongoConnector({ db, client, ObjectId, resources, transactions = true })`, `createMongoGovernanceStore(db)`,

@@ -222,6 +222,35 @@ processus.
 - `postgresGovernanceSchema({ prefix })` est idempotent ; `numeric` arrive en texte (`'10.50'`) et
   se compare comme un nombre à l'annulation.
 
+## Confiance mesurée
+
+Les règles s'assouplissent avec des preuves, **jamais toutes seules** : le pack ne fait que proposer, une personne
+décide en changeant la règle.
+
+```js
+const rapport = await governance.trustReport({ organisationId: 'org-1' });
+// ou, ailleurs (un tableau de bord) : trustSuggestions(entrees, { minimumSample, loosenAbove, tightenUndone, tightenRate })
+```
+
+Par type d'action (IA, ressource, opérations) : comptes des issues, taux de réussite, intervalle de Wilson,
+calibration (l'IA qui se dit sûre à 90 % a-t-elle raison 90 % du temps ?), et au plus une suggestion. Les calculs sont
+ceux de l'autoconscience de `@astratra/conscience`.
+
+| Issue | Sens |
+|---|---|
+| `approved` | Validée par une personne (même si les données ont changé avant l'écriture) |
+| `declined` | Refusée par une personne |
+| `undone` | Exécutée puis annulée |
+| `unreviewed` | Exécutée sans validation (niveau libre) et jamais annulée |
+| `unknown` | Rien de décidé : hors des comptes |
+
+- **Assouplir** `validation` → `free_with_notice` : au moins `minimumSample` décisions (30), borne basse de
+  l'intervalle à `loosenAbove` (0,9) ou plus, et **aucune** annulation.
+- **Resserrer** `free` / `free_with_notice` → `validation` : au moins `tightenUndone` annulations (3) et un taux d'erreur
+  d'au moins `tightenRate` (10 %).
+- Jamais vers `free` directement, jamais depuis ni vers `forbidden`. Sous le seuil d'effectif : aucune conclusion,
+  même à 100 %. Chaque suggestion porte la règle prête à relire (`suggestion.rule`).
+
 ## MongoDB
 
 ```js

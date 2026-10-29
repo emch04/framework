@@ -6,6 +6,7 @@ const { digestOf, keyedDigest, sameValue, randomSalt, stableStringify, toJsonVal
 const { PROPOSAL_SCHEMA, RESULT_SCHEMA, NAME, normalizeActions, isPlainObject } = require('./contract');
 const { normalizeRules, decideLevel, rank } = require('./levels');
 const { createTrust, verifyValidation, challengeFor, withoutDigest } = require('./validation');
+const { trustSuggestions, trustEntriesFromRecords } = require('./trust');
 
 /*
  * Le cycle d'une action de l'IA sur les données :
@@ -488,6 +489,8 @@ function createDataGovernance(options = {}) {
     /** Le défi à faire signer par la passkey, pour une validation dans l'application elle-même (mode hybride). */
     challengeFor: (proposal, { decision, approver, nonce }) => challengeFor({ propositionId: proposal.id, digest: proposal.digest, decision, environment, approver, nonce }),
     verifyDigest: (proposal) => isPlainObject(proposal) && proposal.digest === digestOf(withoutDigest(proposal)),
+    /** La confiance mesurée sur les propositions gardées ici : des suggestions, jamais appliquées. */
+    trustReport: async ({ organisationId, limit = 1000, ...options } = {}) => trustSuggestions(trustEntriesFromRecords(await store.list({ organisationId, limit })), options),
     environment
   });
 }

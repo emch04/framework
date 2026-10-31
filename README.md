@@ -2,6 +2,11 @@
 
 [English](README.md) | [Français](README.fr.md)
 
+[![npm](https://img.shields.io/npm/v/@astratra/saas-kit?label=%40astratra%2Fsaas-kit)](https://www.npmjs.com/package/@astratra/saas-kit)
+[![Licence: MIT](https://img.shields.io/badge/licence-MIT-blue)](LICENSE)
+[![XERJ Corpus Hub contributor](https://hub.xerj.org/contributors/emch04/badge.svg)](https://hub.xerj.org/contributors/emch04)
+[![Powers Humalis](https://img.shields.io/badge/powers-Humalis-c1e928)](https://github.com/emch04/humalis)
+
 **Astratra is a framework and a set of SDKs for building apps with AI built in.**
 
 It is both, and the difference is who is in charge:
@@ -26,6 +31,14 @@ Each package does one job and takes its dependencies by injection: a store, a
 transport, a model, a clock, a key source. Your application decides the
 business rules, the database and the providers; Astratra supplies the parts
 that are the same from one project to the next.
+
+## Astratra and Humalis
+
+[Humalis](https://github.com/emch04/humalis) is a programming language written
+in French, by the same author. The servers it produces are built on Astratra:
+`@astratra/saas-kit`, `@astratra/security` and `@astratra/store-postgres` for
+sign-in, sessions and storage, and `@astratra/prerender` for its websites. A
+Humalis app is therefore an Astratra app, written as sentences.
 
 ## Who it is for
 

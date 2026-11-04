@@ -11,11 +11,12 @@ const { LEVELS, DEFAULT_LEVEL, normalizeRules, decideLevel } = require('./levels
 const { DECISIONS, challengeFor, signValidation, verifyValidation, createTrust } = require('./validation');
 const { stableStringify, digestOf } = require('./stable');
 const { createMemoryGovernanceStore, createMemoryConnector } = require('./memory');
+const { createCommandConnector } = require('./commands');
 const { GouvernanceError } = require('./errors');
 const { trustSuggestions, trustEntriesFromRecords, outcomeOfRecord, TRUST_OUTCOMES } = require('./trust');
 
 module.exports = {
-  createDataGovernance, createMemoryGovernanceStore, createMemoryConnector, defineResources,
+  createDataGovernance, createMemoryGovernanceStore, createMemoryConnector, createCommandConnector, defineResources,
   normalizeRules, decideLevel, challengeFor, signValidation, verifyValidation, createTrust,
   stableStringify, digestOf, GouvernanceError, trustSuggestions, trustEntriesFromRecords, outcomeOfRecord, TRUST_OUTCOMES,
   STATUSES, LEVELS, DEFAULT_LEVEL, OPERATIONS, COMPARISONS, MAX_ACTIONS, DECISIONS,

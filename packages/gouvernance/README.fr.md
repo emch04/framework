@@ -281,6 +281,31 @@ const store = createMongoGovernanceStore(db);
 - Le magasin garde chaque enregistrement en JSON : les valeurs masquées (`$masked`) ne deviennent jamais des clés de
   document.
 
+## Commandes
+
+Pour une action qui ne se résume pas à des lignes d'une base (envoyer un e-mail, déclencher un traitement) :
+
+```js
+const { createCommandConnector } = require('@astratra/gouvernance');
+
+const messages = createCommandConnector({ commands: {
+  send_message: {
+    fields: ['to', 'subject', 'body'], sensitive: ['to'], tags: ['outbound'],
+    recheck: async ({ to }) => (await isBlocked(to) ? 'recipient_blocked' : null),   // au moment d'agir
+    run: async (values, { idempotencyKey }) => { await send(values, idempotencyKey); return { count: 1 }; }
+  }
+} });
+// connectors: { messages }
+await governance.propose({ ...input, actions: [{ connector: 'messages', resource: 'send_message', op: 'insert',
+  values: { id: crypto.randomUUID(), to: 'parent@example.com', subject: 'Réunion', body: 'Lundi à 9 h' } }] });
+```
+
+Une commande se propose comme un ajout : ses valeurs (simples) sont l'aperçu validé, et `id` en est la clé. Rien ne
+part avant l'exécution. Une seule commande par proposition, jamais d'annulation, et le niveau « libre avec avis » devient
+« validation ». Si `run` lève une erreur, la proposition passe en `failed` et n'est jamais relancée. Une commande n'est
+pas dans une transaction : si `run` réussit et que l'enregistrement du résultat échoue ensuite, la proposition reste en
+`failed` alors que l'effet a eu lieu ; `idempotencyKey` sert à éviter tout doublon chez le destinataire.
+
 ## Autres fonctions
 
 `expire({ organisationId })` passe en `expired` les propositions en attente dépassées (12 h par

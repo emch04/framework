@@ -1,6 +1,6 @@
 {
   "name": "@astratra/gouvernance",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "description": "Governed data actions for AI agents: the agent proposes, an exact preview is computed, a human validates (signed, bound to the exact proposal, with an expiry), the data is re-checked at commit time and the change runs all or nothing, with a full audit trail. Builds on @astratra/conscience.",
   "engines": {
     "node": ">=20"

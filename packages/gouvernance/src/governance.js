@@ -171,8 +171,8 @@ function createDataGovernance(options = {}) {
       reasons.push('remote_rules_unavailable');
       if (rank(level) < rank(floor)) level = floor;
     }
-    /* Une suppression ne se défait pas : jamais « libre avec avis ». */
-    if (level === 'free_with_notice' && proposal.actions.some((a) => a.op === 'delete')) { level = 'validation'; reasons.push('not_undoable'); }
+    /* Une suppression ou une commande ne se défait pas : jamais « libre avec avis ». */
+    if (level === 'free_with_notice' && (connectors[proposal.actions[0].connector].undoable === false || proposal.actions.some((a) => a.op === 'delete'))) { level = 'validation'; reasons.push('not_undoable'); }
     return { ...decided, level, reasons, remote, rulesVersion: version ?? null };
   }
 
@@ -219,6 +219,7 @@ function createDataGovernance(options = {}) {
       return { status: 'refused', proposal: null, explanation: null, reasons: ['governor_halted'] };
     }
     const actions = normalizeActions(input.actions, connectors);
+    if (connectors[actions[0].connector].singleAction && actions.length > 1) fail('too_many_actions', 'Ce connecteur ne prend qu\'une action par proposition.');
     if (new Set(actions.map((a) => a.connector)).size > 1) fail('mixed_connectors', 'Une proposition ne touche qu\'une base : tout ou rien n\'est possible qu\'ainsi.');
     const salt = randomSalt();
     const preview = await buildPreview(actions, salt);
@@ -305,6 +306,7 @@ function createDataGovernance(options = {}) {
 
   function undoPlan(record) {
     const { proposal, local } = record;
+    if (connectors[proposal.actions[0].connector].undoable === false) fail('not_undoable', 'Une commande ne se défait pas.');
     const steps = proposal.actions.map((action, index) => {
       const rows = local.actions[index].rows;
       if (action.op === 'delete') fail('not_undoable', 'Une suppression ne se défait pas.');

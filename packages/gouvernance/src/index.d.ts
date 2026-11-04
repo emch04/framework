@@ -182,6 +182,10 @@ export interface ExecutionPlan {
 export interface Connector {
   readonly kind: string;
   readonly resources: Readonly<Record<string, Resource>>;
+  /** Une seule action par proposition. */
+  readonly singleAction?: boolean;
+  /** `false` : jamais d'annulation ni de niveau « libre avec avis ». */
+  readonly undoable?: boolean;
   preview(action: Action, options: { limit: number }): Promise<{ rows: Array<Record<string, unknown>> }>;
   execute(plan: ExecutionPlan, options: { finalize(info: { rowsAffected: number; client: unknown }): Promise<void> }): Promise<{ ok: true; rowsAffected: number } | { ok: false; code: string; detail?: unknown }>;
 }
@@ -264,6 +268,15 @@ export declare function createTrust(trust: TrustInput): Trust;
 export declare function stableStringify(value: unknown): string;
 export declare function digestOf(value: unknown): string;
 export declare function createMemoryGovernanceStore(): GovernanceStore;
+export interface CommandDeclaration {
+  fields: string[];
+  sensitive?: string[];
+  tags?: string[];
+  amount?: string;
+  recheck?(values: Record<string, unknown>): Promise<string | null | undefined> | string | null | undefined;
+  run(values: Record<string, unknown>, context: { idempotencyKey: string }): Promise<{ count?: number } | void> | { count?: number } | void;
+}
+export declare function createCommandConnector(options: { commands: Record<string, CommandDeclaration> }): Connector & { readonly singleAction: true; readonly undoable: false };
 export declare function createMemoryConnector(options: { resources: Record<string, ResourceDeclaration>; data?: Record<string, Array<Record<string, unknown>>> }): Connector & {
   snapshot(name: string): Array<Record<string, unknown>>;
   mutate(name: string, fn: (rows: Array<Record<string, unknown>>) => void): void;

@@ -137,6 +137,31 @@ and execution writes nothing. `transactions: false` allows a standalone server w
 (`transactions_required` otherwise), filtered on the whole row read at preview time. Top-level fields only. The
 store keeps records as JSON, so `$masked` values never become document keys.
 
+## Commands
+
+For an action that is not just rows in a database (sending an e-mail, starting a job):
+
+```js
+const { createCommandConnector } = require('@astratra/gouvernance');
+
+const messages = createCommandConnector({ commands: {
+  send_message: {
+    fields: ['to', 'subject', 'body'], sensitive: ['to'], tags: ['outbound'],
+    recheck: async ({ to }) => (await isBlocked(to) ? 'recipient_blocked' : null),   // at execution time
+    run: async (values, { idempotencyKey }) => { await send(values, idempotencyKey); return { count: 1 }; }
+  }
+} });
+// connectors: { messages }
+await governance.propose({ ...input, actions: [{ connector: 'messages', resource: 'send_message', op: 'insert',
+  values: { id: crypto.randomUUID(), to: 'parent@example.com', subject: 'Meeting', body: 'Monday at 9' } }] });
+```
+
+A command is proposed as an insert: its (scalar) values are the validated preview and `id` is its key. Nothing happens
+before execution. One command per proposal, never undone, and `free_with_notice` becomes `validation`. If `run` throws,
+the proposal becomes `failed` and is never retried. A command is not in a transaction: if `run` succeeds and saving the
+result then fails, the proposal stays `failed` although the effect happened; use `idempotencyKey` to avoid duplicates
+at the destination.
+
 ## Tests
 
 ```sh

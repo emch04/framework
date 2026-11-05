@@ -47,6 +47,10 @@ const DEFAULT_COLORS = {
   light: { active: '#0d1235', idle: '#343a52', pill: 'rgba(13,18,53,0.08)', badge: '#e5484d', badgeRing: '#fdfdff' },
   dark: { active: '#ffffff', idle: 'rgba(255,255,255,0.9)', pill: 'rgba(255,255,255,0.16)', badge: '#e5484d', badgeRing: '#1c1c1e' }
 };
+/* A label follows the phone's text size only so far, and shrinks rather than
+   leave its cell: at the largest sizes a long word filled the pill and ran into
+   its neighbours. */
+const LABEL_FIT = { numberOfLines: 1, maxFontSizeMultiplier: 1.15, adjustsFontSizeToFit: true, minimumFontScale: 0.8 };
 /* A quick spring, without a marked bounce. */
 const SLIDE = { damping: 20, stiffness: 260, mass: 0.7 };
 
@@ -69,7 +73,7 @@ const styles = {
      white slab the glass replaced. The clipping keeps the rounding. */
   glass: { overflow: 'hidden' },
   row: { flex: 1, flexDirection: 'row', alignItems: 'center', paddingHorizontal: TAB_ROW_MARGIN },
-  tab: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 4 },
+  tab: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 4, paddingHorizontal: 4 },
   iconStack: { minWidth: 30, height: 24, alignItems: 'center', justifyContent: 'center' },
   badge: {
     position: 'absolute',
@@ -192,9 +196,9 @@ function TabBar({
             glassEffectStyle: 'regular',
             /* A tint in the glass, or the page's coloured cards show through
                the bar and the labels vanish — glaring in dark mode. `clear`
-               glass let them scramble the labels; `regular` blurs them
-               enough to read, without becoming a card again. */
-            tintColor: scheme === 'dark' ? 'rgba(0,0,0,0.62)' : 'rgba(255,255,255,0.42)',
+               glass let them scramble the labels; a lighter tint still let the
+               page's text be read through the bar, seen on a phone. */
+            tintColor: scheme === 'dark' ? 'rgba(0,0,0,0.82)' : 'rgba(255,255,255,0.72)',
             /* The APP's theme, not the phone's. */
             colorScheme: scheme,
             style: RN.StyleSheet.absoluteFill
@@ -296,7 +300,7 @@ function TabItem({ tab, active, onSelect, scale, fold, palette, testID }) {
       ),
       h(
         AnimatedText,
-        { numberOfLines: 1, style: [styles.label, { color, fontSize: 10 * scale }, active ? styles.labelActive : null, labelStyle] },
+        { ...LABEL_FIT, style: [styles.label, { color, fontSize: 10 * scale }, active ? styles.labelActive : null, labelStyle] },
         tab.label
       )
     )
@@ -337,7 +341,7 @@ function CenterTab({ tab, onSelect, fold, scale, palette, renderCenter, testID }
     ),
     h(
       AnimatedText,
-      { numberOfLines: 1, style: [styles.label, { color: palette.idle, fontSize: 10 * scale, marginTop: 1 }, labelStyle] },
+      { ...LABEL_FIT, style: [styles.label, { color: palette.idle, fontSize: 10 * scale, marginTop: 1 }, labelStyle] },
       tab.label
     )
   );

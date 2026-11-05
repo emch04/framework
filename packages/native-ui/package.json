@@ -1,6 +1,6 @@
 {
   "name": "@astratra/native-ui",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "Mobile UI kit for React Native / Expo: Apple's Liquid Glass on iOS and a calibrated visible surface on Android, glass buttons, pale cards, bars that fold on scroll, an Instagram-style tab bar, a collapsible header, a Markdown renderer for AI answers, pictures (natural-ratio images revealed gently, a shimmer placeholder, a full-screen viewer with pinch, double-tap and pull-to-close), and a thumbs up/down feedback bar for AI answers. Pure rules exported separately and tested in plain Node.",
   "engines": {
     "node": ">=20"

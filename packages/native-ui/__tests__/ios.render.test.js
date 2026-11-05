@@ -211,9 +211,17 @@ describe('TabBar', () => {
     globalThis.__scheme = 'dark';
     const { container } = mount();
     expect(props(byRn(container, 'GlassView')[0])).toMatchObject({
-      tintColor: 'rgba(0,0,0,0.62)',
+      tintColor: 'rgba(0,0,0,0.82)',
       colorScheme: 'dark'
     });
+  });
+
+  test('a label follows the phone\'s text size only so far, and shrinks rather than leave its cell', () => {
+    const { container } = mount();
+    for (const name of ['Messages', 'Assistant']) {
+      const label = [...container.querySelectorAll('[data-rn]')].find((el) => el.children.length === 0 && el.textContent === name);
+      expect(props(label)).toMatchObject({ numberOfLines: 1, maxFontSizeMultiplier: 1.15, adjustsFontSizeToFit: true });
+    }
   });
 
   test('THE PILL SLIDES to the tapped tab, and the page opens only after it', async () => {

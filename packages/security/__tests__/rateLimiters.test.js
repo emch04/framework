@@ -46,6 +46,25 @@ describe('rateLimiters', () => {
     expect(productionLimiter.skip).toBeUndefined();
   });
 
+  test('createApiLimiter gives each area its own counter and, when it says so, its own limit', () => {
+    const limiter = createApiLimiter({
+      max: 300,
+      area: (req) => (req.path === '/big' ? { name: 'big', max: 2000 } : { name: 'other' })
+    });
+    const from = (path, ip) => ({ path, ip });
+    expect(limiter.max(from('/big', '1.1.1.1'))).toBe(2000);
+    expect(limiter.max(from('/small', '1.1.1.1'))).toBe(300);
+    expect(limiter.keyGenerator(from('/big', '1.1.1.1'))).toBe('big:1.1.1.1');
+    expect(limiter.keyGenerator(from('/small', '1.1.1.1'))).toBe('other:1.1.1.1');
+    expect(limiter.keyGenerator(from('/big', '2.2.2.2'))).toBe('big:2.2.2.2');
+  });
+
+  test('createApiLimiter without an area keeps one counter, and the default key', () => {
+    const limiter = createApiLimiter({ max: 50 });
+    expect(limiter.max).toBe(50);
+    expect(limiter.keyGenerator).toBeUndefined();
+  });
+
   test('createApiLimiter uses an explicitly provided store before Redis configuration', () => {
     const store = { increment: jest.fn() };
     const limiter = createApiLimiter({ redisUrl: 'redis://localhost:6379', store });

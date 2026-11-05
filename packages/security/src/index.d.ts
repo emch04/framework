@@ -304,7 +304,9 @@ export interface AccountLimiterOptions extends RateLimitOptions {
   onBlocked?: (context: AccountBlockedContext) => Awaitable<void>;
 }
 
-export function createApiLimiter(options?: RateLimitOptions): RequestHandler;
+/** Un compteur à part pour une zone de l'application ; `max` remplace la limite générale. */
+export interface RateLimitArea { name: string; max?: number }
+export function createApiLimiter(options?: RateLimitOptions & { area?: (req: any) => RateLimitArea | null | undefined }): RequestHandler;
 export function createLoginLimiter(options?: LoginLimiterOptions): RequestHandler;
 export function createAccountLimiter(options?: AccountLimiterOptions): RequestHandler;
 export function skipLocalhost(req: RequestLike): boolean;

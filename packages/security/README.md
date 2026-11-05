@@ -407,6 +407,20 @@ app.use('/auth', createLoginLimiter({
 app.use('/auth/login', createAccountLimiter({ onBlocked: ({ identifier }) => { /* ... */ } }));
 ```
 
+Un compteur par zone, pour qu'un dépassement sur une page ne bloque pas les autres. Les noms forment une liste fermée, jamais une valeur tirée librement de l'adresse demandée :
+
+```js
+const ZONES = new Set(['notes', 'reunions']);
+app.use(createApiLimiter({
+  max: 300,
+  area: (req) => {
+    const premier = req.path.split('/')[1];
+    if (req.path.endsWith('/chapitres')) return { name: 'chapitres', max: 2000 };
+    return { name: ZONES.has(premier) ? premier : 'autres' };
+  }
+}));
+```
+
 `createAccountLimiter()` identifie le compte via `req.body.email` par défaut : comme
 `createWafMiddleware()`, il doit être monté APRÈS `express.json()`/`express.urlencoded()`.
 Avant, `req.body` vaut `undefined` et toutes les tentatives retombent sur la clé

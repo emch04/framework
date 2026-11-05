@@ -174,15 +174,27 @@ const withOptionalStore = (limiterOptions, store) => {
 
 const defaultApiSkip = () => (process.env.NODE_ENV === 'production' ? undefined : skipLocalhost);
 
-const createApiLimiter = (options = {}) => rateLimit(withOptionalStore({
-  windowMs: options.windowMs || 15 * 60 * 1000,
-  max: options.max || 300,
-  skip: options.skip ?? defaultApiSkip(),
-  standardHeaders: options.standardHeaders ?? true,
-  legacyHeaders: options.legacyHeaders ?? false,
-  validate: options.validate || { ip: false },
-  message: options.message || DEFAULT_API_MESSAGE
-}, resolveStore(options)));
+/**
+ * `area(req)` sépare les compteurs : chaque zone rendue (`{ name, max }`) a le
+ * sien, par adresse. Avec un seul compteur, une boucle ou un gros téléchargement
+ * sur une page rendait toutes les autres indisponibles. L'application donne une
+ * liste fermée de noms : un nom tiré librement de l'adresse demandée offrirait
+ * un compteur neuf à chaque requête, donc plus aucune limite.
+ */
+const createApiLimiter = (options = {}) => {
+  const fallback = options.max || 300;
+  const { area } = options;
+  return rateLimit(withOptionalStore({
+    windowMs: options.windowMs || 15 * 60 * 1000,
+    max: area ? (req) => area(req)?.max || fallback : fallback,
+    ...(area ? { keyGenerator: (req) => `${area(req)?.name || 'default'}:${getIp(req)}` } : {}),
+    skip: options.skip ?? defaultApiSkip(),
+    standardHeaders: options.standardHeaders ?? true,
+    legacyHeaders: options.legacyHeaders ?? false,
+    validate: options.validate || { ip: false },
+    message: options.message || DEFAULT_API_MESSAGE
+  }, resolveStore(options)));
+};
 
 const createLoginLimiter = (options = {}) => rateLimit(withOptionalStore({
   windowMs: options.windowMs || 15 * 60 * 1000,

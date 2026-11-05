@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { EvenementErreur } from '../src/envoi.ts';
-import { creerCentrale } from '../src/coeur.ts';
+import { BRUITS_EXTERNES, creerCentrale } from '../src/coeur.ts';
 import type { ReglagesInternes } from '../src/coeur.ts';
 import { CONFIG, transportFactice } from './aides.ts';
 
@@ -41,4 +41,14 @@ test('ignorer : textes et expressions propres à l’app ; bruitsExternes: false
   c.erreur(new Error('Invalid call to runtime.sendMessage(). Tab not found.'));
   await c.vider();
   assert.deepEqual(erreursEnvoyees(t), ['Annulé par l’utilisateur, puis plantage', 'Invalid call to runtime.sendMessage(). Tab not found.']);
+});
+
+test('bruits des navigateurs : écartés par défaut, une vraie erreur du même genre reste', () => {
+  const bruit = (message: string) => BRUITS_EXTERNES.some((m) => m.test(message));
+  assert.ok(bruit("TypeError: undefined is not an object (evaluating 'window.ethereum.selectedAddress = undefined')"));
+  assert.ok(bruit("Can't find variable: SCDynimacBridge"));
+  assert.ok(bruit('Script error.'));
+  assert.ok(bruit('Script error'));
+  assert.ok(!bruit('Script error dans le module de paiement'));
+  assert.ok(!bruit("Can't find variable: panier"));
 });

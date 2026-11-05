@@ -3,6 +3,13 @@
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Les entrées 1.0.0 à 1.4.0 reprennent
 celles du [journal des changements du monorepo](../../CHANGELOG.md).
 
+## 1.11.0 — 2026-11-05 : moins de bruit des navigateurs
+
+### Modifié
+- `BRUITS_EXTERNES` écarte aussi `window.ethereum`, `SCDynimacBridge` (scripts injectés par des extensions et des
+  navigateurs intégrés) et « Script error. » (erreur d'une autre origine, sans message ni pile exploitables).
+  `bruitsExternes: false` les garde.
+
 ## 1.10.0 — 2026-10-29 : la gouvernance des actions de l'IA sur les données
 
 ### Ajouté

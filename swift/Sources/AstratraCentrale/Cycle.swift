@@ -23,7 +23,6 @@ extension Centrale {
         Self.capterExceptions()
         if let dossier = config.dossier {
             Plantages.capterSignaux(dossier: dossier)
-            Plantages.noterPremierPlan(true, dossier: dossier)
         }
         #if canImport(MetricKit) && !os(watchOS) && !os(tvOS)
         AbonneMetricKit.partage.abonner()
@@ -31,6 +30,15 @@ extension Centrale {
         let centre = NotificationCenter.default
         let suivi = SuiviApplication(centrale: self)
         #if canImport(UIKit) && !os(watchOS)
+        // Le premier plan se note quand l'app est vraiment active, pas au lancement : le système peut préparer une app
+        // sans l'afficher puis l'arrêter, ce qui serait pris à tort pour une fermeture inattendue.
+        let dossierPremierPlan = config.dossier
+        centre.addObserver(forName: UIApplication.didBecomeActiveNotification, object: nil, queue: .main) { _ in
+            Plantages.noterPremierPlan(true, dossier: dossierPremierPlan)
+        }
+        DispatchQueue.main.async {
+            if UIApplication.shared.applicationState == .active { Plantages.noterPremierPlan(true, dossier: dossierPremierPlan) }
+        }
         centre.addObserver(forName: UIApplication.didEnterBackgroundNotification, object: nil, queue: .main) { _ in
             MainActor.assumeIsolated { suivi.arrierePlan() }
         }
@@ -41,6 +49,10 @@ extension Centrale {
             MainActor.assumeIsolated { suivi.fermeture() }
         }
         #elseif canImport(AppKit)
+        let dossierPremierPlan = config.dossier
+        DispatchQueue.main.async {
+            if NSApplication.shared.isActive { Plantages.noterPremierPlan(true, dossier: dossierPremierPlan) }
+        }
         centre.addObserver(forName: NSApplication.didResignActiveNotification, object: nil, queue: .main) { _ in
             MainActor.assumeIsolated { suivi.arrierePlan() }
         }

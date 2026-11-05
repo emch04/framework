@@ -19,7 +19,7 @@ import { lireRetryAfter, transportFetch } from './transport.ts';
 import type { Transport } from './transport.ts';
 
 export const NOM_SDK = '@astratra/centrale';
-export const VERSION_SDK = '1.10.0';
+export const VERSION_SDK = '1.11.0';
 
 /** Valeurs par défaut de la file et de l'envoi. */
 export const FILE_MAX = 500;
@@ -34,12 +34,17 @@ const TEXTE_PROPRIETE_MAX = 200;
  * Bruits connus des extensions du navigateur (Safari iOS, Chrome, Firefox, navigateurs intégrés) : ces erreurs
  * viennent d'un script qui n'est pas celui de l'app. Elles sont écartées avant la file, donc aussi de l'envoi
  * final par balise. `bruitsExternes: false` les garde.
+ * « Script error. » est écarté aussi : le navigateur masque tout d'un script d'une autre origine, le message ne dit
+ * rien et n'a aucune pile à suivre.
  */
 export const BRUITS_EXTERNES: readonly RegExp[] = [
   /^Invalid call to runtime\.sendMessage\(\)/,
   /Extension context invalidated/,
   /Could not establish connection\. Receiving end does not exist/,
-  /The message port closed before a response was received/
+  /The message port closed before a response was received/,
+  /\bwindow\.ethereum\b/,
+  /\bSCDynimacBridge\b/,
+  /^Script error\.?$/
 ];
 /** Une pile dont tous les cadres viennent d'une extension n'est pas celle de l'app. */
 const ADRESSE_EXTENSION = /^(?:chrome|moz|safari(?:-web)?|ms-browser)-extension:\/\//;

@@ -38,7 +38,7 @@ test('erreurs, rejets, vues SPA en gabarit, session et balise finale', async () 
     const e = new Error('clic raté');
     e.stack = 'surClic@https://app.exemple.fr/assets/index.js?v=2:1:2\n@https://app.exemple.fr/node_modules/react/index.js:3:4';
     n.window.dispatchEvent(Object.assign(new Event('error'), { error: e }));
-    n.window.dispatchEvent(Object.assign(new Event('error'), { error: null, message: 'Script error.' }));
+    n.window.dispatchEvent(Object.assign(new Event('error'), { error: null, message: 'Erreur sans détail' }));
     n.window.dispatchEvent(Object.assign(new Event('unhandledrejection'), { reason: new TypeError('promesse') }));
     n.env.history.pushState({}, '', '/eleves/456/notes?token=secret');
     n.env.history.pushState({}, '', '/eleves/789/notes'); // même gabarit : pas de nouvelle vue
@@ -69,7 +69,7 @@ test('erreurs, rejets, vues SPA en gabarit, session et balise finale', async () 
     ['https://app.exemple.fr/assets/index.js', true],
     ['https://app.exemple.fr/node_modules/react/index.js', false]
   ]);
-  assert.equal(erreurs[1].exception.message, 'Script error.');
+  assert.equal(erreurs[1].exception.message, 'Erreur sans détail');
   assert.equal(erreurs[2].exception.type, 'TypeError');
   assert.equal(erreurs[2].etiquettes?.origine, 'unhandledrejection');
   const sessions = evs.filter((e) => e.type === 'session') as EvenementSession[];

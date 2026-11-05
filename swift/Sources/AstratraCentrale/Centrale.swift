@@ -60,7 +60,7 @@ public struct ConfigCentrale: Sendable {
 /// synchrones et rendent la main tout de suite ; l'envoi se fait en tâche de fond.
 public final class Centrale: @unchecked Sendable {
     public static let nomSDK = "astratra-centrale-swift"
-    public static let versionSDK = "1.1.0"
+    public static let versionSDK = "1.1.1"
 
     /// L'instance créée par le dernier `demarrer` (utile pour les erreurs captées loin de l'app).
     public static var partagee: Centrale? {
